@@ -1,0 +1,111 @@
+---
+
+opt:
+  odir: runs/opt_2
+  key: 42
+  resume: runs/opt_1 # perform only opt.2 starting from the results of opt.1 (run `test_1.yml` before)
+  # resume: true # uncomment to continue from the results of opt.1 and override them
+  # resume: false # uncomment to perform both opt.1 and opt.2 in one go
+
+---
+
+opt.1:
+  base: base_opt
+  n_total_iterations: 3
+  n_samples: 1*[2] + 2*[4] # Always start a string expression with a `f*[...]` or `[...]*f` term (even if f=1)
+  # in the middle or the end of the expression adding `+ [...]` without a factor `f` is no problem
+  likelihood: =lh.1
+  transitions: null
+
+lh.1:
+  signal: =sig.1
+  data: =data
+  noise_var: 0.01
+
+data:
+  signal: =sig.2
+  seed: 1234
+  noise_var: 0.01
+
+sig.1:
+  diffuse: =sig_df.1
+
+sig_df.1:
+  prefix: df.1
+  shape: [128, 128]
+  offset_mean: 8.
+  offset_std: [1., .1]
+  fluctuations: [5., 1.]
+  loglogavgslope: [-2., 1.]
+  flexibility: [1.2, .4]
+  asperity: [.2, .2]
+
+---
+
+opt.2:
+  base: base_opt
+  n_total_iterations: 3
+  n_samples: 4
+  likelihood: =lh.2
+  transitions: =trans.2
+  constants: 2*[null] + [(sig_ps.2,)] # One can set multiple models in one iteration using a list `[[sig_1, sig_2]]`
+  point_estimates: 1*[None] + [~sig_df.2] + [~] # With the not-op `~sig`, it adds all keys except of `sig`
+
+lh.2:
+  signal: =sig.2
+  data: =data
+  noise_var: 0.01
+
+sig.2:
+  diffuse: =sig_df.2
+  points: =sig_ps.2
+
+sig_df.2:
+  prefix: df.2
+  shape: &shp [128, 128]
+  offset_mean: 10.0
+  offset_std: [1.0, 0.1]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 1.0]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
+
+sig_ps.2:
+  prefix: ps.2
+  shape: *shp
+  coos: [[5,6],[54,67],[31,90],[100,22],[46,120]]
+  mean: 10.0
+  std: 2.0
+
+trans.2:
+  sig_old: =sig.1
+  sig_new: =sig.2
+  opt_dct:
+    base: base_opt
+    n_total_iterations: 3
+    n_samples: 1
+  odir: ->opt/odir # link to another (sub)key to add its string value (only works for strings)
+
+---
+
+base_opt:
+  draw_linear_kwargs:
+    cg_name: null
+    cg_kwargs:
+      absdelta: 0.1
+      maxiter: 100
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: null
+      xtol: 0001
+      cg_kwargs:
+        name: null
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: null
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      maxiter: 50
+  sample_mode: linear_resample

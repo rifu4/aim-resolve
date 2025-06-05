@@ -1,0 +1,23 @@
+---
+
+base_opt:
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 0.1
+      maxiter: 100
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0001
+      cg_kwargs:
+        name: null
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      maxiter: 25
+  sample_mode: linear_resample
