@@ -1,0 +1,88 @@
+base_opt:
+  n_samples: 0
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 0.1
+      maxiter: 1000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 50
+      maxiter: 200
+  sample_mode: nonlinear_resample
+
+base_trans:
+  n_total_iterations: 1
+  n_samples: 0
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 0.1
+      maxiter: 1000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 50
+      maxiter: 200
+  sample_mode: nonlinear_resample
+
+i0_fs:
+  offset_mean: 12.0
+  offset_std: [1.0, 0.5]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 1.0]
+  # flexibility: [1.5, 0.5]
+  # asperity: [0.2, 0.2]
+
+i0_bg:
+  offset_mean: 9.0
+  offset_std: [1.0, 0.5]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 1.0]
+  # flexibility: [1.2, 0.4]
+  # asperity: [0.2, 0.2]
+
+i0_ps:
+  mean: 15.0
+  std: 2.0
+
+i0_ts:
+  offset_mean: 15.0
+  offset_std: [1.0, 0.5]
+  fluctuations: [7.5, 1.0]
+  loglogavgslope: [-3.0, 1.0]
+  # flexibility: [1.2, 0.4]
+  # asperity: [0.2, 0.2]
+
+space_bg:
+  shape: [128, 128]
+  fov: [2, 2]
+
+alpha_fs:
+  offset_mean: -1.0
+  offset_std: [1.0, 0.1]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 1.0]
+  # flexibility: [1.5, 0.5]
+  # asperity: [0.2, 0.2]

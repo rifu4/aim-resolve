@@ -1,0 +1,128 @@
+opt:
+  odir: results/res_fast/2_opt
+  key: 41
+  resume: results/res_fast/1_opt
+
+---
+
+opt.0:
+  base: base_opt
+  likelihood: =lh.0
+  transitions: null
+  n_major_iterations: 5
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 50
+  
+lh.0:
+  sky: =sky.0
+  data: =data.0
+  psf_pixels: 3000
+  response_kernel: results/res_fast/rk_eso_1062mhz_512_01.pkl
+  noise_kernel: results/res_fast/nk_eso_1062mhz_512_01.pkl
+  noise:
+    prefix: nm.0
+    parameters:
+      mean: 1.1
+      mode: 1.0
+    scaling: True
+  fun: fast_radio
+
+data.0:
+  fname: /Users/rf/Development/data/eso_1062mhz_01.npz
+  fun: fast_radio
+
+space_bg:
+  shape: [512, 512]
+  fov: [1deg, 1deg]
+
+sky.0:
+  prefix: sky.0
+  background: =sky_bg.0
+
+sky_bg.0:
+  prefix: bg.0
+  space:
+    base: space_bg
+  i0:
+    base: i0_fs
+
+---
+
+opt.1:
+  base: base_opt
+  likelihood: =lh.1
+  transitions: =trans.1
+  n_major_iterations: 5
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 50
+
+lh.1:
+  sky: =sky.1
+  data: =data.0
+  psf_pixels: 3000
+  response_kernel: results/res_fast/rk_eso_1062mhz_512_01.pkl
+  noise_kernel: results/res_fast/nk_eso_1062mhz_512_01.pkl
+  noise:
+    prefix: nm.1
+    parameters:
+      mean: 1.1
+      mode: 1.0
+    scaling: True
+  fun: fast_radio
+
+sky.1:
+  prefix: sky.1
+  background: =sky_bg.1
+  t0: =sky_t0.1
+  t1: =sky_t1.1
+
+sky_bg.1:
+  prefix: bg.1
+  space:
+    base: space_bg
+  i0:
+    base: i0_bg
+
+sky_t0.1:
+  prefix: t0.1
+  space:
+    shape: [192, 88]
+    fov: [0.006544984694978736, 0.0029997846518652537]
+    center: [3.408846195301386e-05, -0.0004431500053891854]
+  i0:
+    base: i0_ts
+
+sky_t1.1:
+  prefix: t1.1
+  space:
+    shape: [124, 80]
+    fov: [0.004226969282173767, 0.00272707695624114]
+    center: [0.0005113269292952131, 0.004806473135375008]
+  i0:
+    base: i0_ts
+
+trans.1:
+  lh_old: =lh.0
+  lh_new: =lh.1
+  sky_old: =sky.0
+  sky_new: =sky.1
+  mode: addt
+  opt_dct:
+    base: base_trans
+  odir: ->opt/odir + trans

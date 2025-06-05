@@ -1,0 +1,174 @@
+---
+
+# specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
+odir: test/exp_map_256_1
+key: 44
+
+n_it: 3
+
+unet: train/train128/model.pth
+
+# additional plots (saved if true)
+callback: true
+extra: true
+trans: true
+rerun: true
+
+--- 
+
+# specify the data to be reconstructed and the background space (shape and field of view)
+data:
+  fname: /Users/rf/Development/packages/tile-nifty/tests/data/files/test256_1.pkl
+  fun: exp
+  idx: 11 # zoom: 0, points: 1, normal: 11
+  max_std: 0.0001
+
+space_bg:
+  shape: [256, 256]
+  fov: [2, 2]
+
+# data:
+#   fname: /scratch/users/rfuchs/data/eso_986-1137mhz.npz
+#   # fname: /scratch/users/rfuchs/data/eso_1356-1439mhz.npz
+#   # fname: /Users/rf/Development/data/eso_986-1137mhz.npz
+#   fun: fast_radio
+
+# space_bg:
+#   shape: [1024, 1024]
+#   fov: [2deg, 2deg]
+
+# noise:
+#   parameters:
+#     mode: 1.0
+#     mean: 1.1
+#   scaling: true
+#   varcov: false
+
+i0_fs:
+  offset_mean: 12.0
+  offset_std: [1.0, 0.1]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
+
+---
+
+# overwrite the default optimization and transition parameters
+base_opt.0:
+  n_total_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 25
+      maxiter: 50
+
+  # n_major_iterations: 10
+  # n_minor_iterations: 2
+  # n_samples: 2
+  # draw_linear_kwargs:
+  #   cg_name: SL
+  #   cg_kwargs:
+  #     absdelta: 1.e-11
+  #     miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+  #     maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
+  # nonlinearly_update_kwargs:
+  #   minimize_kwargs:
+  #     name: SN
+  #     xtol: 1.e-4
+  #     cg_kwargs:
+  #       name: null
+  #     miniter: 0
+  #     maxiter: 10
+  # kl_kwargs:
+  #   minimize_kwargs:
+  #     name: M
+  #     absdelta: 1.e-10
+  #     cg_kwargs:
+  #       name: null
+  #       miniter: 2*[5] + 2*[10] + [20]
+  #     miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
+  #     maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
+  #     energy_reduction_factor: 1.e-3
+  # sample_mode: linear_resample
+
+base_opt.n:
+  n_total_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 50
+      maxiter: 100
+
+  # n_major_iterations: 10
+  # n_minor_iterations: 2
+  # n_samples: 2
+  # draw_linear_kwargs:
+  #   cg_kwargs:
+  #     miniter: 500
+  #     maxiter: 2000
+  # nonlinearly_update_kwargs:
+  #   minimize_kwargs:
+  #     miniter: 5
+  #     maxiter: 20
+  # kl_kwargs:
+  #   minimize_kwargs:
+  #     miniter: 50
+  #     maxiter: 200
+  # sample_mode: nonlinear_resample
+
+base_trans:
+  n_total_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 25
+      maxiter: 50
+
+---
+
+# overwrite the default clustering parameters
+base_clu:
+  alg: dbscan
+  eps: 0.1
+  min_samples: 3
+
+# overwrite the default modelling settings
+base_model:
+  zoom: 1
+  masks:
+    margin_fac: 0.25
+    margin_min: 5
+    max_objects: 5
+  points: true
+  objects:
+    gaussian:
+      mean_fac: 0.1
+      std_fac: 0.0001
+    zero_pad: 1
+  tiles:
+    tile_size: 32
+    gaussian:
+      mean_fac: 0.1
+      std_fac: 0.0001
+
+# overwrite the default plotting settings
+base_plot:
+  # vmin: 1.e+4
+  # vmax: 2.e+8
+  # cbar: false
+  ticks: 0
+  plot_space: false
+  plot_label: false

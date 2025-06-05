@@ -1,0 +1,75 @@
+---
+
+name: test_256_10
+odir: data
+dtype: float64
+
+seed: 44
+n_copies: 10
+
+---
+
+parameters:
+
+  space:
+    shape: [256, 256]
+    fov: [2, 2]
+
+  background:
+    i0:
+      offset_mean: 8
+      offset_std: [1, 0.5]
+      fluctuations: [1, 0.5]
+      loglogavgslope: [-4, 0.5]
+    gaussian:
+      cov_x: [1, 0.1]
+      cov_y: [1, 0.1]
+
+  points:
+    n_min: 0
+    n_max: 10
+    i0:
+      mean: 12
+      std: 2
+    blur:
+      b_min: 0
+      b_max: 0.1
+      steps: 100
+
+  tiles:
+    n_min: 0
+    n_max: 5
+    tile_size: [8, 8]
+    i0:
+      offset_mean: 12
+      offset_std: [2, 0.5]
+      fluctuations: [1, 0.5]
+      loglogavgslope: [-2, 0.5]
+    gaussian:
+      cov_x: [0.007, 0.0007]
+      cov_y: [0.007, 0.0007]
+
+  objects:
+    i0:
+      mean: 17
+      std: 2
+    masks:
+      m_min: 0
+      m_max: 100
+    zoom:
+      u_min: 0.5
+      u_max: 1
+
+  func: exp
+
+---
+
+plot:
+  n_copies: 10
+  space: True
+  label: True
+  cmap: inferno
+  norm: [log, linear, linear]
+  vmin: [~, 0, 0]
+  vmax: [~, 1, 1]
+  transpose: True

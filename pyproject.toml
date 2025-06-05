@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aim-resolve"
+dynamic = ["version"]
+description = ""
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+keywords = []
+authors = [
+  {name = "Richard Fuchs", email = "richard.fuchs@tum.de"},
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "nifty8[re]",
+    "jax==0.4.30",
+    "jaxbind==1.1.0",
+    "jax-finufft",
+    "jax-tqdm",
+    "ducc0",
+    "PyYAML",
+    "h5py",
+    "pandas",
+    "matplotlib",
+    "snakemake",
+    "graphviz",
+    "scikit-learn",
+    "torch",
+    "neuraloperator"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "aim_resolve.__version__.__version__"}
+
+[project.urls]
+Documentation = "https://github.com/rifu4/aim-resolve#readme"
+Issues = "https://github.com/rifu4/aim-resolve/issues"
+Source = "https://github.com/rifu4/aim-resolve"

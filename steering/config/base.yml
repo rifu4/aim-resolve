@@ -1,0 +1,171 @@
+---
+
+base_opt.0:
+  n_total_iterations: 10
+  n_major_iterations: 10
+  n_minor_iterations: 2
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 5
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 1.e-3
+  sample_mode: linear_resample
+
+base_opt.n:
+  n_total_iterations: 10
+  n_major_iterations: 10
+  n_minor_iterations: 2
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 200
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 5
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 20
+      maxiter: 200
+      energy_reduction_factor: 1.e-3
+  sample_mode: nonlinear_resample
+
+base_trans:
+  n_total_iterations: 20
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 5
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 1.e-3
+  sample_mode: nonlinear_resample
+
+---
+
+base_clu:
+  alg: dbscan
+  eps: 0.5
+  min_samples: 3
+
+---
+
+base_model:
+  zoom: 1
+  masks:
+    margin_fac: 0.2
+    margin_min: 2
+    max_objects: 3
+  points: true
+  objects:
+    gaussian:
+      mean_fac: 0.2
+      std_fac: 0.0001
+    zero_pad: 1
+  tiles:
+    tile_size: 0
+    gaussian:
+      mean_fac: 0.2
+      std_fac: 0.0001
+
+---
+
+base_plot:
+  cmap: 'inferno'
+  norm: 'log'
+  vmin: ~
+  vmax: ~ 
+  rows: ~ 
+  cols: ~
+  cbar: true
+  ticks: 5
+  plot_space: true
+  plot_label: true
+
+---
+
+i0_fs:
+  offset_mean: 12.0
+  offset_std: [3.0, 1.0]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
+
+i0_bg:
+  offset_mean: 12.0
+  offset_std: [3.0, 1.0]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
+
+i0_ps:
+  mean: 0.0
+  std: 3.0
+
+i0_os:
+  offset_mean: 0.0
+  offset_std: [3.0, 1.0]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
+
+i0_ts:
+  offset_mean: 0.0
+  offset_std: [3.0, 1.0]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]

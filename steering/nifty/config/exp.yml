@@ -1,0 +1,160 @@
+opt:
+  odir: results/res_exp/2_opt
+  key: 41
+  resume: results/res_exp/1_opt
+
+---
+
+opt.0:
+  base: base_opt
+  likelihood: =lh.0
+  transitions: null
+  n_total_iterations: 1
+  n_samples: 0
+  
+lh.0:
+  sky: =sky.0
+  data: =data.0
+  noise:
+    max_std: 0.001
+  fun: exp
+
+data.0:
+  fname: /Users/rf/Development/packages/tile-nifty/tests/data/files/test256.pkl
+  fun: exp
+  idx: 0
+  max_std: 0.001
+
+space_bg:
+  shape: [128, 128]
+  fov: [2, 2]
+
+sky.0:
+  prefix: sky.0
+  background: =sky_bg.0
+
+sky_bg.0:
+  prefix: bg.0
+  space:
+    base: space_bg
+  i0:
+    base: i0_fs
+
+---
+
+opt.1:
+  base: base_opt
+  likelihood: =lh.1
+  transitions: =trans.1
+  n_total_iterations: 1
+  n_samples: 0
+
+lh.1:
+  sky: =sky.1
+  data: =data.0
+  noise:
+    max_std: 0.001
+  fun: exp
+
+sky.1:
+  prefix: sky.1
+  background: =sky_bg.1
+  p0: =sky_p0.1
+  s0: =sky_s0.1
+  s1: =sky_s1.1
+  t0: =sky_t0.1
+
+sky_bg.1:
+  prefix: bg.1
+  space:
+    base: space_bg
+  i0:
+    base: i0_bg
+
+sky_p0.1:
+  prefix: p0.1
+  space:
+    shape: [256, 256]
+    fov: [2.0, 2.0]
+  coordinates: [[-0.59765625, -0.27734375], [-0.51953125, 0.30078125], [-0.23046875,
+      0.08984375], [0.47265625, -0.37890625], [0.50390625, -0.41796875]]
+  i0:
+    base: i0_ps
+    mean: [16.6, 16.2, 15.7, 14.6, 14.8]
+  n_copies: 5
+
+sky_s0.1:
+  prefix: s0.1
+  space:
+    shape: [72, 96]
+    fov: [0.5625, 0.75]
+    center: [-0.078125, 0.1640625]
+  i0:
+    base: i0_ts
+  gaussian:
+    cov_x: [0.056, 1.e-6]
+    cov_y: [0.075, 1.e-6]
+
+sky_s1.1:
+  prefix: s1.1
+  space:
+    shape: [32, 28]
+    fov: [0.25, 0.21875]
+    center: [0.109375, -0.890625]
+  i0:
+    base: i0_ts
+  gaussian:
+    cov_x: [0.025, 1.e-6]
+    cov_y: [0.022, 1.e-6]
+
+sky_t0.1:
+  prefix: t0.1
+  space:
+    shape: [256, 256]
+    fov: [2.0, 2.0]
+  tile_spaces:
+    shape: [16, 16]
+    fov: [0.125, 0.125]
+    center: [[0.7421875, 0.0078125], [-0.078125, 0.55]]
+  i0:
+    base: i0_ts
+  n_copies: 2
+  gaussian:
+    cov_x: [0.013, 1.e-6]
+    cov_y: [0.013, 1.e-6]
+
+trans.1:
+  lh_old: =lh.0
+  lh_new: =lh.1
+  sky_old: =sky.0
+  sky_new: =sky.1
+  mode: addt
+  opt_dct:
+    base: base_trans
+  odir: ->opt/odir + trans
+
+---
+
+base_opt:
+  n_samples: 0
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 0.1
+      maxiter: 1000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 75
+      maxiter: 200
+  sample_mode: linear_resample

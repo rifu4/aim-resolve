@@ -1,0 +1,36 @@
+---
+
+opt:
+  base: base_opt
+  odir: _
+  resume: false
+
+---
+
+opt.0:
+  base: base_opt.0
+  likelihood: =lh.0
+
+lh.0:
+  sky: =sky.0
+  data: =data.0
+  noise:
+    parameters: {}
+    scaling: false
+    varcov: false
+  fun: _
+
+data.0:
+  fname: _
+  fun: _
+
+sky.0:
+  prefix: sky.0
+  background: =sky_bg.0
+
+sky_bg.0:
+  prefix: bg.0
+  space:
+    base: space_bg
+  i0:
+    base: i0_fs

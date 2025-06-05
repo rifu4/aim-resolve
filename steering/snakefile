@@ -1,0 +1,128 @@
+import os
+os.environ['JAX_PLATFORM_NAME'] = 'cpu'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
+# os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+
+
+from aim_resolve import yaml_load
+
+file = 'config/snake.yml'
+dct = yaml_load(file)
+
+odir = dct['odir']
+n_it = dct['n_it']
+unet = dct['unet']
+data = dct['data']['fname']
+
+base = 'config/base.yml'
+
+
+
+# overall snakemake rule: specifies last generated file of the pipeline
+rule all:
+    input:
+        f'{odir}/files/{n_it-1}_rec.pkl' # run whole pipeline
+
+
+
+# generation of the initial cfg file for nifty reconstruction
+rule:
+    name:
+        '0. model'
+    input:
+        m = 'config/0_mdl.yml',
+    output:
+        f'{odir}/files/0_pre.yml',
+    params:
+        p = file
+    shell:
+        'python3 scripts/initialize.py {input.m} scripts/yamls/base.yml {params.p}'
+
+
+
+# optimize the initial model to get a preliminary reconstruction of the data
+rule:
+    name:
+        f'0. reconstruct'
+    input:
+        p = f'{odir}/files/0_pre.yml',
+        d = data,
+    output:
+        f'{odir}/files/0_rec.pkl',
+    params:
+        t = {},
+        b = base,
+        i = 0,
+    shell:
+        'python3 scripts/reconstruct.py {input.p} {params.t} {params.b} {params.i}'
+
+
+
+# loop over the number of reconstructions (last iteration ends after the reconstruction)
+for it in range(1, n_it):
+
+    # predict point sources in the reconstruction of the background signal
+    rule:
+        name:
+            f'{it}. detect'
+        input:
+            o = f'{odir}/files/{it-1}_rec.pkl',
+            u = unet,
+        output:
+            f'{odir}/files/{it}_det.npz',
+        params:
+            b = base,
+            i = it,
+        shell:
+            'python3 scripts/detect.py {input.o} {input.u} {params.b} {params.i}'
+
+
+    # create cfg file for enhanced signal model containing an additional point source model
+    rule:
+        name:
+            f'{it}. model'
+        input:
+            p = f'{odir}/files/{it-1}_pre.yml',
+            o = f'{odir}/files/{it-1}_rec.pkl',
+            d = f'{odir}/files/{it}_det.npz',
+        output:
+            f'{odir}/files/{it}_mdl.yml',
+        params:
+            b = base,
+            i = it,
+        shell:
+            'python3 scripts/model.py {input.p} {input.o} {input.d} {params.b} {params.i}'
+
+
+    # perform a transition from the old to the new model
+    rule:
+        name:
+            f'{it}. pre-fit'
+        input:
+            m = f'{odir}/files/{it}_mdl.yml',
+        output:
+            f'{odir}/files/{it}_pre.yml',
+        params:
+            r = f'{odir}/opt/{it-1}_rec/last.pkl',
+            b = base,
+            i = it,
+        shell:
+            'python3 scripts/pre_fit.py {input.m} {params.r} {params.b} {params.i}'
+
+
+    # using the cfg file to build the signal model and optimize it to get a reconstruction of the data
+    rule:
+        name:
+            f'{it}. reconstruct'
+        input:
+            m = f'{odir}/files/{it}_pre.yml',
+            d = data,
+        output:
+            f'{odir}/files/{it}_rec.pkl',
+        params:
+            t = f'{odir}/opt/{it}_pre/last.pkl',
+            b = base,
+            i = it,
+        shell:
+            'python3 scripts/reconstruct.py {input.m} {params.t} {params.b} {params.i}'

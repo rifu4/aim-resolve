@@ -1,0 +1,69 @@
+opt:
+  odir: runs/cyg/1_opt
+  key: 42
+
+---
+
+opt.0:
+  base: base_opt
+  likelihood: =lh.0
+  transitions: null
+  n_total_iterations: 1
+  n_samples: 0
+  
+lh.0:
+  sky: =sky.0
+  data: =data.0
+  noise:
+    prefix: nm.0
+    parameters:
+      mean: 1.1
+      mode: 1.0
+    scaling: true
+  wgridding: false
+  fun: radio
+
+data.0:
+  fname: /Users/rf/Development/data/cyg_2052mhz_01.npz
+  fun: radio
+
+space_bg:
+  shape: [400, 200]
+  fov: [0.04deg, 0.02deg]
+  center: [0.001deg, 0deg]
+  rotation: -0.25
+
+sky.0:
+  prefix: sky.0
+  background: =sky_bg.0
+  p0: =sky_p0.0
+
+sky_bg.0:
+  prefix: bg.0
+  space:
+    base: space_bg
+  i0:
+    base: base_i0
+
+sky_p0.0:
+  prefix: p0.0
+  space:
+    base: space_bg
+  coordinates: 
+    mean: [[0as, 0as], [0.3as, -0.2as]]
+    std: 0.1as
+  i0:
+    mean: 25.0
+    std: 2.0
+  n_copies: 2
+  
+
+---
+
+base_i0:
+  offset_mean: 21.0
+  offset_std: [1.0, 0.1]
+  fluctuations: [5.0, 1.0]
+  loglogavgslope: [-2.0, 1.0]
+  flexibility: [1.2, 0.4]
+  asperity: [0.2, 0.2]
