@@ -1,5 +1,5 @@
 from .util import clean_dict, merge_dicts, split_its, update_it, pop_val
-from .yml import yaml_load, yaml_safe
+from .yml import yaml_load, yaml_save
 
 
 
@@ -45,7 +45,7 @@ class SetupKLConfig:
         dct = clean_dict(self.sections)
         dct_lst = split_its(dct)
 
-        yaml_safe(dct_lst, fname)
+        yaml_save(dct_lst, fname)
 
 
     def get_it(self):

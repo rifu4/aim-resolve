@@ -1,6 +1,6 @@
 import os
 import sys
-from aim_resolve import SetupKLConfig, yaml_load, yaml_safe, merge_dicts
+from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts
 
 
 
@@ -65,7 +65,7 @@ def main():
 
     # save the new model yaml-file and base yaml-file
     cfg.to_file(odir + '/files/0_pre.yml')
-    yaml_safe(base_dct, odir + '/files/base.yml')
+    yaml_save(base_dct, odir + '/files/base.yml')
 
 
 if __name__ == '__main__':

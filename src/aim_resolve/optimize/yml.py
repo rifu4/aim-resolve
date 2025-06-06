@@ -32,7 +32,7 @@ def yaml_load(fname):
 
 
 
-def yaml_safe(dct, fname):
+def yaml_save(dct, fname):
     '''Save a python dict as a single yaml stream or a list of dicts as separate yaml streams in a single file
     
     Parameters
