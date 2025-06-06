@@ -1,7 +1,6 @@
 opt:
-  odir: results/res_fast/2_opt
-  key: 41
-  resume: results/res_fast/1_opt
+  odir: runs/fast/1_opt
+  key: 4
 
 ---
 
@@ -25,8 +24,8 @@ lh.0:
   sky: =sky.0
   data: =data.0
   psf_pixels: 3000
-  response_kernel: results/res_fast/rk_eso_1062mhz_512_01.pkl
-  noise_kernel: results/res_fast/nk_eso_1062mhz_512_01.pkl
+  response_kernel: runs/fast/rk_eso_1062mhz_512_01.pkl
+  noise_kernel: runs/fast/nk_eso_1062mhz_512_01.pkl
   noise:
     prefix: nm.0
     parameters:
@@ -76,8 +75,8 @@ lh.1:
   sky: =sky.1
   data: =data.0
   psf_pixels: 3000
-  response_kernel: results/res_fast/rk_eso_1062mhz_512_01.pkl
-  noise_kernel: results/res_fast/nk_eso_1062mhz_512_01.pkl
+  response_kernel: runs/fast/rk_eso_1062mhz_512_01.pkl
+  noise_kernel: runs/fast/nk_eso_1062mhz_512_01.pkl
   noise:
     prefix: nm.1
     parameters:

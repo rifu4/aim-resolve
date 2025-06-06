@@ -78,11 +78,3 @@ i0_ts:
 space_bg:
   shape: [128, 128]
   fov: [2, 2]
-
-alpha_fs:
-  offset_mean: -1.0
-  offset_std: [1.0, 0.1]
-  fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 1.0]
-  # flexibility: [1.5, 0.5]
-  # asperity: [0.2, 0.2]

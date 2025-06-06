@@ -1,7 +1,6 @@
 opt:
-  odir: results/res_exp/2_opt
-  key: 41
-  resume: results/res_exp/1_opt
+  odir: runs/exp/1_opt
+  key: 4
 
 ---
 
@@ -20,7 +19,8 @@ lh.0:
   fun: exp
 
 data.0:
-  fname: /Users/rf/Development/packages/tile-nifty/tests/data/files/test256.pkl
+  fname: test_256.pkl
+  odir: ../data/files
   fun: exp
   idx: 0
   max_std: 0.001

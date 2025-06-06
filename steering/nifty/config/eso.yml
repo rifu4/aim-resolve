@@ -1,7 +1,6 @@
 opt:
-  odir: results/res_eso/2_opt
-  key: 41
-  resume: results/res_eso/1_opt
+  odir: runs/eso/1_opt
+  key: 4
 
 ---
 
