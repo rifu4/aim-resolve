@@ -133,6 +133,23 @@ class ImageDataGenerator():
             **kwargs,
         )
 
+    def get_subset(self, size):
+        '''
+        Get a subset of the samples.
+
+        Parameters
+        ----------
+        size : int
+            Size of the subset to get
+        '''
+        if not isinstance(self.samples, np.ndarray):
+            raise ValueError('no samples to get - please draw samples first')
+        
+        size = min(size, self.samples.shape[0])
+        samples = self.samples[:size]
+
+        return ImageDataGenerator(self.model, self.parameters, samples)
+
     def save(self, name, odir='', dtype='float64'):
         '''
         Save the model to a file.
