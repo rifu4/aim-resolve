@@ -102,7 +102,7 @@ def masks_from_model(
     margin_min *= zoom
 
     for sky_pi in sky.points:
-        mask_pi = map_points(np.ones(sky_pi.shape), sky_pi.points.space.coos, sky.space, vmap_sum=False)
+        mask_pi = np.array(map_points(np.ones(sky_pi.shape), sky_pi.points.space.coos, sky.space, vmap_sum=False))
         for i in range(mask_pi.shape[0]):
             mask_pi[i] = add_margin(mask_pi[i], margin_min, round=True)
         mask_dct[sky_pi.prefix] = mask_pi
