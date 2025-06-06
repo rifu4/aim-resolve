@@ -1,11 +1,8 @@
----
-
 name: uno_1
+
 odir: files
 
 device: cpu
-
----
 
 dataset:
   train:
@@ -19,11 +16,6 @@ dataset:
       odir: ../data/files
       dtype: float32
       size: 10
-    # _256:
-    #   name: valid_256
-    #   odir: /scratch/users/rfuchs/packages/aim-resolve/tests/data/files
-    #   dtype: float32
-    #   size: 100
   transform:
     log: true
     normalize: true
@@ -51,39 +43,32 @@ model:
   hidden_channels: 64
   projection_channels: 64
   positional_embedding: null
-  uno_out_channels: [32] #,64,64,64,32],
-  uno_n_modes: [[16,16]] #,[8,8],[8,8],[8,8],[16,16]],
-  uno_scalings: [[1.0,1.0]] #,[0.5,0.5],[1,1],[2,2],[1,1]],
+  uno_out_channels: [32]
+  uno_n_modes: [[16, 16]]
+  uno_scalings: [[1.0, 1.0]]
   horizontal_skips_map: null
   channel_mlp_skip: linear
   n_layers: 1
   domain_padding: 0.2
 
 optimizer:
-  lr: 8.e-3
-  weight_decay: 1.e-4
+  lr: 0.008
+  weight_decay: 0.0001
 
 scheduler:
   T_max: 30
 
-# loss:
-#   train:
-#     name: BCELoss
-#   test:
-#     name: BCELoss
-
 trainer:
   n_epochs: 1
-  wandb_log: False
+  wandb_log: false
   eval_interval: 1
-  use_distributed: False
-  verbose: True
-
----
+  use_distributed: false
+  verbose: true
 
 plot:
   odir: plots
   n_copies: 5
-  plot_space: True
-  plot_label: True
+  plot_space: true
+  plot_label: true
   cmap: inferno
+
