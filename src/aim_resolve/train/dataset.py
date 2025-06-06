@@ -4,59 +4,74 @@ import numpy as np
 from jax.typing import ArrayLike
 from torch.utils.data import DataLoader, Dataset
 
-from .img_data.data import ImageDataGenerator
-from .plot.arrays import plot_arrays
+from ..img_data.data import ImageDataGenerator
+from ..plot.arrays import plot_arrays
 
 
 
 class Dataset():
     '''Create datasets from the given image data. See `build` function to create the dataset.'''
 
-    def __init__(self, data_train, data_valid):
-        self.train = data_train
-        self.valid = data_valid
+    def __init__(self, train, valid):
+        self.train = train
+        self.valid = valid
 
     def train_loader(self, **kwargs):
-        return DataLoader(self.train, **kwargs)
-    
-    def valid_loader(self, **kwargs):
-        return DataLoader(self.valid, **kwargs)
+        train_loader = DataLoader(self.train, **kwargs)
+        return train_loader
 
-    def plot(self):
-        plot_arrays(self.train[0][:10], cols=3, transpose=True)
-        plot_arrays(self.train[1][:10], cols=2, transpose=True)
+    def valid_loader(self, **kwargs):
+        valid_loader = {}
+        for k, v in self.valid.items():
+            valid_loader[k] = DataLoader(v, **kwargs)
+        return valid_loader
+
+    # def plot(self):
+    #     plot_arrays(self.train.x[:10], cols=3, transpose=True)
+    #     plot_arrays(self.train.y[:10], cols=2, transpose=True)
 
     @classmethod
-    def build(cls, img_data, transform, coordinates=True, size=1000, split=0.8):
+    def build(cls, train, valid, transform, coordinates=True):
         '''
         Build train and validation datasets from generated ImageData.
         
         Parameters
         ----------
-        img_data : dict
-            Dictionary containing image data parameters (see ImageDataGenerator.load)
+        train : dict
+            Dictionary containing training data (see ImageDataGenerator.load)
+        valid : dict of dicts
+            Dictionary of dictionaries containing validation data (see ImageDataGenerator.load)
         transform : dict
             Dictionary containing transformation parameters (see transform_data)
         coordinates : bool, optional
             Whether to add coordinates to the data, by default True
-        size : int, optional
-            Number of samples to use from the dataset, by default 1000
-        split : float, optional
-            Fraction of data to use for training, by default 0.8
         '''
-        img_data = ImageDataGenerator.load(**img_data)
+        n_train = train.pop('size', 1000)
+        image_data_train = ImageDataGenerator.load(**train)
+        image_data_train = image_data_train.get_subset(n_train)
 
-        data = img_data.x[:size], img_data.y[:size]
-
-        data = transform_data(data, **transform)
+        data_train = (image_data_train.x, image_data_train.y)
+        data_train = transform_data(data_train, **transform)
 
         if coordinates:
-            data = add_coordinates(data, img_data.model.space.coos)
-
-        data_train, data_valid = split_data(data, split)
+            data_train = add_coordinates(data_train, image_data_train.model.space.coos)
 
         data_train = TensorDataset(data_train)
-        data_valid = TensorDataset(data_valid)
+
+        data_valid = {}
+        for k,v in valid.items():
+            n_v = v.pop('size', 100)
+            image_data_v = ImageDataGenerator.load(**v)
+            image_data_v = image_data_v.get_subset(n_v)
+            
+            data_v = (image_data_v.x, image_data_v.y)
+            data_v = transform_data(data_v, **transform)
+            
+            if coordinates:
+                data_v = add_coordinates(data_v, image_data_v.model.space.coos)
+
+            data_v = TensorDataset(data_v)
+            data_valid[k] = data_v
 
         return cls(data_train, data_valid)
 

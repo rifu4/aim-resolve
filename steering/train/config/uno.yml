@@ -3,21 +3,34 @@
 name: uno_1
 odir: training
 
+device: cpu
+
 ---
 
 dataset:
-  name: train128_1k
-  odir: /scratch/users/rfuchs/packages/tile-nifty/tests/data/files
-  dtype: float32
-  size: 1000
-  split: 0.8
-  coos: true
+  train:
+    name: train128
+    odir: /scratch/users/rfuchs/packages/tile-nifty/tests/data/files
+    dtype: float32
+    size: 100
+  valid:
+    _128:
+      name: valid128
+      odir: /scratch/users/rfuchs/packages/tile-nifty/tests/data/files
+      dtype: float32
+      size: 10
+    # _256:
+    #   name: valid256
+    #   odir: /scratch/users/rfuchs/packages/tile-nifty/tests/data/files
+    #   dtype: float32
+    #   size: 100
   transform:
     log: true
     normalize: true
     standardize: false
     rotate: true
     flip: true
+  coordinates: true
 
 dataloader:
   train:
@@ -33,7 +46,6 @@ dataloader:
       pin_memory: true
 
 model:
-  name: UNO
   in_channels: 3
   out_channels: 2
   hidden_channels: 64
@@ -47,33 +59,32 @@ model:
   n_layers: 1
   domain_padding: 0.2
 
-optimizer:
-  name: AdamW
-  lr: 8.e-3
-  weight_decay: 1.e-4
+# optimizer:
+#   name: AdamW
+#   lr: 8.e-3
+#   weight_decay: 1.e-4
 
-scheduler:
-  name: CosineAnnealingLR
+# scheduler:
+#   name: CosineAnnealingLR
 
-loss:
-  train:
-    name: BCEwithLogitsLoss
-  test:
-    name: BCEwithLogitsLoss
+# loss:
+#   train:
+#     name: BCEwithLogitsLoss
+#   test:
+#     name: BCEwithLogitsLoss
 
 trainer:
   n_epochs: 100
-  device: device
   wandb_log: False
-  eval_interval: 3
+  eval_interval: 5
   use_distributed: False
   verbose: True
 
 ---
 
-plot:
-  n_copies: 10
-  space: True
-  label: True
-  cmap: inferno
-  norm: [log, linear, linear]
+# plot:
+#   n_copies: 10
+#   space: True
+#   label: True
+#   cmap: inferno
+#   norm: [log, linear, linear]
