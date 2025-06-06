@@ -1,7 +1,7 @@
 ---
 
-name: test_256_10
-odir: data
+name: test_256
+odir: files
 dtype: float64
 
 seed: 44
@@ -26,10 +26,10 @@ parameters:
       cov_y: [1, 0.1]
 
   points:
-    n_min: 0
+    n_min: 5
     n_max: 10
     i0:
-      mean: 12
+      mean: 15
       std: 2
     blur:
       b_min: 0
@@ -37,8 +37,8 @@ parameters:
       steps: 100
 
   tiles:
-    n_min: 0
-    n_max: 5
+    n_min: 5
+    n_max: 10
     tile_size: [8, 8]
     i0:
       offset_mean: 12
@@ -65,6 +65,7 @@ parameters:
 ---
 
 plot:
+  odir: plots
   n_copies: 10
   space: True
   label: True

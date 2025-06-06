@@ -39,5 +39,5 @@ else:
 # plot data
 if 'plot' in dct:
     print('\nplot data:')
-    data.plot_samples(dct['name'], dct['odir'], **dct['plot'])
+    data.plot_samples(dct['name'], **dct['plot'])
     print('done')
