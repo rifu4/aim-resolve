@@ -23,7 +23,7 @@ class Dataset():
     def valid_loader(self, **kwargs):
         valid_loader = {}
         for k, v in self.valid.items():
-            valid_loader[k] = DataLoader(v, **kwargs)
+            valid_loader[k] = DataLoader(v, **kwargs[k])
         return valid_loader
 
     # def plot(self):
