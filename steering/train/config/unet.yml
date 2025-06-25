@@ -1,8 +1,8 @@
 ---
 
-name: uno5
+name: unet1024c
 odir: files
-resume: false
+resume: unet128b
 
 wandb: true
 
@@ -10,16 +10,24 @@ wandb: true
 
 dataset:
   train:
-    name: train_128_10k
+    name: train1024_1k
     odir: ../data/files
     dtype: float32
   valid:
-    _128:
-      name: valid_128_1k
+    v_128:
+      name: valid128_1k
       odir: ../data/files
       dtype: float32
-    _256:
-      name: valid_256_1k
+    v_256:
+      name: valid256_1k
+      odir: ../data/files
+      dtype: float32
+    v_512:
+      name: valid512_1k
+      odir: ../data/files
+      dtype: float32
+    v_1024:
+      name: valid1024_1k
       odir: ../data/files
       dtype: float32
   transform:
@@ -28,16 +36,17 @@ dataset:
     standardize: false
     rotate: true
     flip: true
+    batch_size: 250
   coordinates: false
 
 dataloader:
   train:
-    batch_size: 32
+    batch_size: 2
     shuffle: true
     num_workers: 0
     pin_memory: true
   valid:
-    batch_size: 32
+    batch_size: 8
     num_workers: 0
     shuffle: false
     pin_memory: true
@@ -45,22 +54,13 @@ dataloader:
 ---
 
 model:
-  name: uno
+  mode: unet
   parameters:
+    encoder_name: resnet50
+    encoder_weights: imagenet
     in_channels: 1
-    out_channels: 2
-    hidden_channels: 64
-    projection_channels: 64
-    positional_embedding: grid
-    uno_out_channels: [32,64,64,64,32]
-    uno_n_modes: [[16,16],[8,8],[8,8],[8,8],[16,16]]
-    uno_scalings: [[1.0,1.0],[0.5,0.5],[1,1],[2,2],[1,1]]
-    horizontal_skips_map: null
-    channel_mlp_skip: linear
-    n_layers: 5
-    domain_padding: 0.2
-
----
+    classes: 2
+    activation: null
 
 train:
   optimizer:
@@ -69,7 +69,7 @@ train:
   scheduler:
     T_max: 30
   trainer:
-    n_epochs: 100
+    n_epochs: 25
     wandb_log: True
     eval_interval: 5
     use_distributed: False
