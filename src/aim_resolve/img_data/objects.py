@@ -116,6 +116,7 @@ def get_masks(*,
     fname = os.path.join(dpath, 'masks.npz')
     masks = np.load(fname)['val']
 
-    masks = np.concatenate((masks, np.zeros((m_max-90, 256, 256))), axis=0)
+    if m_max > 90:
+        masks = np.concatenate((masks, np.zeros((m_max-90, 256, 256))), axis=0)
 
     return masks[m_min : m_max + 1]
