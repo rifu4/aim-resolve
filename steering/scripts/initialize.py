@@ -13,7 +13,7 @@ def main():
 
     # load the pipeline yaml-file and pop not needed keys
     pipe_dct = yaml_load(pipe_yml)
-    [pipe_dct.pop(k) for k in ['n_it', 'unet']]
+    pipe_dct.pop('n_it')
     
     # adjust model yaml-file (opt, lh, and data section)
     odir = pipe_dct.pop('odir')
@@ -32,14 +32,15 @@ def main():
 
     # get correct kernels if fast-resolve is used
     if 'radio' in fun and 'fast' in fun:
+        os.makedirs('kernels/', exist_ok=True)
         kname = cfg.sections['data.0']['fname'].split('/')[-1].split('.')[0]
         ksize = pipe_dct['space_bg']['shape'][0]
         kfov = pipe_dct['space_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
             psf_pixels = 3000,
-            response_kernel = f'test/kernel/rk_{kname}_{kfov}_{ksize}.pkl', 
-            noise_kernel = f'test/kernel/nk_{kname}_{kfov}_{ksize}.pkl',
+            response_kernel = f'kernels/rk_{kname}_{kfov}_{ksize}.pkl', 
+            noise_kernel = f'kernels/nk_{kname}_{kfov}_{ksize}.pkl',
         )
 
     # extract callback, extra, and transition keys from pipe_dct
