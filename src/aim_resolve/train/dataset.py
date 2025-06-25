@@ -5,14 +5,17 @@ from jax.typing import ArrayLike
 from torch.utils.data import DataLoader, Dataset
 
 from ..img_data.data import ImageDataGenerator
-from ..plot.arrays import plot_arrays
+from ..model.util import check_type
 
 
 
 class Dataset():
     '''Create datasets from the given image data. See `build` function to create the dataset.'''
 
-    def __init__(self, train, valid):
+    def __init__(self, train, valid = None):
+        check_type(train, TensorDataset)
+        check_type(valid, (dict, type(None), TensorDataset))
+
         self.train = train
         self.valid = valid
 
@@ -23,12 +26,8 @@ class Dataset():
     def valid_loader(self, **kwargs):
         valid_loader = {}
         for k, v in self.valid.items():
-            valid_loader[k] = DataLoader(v, **kwargs[k])
+            valid_loader[k] = DataLoader(v, **kwargs)
         return valid_loader
-
-    # def plot(self):
-    #     plot_arrays(self.train.x[:10], cols=3, transpose=True)
-    #     plot_arrays(self.train.y[:10], cols=2, transpose=True)
 
     @classmethod
     def build(cls, train, valid, transform, coordinates=True):
@@ -46,9 +45,10 @@ class Dataset():
         coordinates : bool, optional
             Whether to add coordinates to the data, by default True
         '''
-        n_train = train.pop('size', 1000)
+        n_train = train.pop('size', False)
         image_data_train = ImageDataGenerator.load(**train)
-        image_data_train = image_data_train.get_subset(n_train)
+        if n_train:
+            image_data_train = image_data_train.get_subset(n_train)
 
         data_train = (image_data_train.x, image_data_train.y)
         data_train = transform_data(data_train, **transform)
@@ -60,10 +60,11 @@ class Dataset():
 
         data_valid = {}
         for k,v in valid.items():
-            n_v = v.pop('size', 100)
+            n_v = v.pop('size', False)
             image_data_v = ImageDataGenerator.load(**v)
-            image_data_v = image_data_v.get_subset(n_v)
-            
+            if n_v:
+                image_data_v = image_data_v.get_subset(n_v)
+
             data_v = (image_data_v.x, image_data_v.y)
             data_v = transform_data(data_v, **transform)
             
@@ -96,32 +97,72 @@ class TensorDataset(Dataset):
 
 def transform_data(
         data,
+        min_value = 0,
         log = True,
         normalize = True,
         standardize = False,
         rotate = True,
         flip = True,
-):
+        batch_size = 1000,
+):  
+    '''
+    Apply various transformations to the data.
+
+    Parameters
+    ----------
+    data : tuple of (images, labels)
+        The input data containing images and labels.
+    min_value : float, optional
+        Sets the minimum value of the images, by default 0.
+    log : bool, optional
+        Whether to take the logarithm of the images, by default True.
+    normalize : bool, optional
+        Whether to normalize the images, by default True.
+    standardize : bool, optional
+        Whether to standardize the images, by default False.
+    rotate : bool, optional
+        Whether to apply random rotation to the images and labels, by default True.
+    flip : bool, optional
+        Whether to apply random flipping to the images and labels, by default True.
+    batch_size : int, optional
+        The size of the batches to process the data, by default 1000.
+    '''
     if normalize and standardize:
         raise ValueError('normalize and standardize cannot both be True')
+    
+    images, labels = data
+    n_copies = images.shape[0]
+    n_batches = (n_copies + batch_size - 1) // batch_size
 
-    xs, ys = data
-    if log:
-        xs = np.log(xs)
-    if normalize:
-        xs = jax.vmap(lambda x: (x-x.min())/(x.max()-x.min()))(xs)
-    if standardize:
-        xs = jax.vmap(lambda x: (x-x.mean())/x.std())(xs)
-    if rotate:
-        ks = np.random.randint(0, 3, size=xs.shape[0])
-        xs = jax.vmap(lambda x, k: rotate_data(x, k, axes=(1, 2)))(xs, ks)
-        ys = jax.vmap(lambda y, k: rotate_data(y, k, axes=(1, 2)))(ys, ks)
-    if flip:
-        axs = np.random.randint(0, 3, size=xs.shape[0])
-        xs = jax.vmap(lambda x, a: flip_data(x, a))(xs, axs)
-        ys = jax.vmap(lambda y, a: flip_data(y, a))(ys, axs)
+    for batch_i in range(n_batches):
+        start = batch_i * batch_size
+        end = min(start + batch_size, n_copies)
 
-    return (np.array(xs), np.array(ys))
+        img_i = jnp.array(images[start:end])
+        lbl_i = jnp.array(labels[start:end])
+
+        if min_value <= 0:
+            min_value = np.min(img_i[img_i > 0])
+        img_i = np.where(img_i > min_value, img_i, min_value)
+        if log:
+            img_i = np.log(img_i)
+        if normalize:
+            img_i = jax.vmap(lambda x: (x-x.min())/(x.max()-x.min()))(img_i)
+        if standardize:
+            img_i = jax.vmap(lambda x: (x-x.mean())/x.std())(img_i)
+        if rotate:
+            ks = np.random.randint(0, 3, size=img_i.shape[0])
+            img_i = jax.vmap(lambda x, k: rotate_data(x, k, axes=(1, 2)))(img_i, ks)
+            lbl_i = jax.vmap(lambda y, k: rotate_data(y, k, axes=(1, 2)))(lbl_i, ks)
+        if flip:
+            axs = np.random.randint(0, 3, size=img_i.shape[0])
+            img_i = jax.vmap(lambda x, a: flip_data(x, a))(img_i, axs)
+            lbl_i = jax.vmap(lambda y, a: flip_data(y, a))(lbl_i, axs)
+
+        images[start:end] = np.array(img_i)
+        labels[start:end] = np.array(lbl_i)
+
+    return (images, labels)
 
 
 
@@ -159,14 +200,14 @@ def add_coordinates(
         data,
         coordinates,
 ):
-    xs, ys = data
+    images, labels = data
 
     coordinates = np.concatenate([c[None] for c in coordinates], axis=0)
-    coordinates = np.repeat(coordinates[None], xs.shape[0], axis=0)
+    coordinates = np.repeat(coordinates[None], images.shape[0], axis=0)
 
-    xs = np.concatenate((xs, coordinates), axis=1)
+    images = np.concatenate((images, coordinates), axis=1)
 
-    return (xs, ys)
+    return (images, labels)
 
 
 
