@@ -52,7 +52,7 @@ class ImageDataGenerator():
 
         return cls(model, parameters, samples)
 
-    def draw_samples(self, key, n_copies=1):
+    def draw_samples(self, key, n_copies=1, batch_size=10000):
         '''
         Draw samples from the model.
 
@@ -62,20 +62,36 @@ class ImageDataGenerator():
             Random key for sampling. If an int is provided, it will be used as a seed.
         n_copies : int, optional
             Number of samples to draw, by default 1
+        batch_size : int, optional
+            Size of the batches to use for sampling, by default 10000.
         '''
         key = random.PRNGKey(key) if isinstance(key, int) else key
-        samples = jnp.empty((n_copies,) + self.model.target.shape)
+        samples = np.empty((n_copies,) + self.model.target.shape)
 
-        @loop_tqdm(n_copies)
-        def step(i, tpl):
-            smp, key = tpl
-            key, subkey = random.split(key)
-            xi = jft.random_like(subkey, self.model.domain)
-            smp = smp.at[i].set(self.model(xi, key=subkey))
-            return (smp, key)
+        n_batches = (n_copies + batch_size - 1) // batch_size
 
-        samples, key = lax.fori_loop(0, n_copies, step, (samples, key))
-        self.samples = np.array(samples)
+        for batch_i in range(n_batches):
+            start = batch_i * batch_size
+            end = min(start + batch_size, n_copies)
+            n_i = end - start
+
+            samples_i = jnp.empty((n_i,) + self.model.target.shape)
+
+            print(f'Step {batch_i + 1}/{n_batches}: ', end='', flush=True)
+
+            @loop_tqdm(n_i)
+            def step(i, tpl):
+                smp, k = tpl
+                k, sk = random.split(k)
+                xi = jft.random_like(sk, self.model.domain)
+                smp = smp.at[i].set(self.model(xi, key=sk))
+                return (smp, k)
+
+            samples_i, key = lax.fori_loop(0, n_i, step, (samples_i, key))
+
+            samples[start:end] = np.array(samples_i)
+
+        self.samples = samples
 
     def get_sample(self, index=0, prefix='data'):
         '''
@@ -121,6 +137,8 @@ class ImageDataGenerator():
             if not odir.endswith(('plots', 'plots/')):
                 odir = os.path.join(odir, 'plots')
             os.makedirs(odir, exist_ok=True)
+
+        [kwargs.pop(key, None) for key in ('rows', 'cols')]
         
         plot_arrays(
             array = vals,
@@ -165,8 +183,6 @@ class ImageDataGenerator():
         '''
         if not name.endswith('.pkl'):
             name += '.pkl'
-        if not odir.endswith(('files', 'files/')):
-            odir = os.path.join(odir, 'files')
         os.makedirs(odir, exist_ok=True)
 
         with open(os.path.join(odir, name), 'wb') as f:
@@ -188,8 +204,6 @@ class ImageDataGenerator():
         '''
         if not name.endswith('.pkl'):
             name += '.pkl'
-        if not odir.endswith(('files', 'files/')):
-            odir = os.path.join(odir, 'files')
         with open(os.path.join(odir, name), 'rb') as file:
             parameters, samples = pickle.load(file)
         
