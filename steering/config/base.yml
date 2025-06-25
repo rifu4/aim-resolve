@@ -93,6 +93,19 @@ base_trans:
 
 ---
 
+base_seg:
+  seg_model:
+    name: unet128
+    odir: train/files
+  transform:
+    log: true
+    normalize: true
+    standardize: false
+    rotate: false
+    flip: false
+  n_orders: 5
+  coordinates: false
+
 base_clu:
   alg: dbscan
   eps: 0.5
