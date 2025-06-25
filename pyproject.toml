@@ -21,21 +21,22 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "nifty8[re]",
-    "jax==0.4.30",
-    "jaxbind==1.1.0",
+    "ducc0",
+    "h5py",
+    "jax!=0.6",
+    "jaxbind",
     "jax-finufft",
     "jax-tqdm",
-    "ducc0",
-    "PyYAML",
-    "h5py",
-    "pandas",
     "matplotlib",
+    "neuraloperator",
+    "nifty8[re]",
+    "pandas",
+    "PyYAML",
     "snakemake",
-    "graphviz",
     "scikit-learn",
+    "segmentation-models-pytorch"
     "torch",
-    "neuraloperator"
+    "wandb",
 ]
 
 [tool.setuptools.dynamic]

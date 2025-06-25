@@ -1,3 +1,8 @@
+# Extra
+*runs/
+*wandb/
+*.snakemake/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -7,7 +12,6 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-*runs/
 .Python
 build/
 develop-eggs/
