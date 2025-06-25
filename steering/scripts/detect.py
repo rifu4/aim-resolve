@@ -1,13 +1,13 @@
 import os
 import sys
 import numpy as np
-from aim_resolve import ImageData, yaml_load, plot_arrays, plot_classes, clustering, unet_predict
+from aim_resolve import ImageData, yaml_load, plot_arrays, plot_classes, clustering, model_predict
 
 
 
 def main():
     _, files = sys.argv[0], sys.argv[1:]
-    opt_pkl, unet_pth, base_yml, it = files
+    opt_pkl, base_yml, it = files
     
     # load model and base yaml-files and extract output directory
     base_dct = yaml_load(base_yml)
@@ -18,8 +18,7 @@ def main():
     rec = ImageData.load(opt_pkl, dtype='float32')
 
     # detect point sources and objects in the reconstructed image using the U-Net model
-    ps_map, oj_map = unet_predict(np.log(rec.val), unet_pth)
-    # ps_map, oj_map = brightest_pixels(rec_val, fac=5)
+    ps_map, oj_map = model_predict(rec, **base_dct['base_seg'])
 
     # load the clustering settings and cluster the detected objects
     cl_dct = base_dct['base_clu']
