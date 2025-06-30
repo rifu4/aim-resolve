@@ -12,19 +12,14 @@ def main(config, cuda_device):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_device)
         device = 'cuda'
 
-    import wandb
-    from neuralop.utils import count_model_params
+    import lightning as pl
+    from lightning.pytorch.loggers import WandbLogger
     from aim_resolve import Dataset, SegmentationModel, yaml_load
 
     # Load YAML config
     dct = yaml_load(config)
-
-    # Initialize wandb if requested
-    if all(dct.get(k, False) for k in ['model', 'train', 'wandb']): 
-        wandb.init(
-            project=dct['model']['mode'],
-            config=dct,
-        )
+    name = dct.get('name')
+    odir = dct.get('odir')
 
     # Load dataset and data loaders
     dataset = Dataset.build(**dct['dataset'])
@@ -32,34 +27,46 @@ def main(config, cuda_device):
     valid_loaders = dataset.valid_loader(**dct['dataloader']['valid'])
 
     # build new model or resume from saved model
-    if 'resume' in dct:
-        if isinstance(dct['resume'], str):
-            print('\nload model:\nname:', dct['resume'])
-            model = SegmentationModel.load(dct['resume'], dct['odir'])
-        else:
-            print('\nload model:\nname:', dct['name'])
-            model = SegmentationModel.load(dct['name'], dct['odir'])
-    elif 'model' in dct:
-        print('\nbuild model:\nname:', dct['model'].get('mode', None))
-        model = SegmentationModel.build(**dct['model'])
+    resume = dct.get('resume', False)
+    if resume in dct:
+        rname = resume if isinstance(resume, str) else name
+        print('\nload model:\nname:', rname)
+        model = SegmentationModel.load(rname, odir)
     else:
-        raise ValueError('No model specified in the config file.')
+        print('\nbuild model:')
+        model = SegmentationModel.build(**dct['model'])
 
     model = model.to(device)
-    n_params = count_model_params(model)
     print('\nModel: \n', model)
-    print('n params:', n_params)
 
-    # Train model if requested
-    if 'train' in dct:
-        model.train_model(train_loader, valid_loaders, **dct['train'])
-        model.save(dct['name'], dct['odir'])
+    train = dct.get('train', False)
+    if train:
+        # Initialize wandb if requested
+        logger = train.pop('logger', None)
+        if logger == 'wandb':
+            logger = WandbLogger(
+                project=model.config['arch'],
+                name=name,
+                config=dct,
+            )
+
+        # train the model
+        trainer = pl.Trainer(logger=logger, **train)
+
+        trainer.fit(
+            model,
+            train_dataloaders=train_loader,
+            val_dataloaders=valid_loaders,
+        )
+
+        # save the model
+        model.save(name, odir)
 
     # Plot predictions if requested
     if 'plot' in dct:
         print('\nplot predictions:')
         model = model.to('cpu')
-        model.plot_predictions(dataset, dct['name'], **dct['plot'])
+        model.plot_predictions(dataset, name, **dct['plot'])
         print('done')
 
 
