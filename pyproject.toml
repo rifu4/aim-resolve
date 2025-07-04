@@ -34,7 +34,7 @@ dependencies = [
     "PyYAML",
     "snakemake",
     "scikit-learn",
-    "segmentation-models-pytorch"
+    "segmentation-models-pytorch",
     "torch",
     "wandb",
 ]
