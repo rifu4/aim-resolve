@@ -87,7 +87,7 @@ def main():
         label = 'detected components',
         name = f'{it}_mdl.png',
         odir = f'{odir}/plots',
-        marker = (ps_mrk, oj_mrk),
+        marker = dict(ps_mrk=ps_mrk, oj_mrk=oj_mrk),
         **plt_dct,
     )
 

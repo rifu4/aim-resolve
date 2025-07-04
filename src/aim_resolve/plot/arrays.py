@@ -22,7 +22,7 @@ def plot_arrays(
         vmax = None,
         cbar = True,
         ticks = 5,
-        marker = (),
+        marker = {},
         square = False,
         transpose = False,
         plot_space = True,
@@ -63,8 +63,9 @@ def plot_arrays(
         Whether to show the colorbar. Default is True.
     ticks : int, optional
         The number of ticks to use. Default is 5. If set to 0, no ticks will be shown.
-    marker : tuple, optional
-        Plot markers at specific locations in an image. Default is ().
+    marker : dict or dict containing subdicts, optional
+        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
+        For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
     square : bool, optional
         Whether to fillup non-square images with zeros. Default is False.
     transpose : bool, optional
@@ -91,6 +92,7 @@ def plot_arrays(
     vmins = to_shape(vmin, shape_T, default=-1, transpose=transpose)
     vmaxs = to_shape(vmax, shape_T, default=-1, transpose=transpose)
     norms = to_shape(norm, shape_T, default=-1, transpose=transpose)
+    markers = to_shape(marker, shape_T, default={}, transpose=transpose)
 
     figsize = to_shape(figsize, (2,), dtype='float64') * np.array(shape[::-1])
     figure = plt.figure(figsize=figsize, dpi=dpi)
@@ -114,7 +116,7 @@ def plot_arrays(
                 vmax = vmaxs[x, y],
                 cbar = cbar,
                 ticks = ticks,
-                marker = marker,
+                marker = markers[x, y],
                 square = square,
                 plot_space = plot_space,
                 plot_label = plot_label,

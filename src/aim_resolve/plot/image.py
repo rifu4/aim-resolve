@@ -21,7 +21,7 @@ def plot_image(
         vmax = None,
         cbar = True,
         ticks = 5,
-        marker = (),
+        marker = {},
         square = False,
         plot_space = True,
         plot_label = True,
@@ -56,8 +56,9 @@ def plot_image(
         Whether to show a colorbar. Default is True.
     ticks : int, optional
         The number of ticks to use. Default is 5. If set to 0, no ticks will be shown.
-    marker : tuple of dict, optional
-        The markers to plot. Default is ().
+    marker : dict or dict containing subdicts, optional
+        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
+        For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
     square : bool, optional
         Whether to plot the image in a square format. Default is False.
     plot_space : bool, optional
@@ -106,11 +107,12 @@ def plot_image(
     
     set_ticks(axes[-1], space, ticks, plot_space)
     
-    marker = (marker, ) if not isinstance(marker, tuple) else marker
-    for mrk in marker:
-        if not isinstance(mrk, dict):
-            raise TypeError('`marker` has to be a dictionary')
-        axes[-1].scatter(**mrk)
+    marker = {'m0': marker} if all(k in marker for k in ['x', 'y']) else marker
+    for mrk in marker.values():
+        if isinstance(mrk, dict) and all(k in mrk for k in ['x', 'y']):
+            axes[-1].scatter(**mrk)
+        else:
+            raise TypeError('`marker` has to be a dictionary with keys `x`, `y`.')
 
     if plot_now:
         plot_figure(figure, odir, name)
