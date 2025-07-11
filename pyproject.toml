@@ -27,6 +27,7 @@ dependencies = [
     "jaxbind",
     "jax-finufft",
     "jax-tqdm",
+    "lightning",
     "matplotlib",
     "neuraloperator",
     "nifty8[re]",
