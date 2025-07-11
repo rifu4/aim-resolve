@@ -29,6 +29,7 @@ def plot_arrays(
         plot_label = True,
         figsize = (5, 5),
         dpi = 300,
+        callback = None,
         **kwargs,
 ):
     '''
@@ -78,6 +79,9 @@ def plot_arrays(
         The size of the figure. Default is (5, 5).
     dpi : int, optional
         The dpi of the figure. Default is 300.
+    callback : callable, optional
+        A callback function. Can be used to customize the plots (e.g. by adding text).
+        -> The function should take two arguments: figure and axes.
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
     '''
@@ -132,5 +136,8 @@ def plot_arrays(
             )
         else:
             raise ValueError('`array` has to be 1D or 2D')
+        
+    if callable(callback):
+        callback(figure, axes)
 
     plot_figure(figure, odir, name)

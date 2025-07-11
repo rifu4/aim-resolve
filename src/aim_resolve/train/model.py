@@ -1,51 +1,84 @@
 import os
 import torch
-from neuralop import Trainer
-from neuralop.models import UNO
-from segmentation_models_pytorch import Unet
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.data import DataLoader
+import lightning as pl
+import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.losses import DiceLoss, JaccardLoss, SoftBCEWithLogitsLoss
+from torch.optim import lr_scheduler
 
 from .dataset import Dataset
-from .loss import BCELoss
 from ..model.util import check_type
-from ..optimize.yml import yaml_load, yaml_save
 
 
 
-class SegmentationModel():
-    '''Base class for segmentation models, providing common functionality for saving and loading.'''
+class SegmentationModel(pl.LightningModule):
+    '''Base class for segmentation models for saving, loading, and plotting, based on pytorch lightning.'''
 
-    def __init__(self, mode, parameters):
-        raise NotImplementedError('This method should be defined in subclasses.')
+    def __init__(self, model, loss_fn, config):
+        super().__init__()
+        self.model = model
+        self.loss_fn = loss_fn
+        self.optim_fn = torch.optim.Adam(self.parameters(), **config['optimizer'])
+        self.sched_fn = lr_scheduler.CosineAnnealingLR(self.optim_fn, **config['scheduler'])
+        self.config = config
 
-    @staticmethod
-    def build(*, mode, parameters):
+        # initialize step metrics
+        self.training_step_outputs = []
+        self.validation_step_outputs = {}
+        self.test_step_outputs = []
+
+    @classmethod
+    def build(cls, *, arch, model_args, loss, optimizer, scheduler):
         '''
         Build the model from the given parameters.
 
         Parameters
         ----------
-        mode : str
-            The type of model to build ('unet' or 'uno').
-        parameters : dict
-            Dictionary containing the parameters for the model.
+        arch : str
+            The arch of the model to build.
+        model_args : dict
+            Dictionary containing the arguments for the model.
+        loss : str
+            The loss function to use for training the model.
+        optimizer : dict
+            The optimizer to use for training the model.
+        scheduler : dict
+            The learning rate scheduler to use for training the model.
         '''
-        check_type(mode, str)
-        check_type(parameters, dict)
+        check_type(arch, str)
+        check_type(model_args, dict)
+        check_type(loss, str)
+        check_type(optimizer, dict)
+        check_type(scheduler, dict)
 
-        if mode == 'unet':
-            return UnetModel(mode, parameters)
-        elif mode == 'uno':
-            return UNOModel(mode, parameters)
+        if arch == 'uno':
+            from neuralop.models.uno import UNO
+            model = UNO(**model_args)
         else:
-            raise ValueError(f'Unknown model mode: {mode}. Supported modes are `unet` and `uno`.')
+            model = smp.create_model(arch, **model_args)
+
+        if loss == 'bce':
+            loss_fn = SoftBCEWithLogitsLoss()
+        elif loss == 'dice':
+            loss_fn = DiceLoss(mode='multilabel')
+        elif loss == 'jaccard':
+            loss_fn = JaccardLoss(mode='multilabel')
+        else:
+            raise ValueError(f'Unknown loss function: `{loss}`')
+
+        config = dict(
+            arch=arch,
+            model_args=model_args,
+            loss=loss,
+            optimizer=optimizer,
+            scheduler=scheduler,
+        )
+
+        return cls(model, loss_fn, config)
 
     def save(self, name, odir=''):
         '''
-        Save the model the parameters to a `.yml` file and the model to a `.pth` file.
-        
+        Save the model model, arch, and config to a `.pth` file.
+
         Parameters
         ----------
         name : str
@@ -54,14 +87,10 @@ class SegmentationModel():
             Output directory for the file, by default ''
         '''
         os.makedirs(odir, exist_ok=True)
-
-        if not name.endswith('.yml'):
-            name_yml = name + '.yml'
-        yaml_save(dict(mode=self.mode, parameters=self.params), os.path.join(odir, name_yml))
-
         if not name.endswith('.pth'):
             name_pth = name + '.pth'
-        torch.save(self.state_dict(), os.path.join(odir, name_pth))
+
+        torch.save(self.config | {'state_dict': self.state_dict()}, os.path.join(odir, name_pth))
 
         return
 
@@ -77,68 +106,16 @@ class SegmentationModel():
         odir : str, optional
             Output directory for the file, by default ''
         '''
-        if not name.endswith('.yml'):
-            name_yml = name + '.yml'
-        dct = yaml_load(os.path.join(odir, name_yml))
-        model = cls.build(**dct)
-
         if not name.endswith('.pth'):
             name_pth = name + '.pth'
-        model.load_state_dict(torch.load(os.path.join(odir, name_pth)))
+
+        config = torch.load(os.path.join(odir, name_pth))
+        state_dict = config.pop('state_dict', None)
+        model = cls.build(**config)
+        model.load_state_dict(state_dict)
         model.eval()
 
         return model
-    
-    def train_model(self, train_loader, valid_loaders, optimizer, scheduler, trainer, device='cuda'):
-        '''
-        Train the model using the provided dataset, optimizer, and scheduler.
-        
-        Parameters
-        ----------
-        train_loader : torch.utils.data.DataLoader
-            DataLoader for the training dataset.
-        valid_loaders : dict
-            Dictionary of DataLoaders for validation datasets.
-        optimizer : torch.optim.Optimizer
-            The optimizer to use for training.
-        scheduler : torch.optim.lr_scheduler._LRScheduler
-            The learning rate scheduler.
-        trainer : neuralop.Trainer
-            The trainer instance for training the model.
-        device : str, optional
-            The device to use for training, by default `cuda`.
-        '''
-        check_type(train_loader, DataLoader)
-        check_type(valid_loaders, dict)
-        check_type(optimizer, dict)
-        check_type(scheduler, dict)
-        check_type(trainer, dict)
-        check_type(device, str)
-
-        optimizer = AdamW(self.parameters(), **optimizer)
-        print('\nOptimizer: \n', optimizer)
-
-        scheduler = CosineAnnealingLR(optimizer, **scheduler)
-
-        train_loss = BCELoss()
-        valid_losses = {'bce': BCELoss()}
-        print(f'\nLosses: \n   train: {train_loss}\n   valid: {valid_losses}')
-
-        trainer = Trainer(model=self, device=device, **trainer)
-
-        trainer.train(
-            train_loader=train_loader,
-            test_loaders=valid_loaders,
-            optimizer=optimizer,
-            scheduler=scheduler, 
-            training_loss=train_loss,
-            eval_losses=valid_losses,
-        )
-
-    def sigmoid_predict(self, x):
-        pred = self(x)
-        pred = torch.sigmoid(pred.squeeze())
-        return pred > 0.5
     
     def plot_predictions(self, dataset, name, odir='', n_copies=5, label=False, **kwargs):
         '''
@@ -166,16 +143,11 @@ class SegmentationModel():
         data_loaders = {f'{name}_train': dataset.train_loader(batch_size=n_copies)}
         data_loaders |= {f'{name}_valid{k}': v for k,v in dataset.valid_loader(batch_size=n_copies).items()}
 
-        if odir:
-            if not odir.endswith(('plots', 'plots/')):
-                odir = os.path.join(odir, 'plots')
-            os.makedirs(odir, exist_ok=True)
-
         for nm,dl in data_loaders.items():
             sample = next(iter(dl))
             x = sample['x'].detach().numpy()
             y = sample['y'].detach().numpy()
-            pred = self.sigmoid_predict(sample['x'])
+            pred = self.forward_sigmoid(sample['x'])
             pred = pred.detach().numpy()
 
             arrays = []
@@ -197,22 +169,123 @@ class SegmentationModel():
 
         return
     
+    def forward(self, image):
+        return self.model.forward(image)
+
+    def forward_sigmoid(self, image):
+        pred = self.forward(image)
+        pred = torch.sigmoid(pred.squeeze())
+        return pred > 0.5
+    
+    def shared_step(self, batch, stage):
+        image = batch['x']
+        mask = batch['y']
+
+        assert image.ndim == 4
+        h, w = image.shape[2:]
+        assert h % 32 == 0 and w % 32 == 0
+        assert mask.ndim == 4
+        assert mask.max() <= 1.0 and mask.min() >= 0
+
+        logits_mask = self.forward(image)
+
+        loss = self.loss_fn(logits_mask, mask)
+
+        prob_mask = logits_mask.sigmoid()
+        pred_mask = (prob_mask > 0.5).float()
+
+        tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), mask.long(), mode='multilabel')
+
+        return {
+            'loss': loss,
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'tn': tn,
+        }
+
+    def shared_epoch_end(self, outputs, stage):
+        # aggregate step metics
+        tp = torch.cat([x['tp'] for x in outputs])
+        fp = torch.cat([x['fp'] for x in outputs])
+        fn = torch.cat([x['fn'] for x in outputs])
+        tn = torch.cat([x['tn'] for x in outputs])
+
+        # get average loss
+        losses = torch.stack([x['loss'] for x in outputs])
+        avg_loss = losses.mean()
+
+        # per image IoU means that we first calculate IoU score for each image
+        # and then compute mean over these scores
+        per_image_iou = smp.metrics.iou_score(
+            tp, fp, fn, tn, reduction='micro-imagewise'
+        )
+
+        # dataset IoU means that we aggregate intersection and union over whole dataset
+        # and then compute IoU score. The difference between dataset_iou and per_image_iou scores
+        # in this particular case will not be much, however for dataset
+        # with 'empty' images (images without target class) a large gap could be observed.
+        # Empty images influence a lot on per_image_iou and much less on dataset_iou.
+        dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction='micro')
+        metrics = {
+            f'{stage}_loss': avg_loss,
+            f'{stage}_per_image_iou': per_image_iou,
+            f'{stage}_dataset_iou': dataset_iou,
+        }
+
+        self.log_dict(metrics, prog_bar=True)
+
+    def training_step(self, batch, batch_idx):
+        train_loss_info = self.shared_step(batch, 'train')
+        # append the metics of each step to the
+        self.training_step_outputs.append(train_loss_info)
+        return train_loss_info
+
+    def on_train_epoch_end(self):
+        self.shared_epoch_end(self.training_step_outputs, 'train')
+        # empty set output list
+        self.training_step_outputs.clear()
+        return
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        # Create key for each dataloader, e.g., 'valid0', 'valid1', etc.
+        key = f'valid{dataloader_idx}'
+        valid_loss_info = self.shared_step(batch, key)
+
+        # Initialize list for this dataloader if not already
+        if key not in self.validation_step_outputs:
+            self.validation_step_outputs[key] = []
+        self.validation_step_outputs[key].append(valid_loss_info)
+
+        return valid_loss_info
+
+    def on_validation_epoch_end(self):
+        # Loop over all dataloader outputs
+        for key, outputs in self.validation_step_outputs.items():
+            self.shared_epoch_end(outputs, key)
+
+        # Clear for next epoch
+        self.validation_step_outputs.clear()
 
 
-class UnetModel(Unet, SegmentationModel):
-    '''Generate a U-Net model for segmentation. Use `build` function to create the model.'''
+    def test_step(self, batch, batch_idx):
+        test_loss_info = self.shared_step(batch, 'test')
+        self.test_step_outputs.append(test_loss_info)
+        return test_loss_info
 
-    def __init__(self, mode, parameters):
-        super().__init__(**parameters)
-        self.mode = mode
-        self.params = parameters
+    def on_test_epoch_end(self):
+        self.shared_epoch_end(self.test_step_outputs, 'test')
+        # empty set output list
+        self.test_step_outputs.clear()
+        return
 
-
-
-class UNOModel(UNO, SegmentationModel):
-    '''Generate a UNO model for segmentation. Use `build` function to create the model.'''
-
-    def __init__(self, mode, parameters):
-        super().__init__(**parameters)
-        self.mode = mode
-        self.params = parameters
+    def configure_optimizers(self):
+        return {
+            'optimizer': self.optim_fn,
+            'lr_scheduler': {
+                'scheduler': self.sched_fn,
+                'interval': 'step',
+                'frequency': 1,
+            },
+        }
+        return

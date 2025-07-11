@@ -54,7 +54,7 @@ def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinat
     rec_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     sample = next(iter(rec_loader))
-    pred = seg_model.sigmoid_predict(sample['x'])
+    pred = seg_model.forward_sigmoid(sample['x'])
     pred = pred.detach().numpy()
 
     if print_ps:

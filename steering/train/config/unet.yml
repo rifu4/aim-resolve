@@ -1,84 +1,81 @@
 ---
 
-name: unet1024c
-odir: files
-resume: unet128b
-
-wandb: true
+name: unet128_dice0
+odir: runs/files
+resume: false
 
 ---
 
 dataset:
   train:
-    name: train1024_1k
-    odir: ../data/files
+    name: train128_10k
+    odir: ../data/runs/files
     dtype: float32
   valid:
     v_128:
       name: valid128_1k
-      odir: ../data/files
+      odir: ../data/runs/files
       dtype: float32
     v_256:
       name: valid256_1k
-      odir: ../data/files
+      odir: ../data/runs/files
       dtype: float32
-    v_512:
-      name: valid512_1k
-      odir: ../data/files
-      dtype: float32
-    v_1024:
-      name: valid1024_1k
-      odir: ../data/files
-      dtype: float32
+    # v_512:
+    #   name: valid512_1k
+    #   odir: ../data/runs/files
+    #   dtype: float32
+    # v_1024:
+    #   name: valid1024_1k
+    #   odir: ../data/runs/files
+    #   dtype: float32
   transform:
     log: true
     normalize: true
     standardize: false
     rotate: true
     flip: true
-    batch_size: 250
+    batch_size: 1000
   coordinates: false
 
 dataloader:
   train:
-    batch_size: 2
+    batch_size: 32
     shuffle: true
-    num_workers: 0
+    num_workers: 127
     pin_memory: true
   valid:
-    batch_size: 8
-    num_workers: 0
+    batch_size: 32
+    num_workers: 127
     shuffle: false
     pin_memory: true
 
 ---
 
 model:
-  mode: unet
-  parameters:
+  arch: unet
+  model_args:
     encoder_name: resnet50
     encoder_weights: imagenet
     in_channels: 1
     classes: 2
     activation: null
+  loss: dice
+  optimizer:
+    lr: 0.001
+    weight_decay: 0.0001
+  scheduler:
+    T_max: 100
+    eta_min: 1.e-5
 
 train:
-  optimizer:
-    lr: 1.e-4
-    weight_decay: 1.e-4
-  scheduler:
-    T_max: 30
-  trainer:
-    n_epochs: 25
-    wandb_log: True
-    eval_interval: 5
-    use_distributed: False
-    verbose: True
+  logger: wandb
+  max_epochs: 50
+  log_every_n_steps: 1
 
 ---
 
 plot:
-  odir: plots
+  odir: runs/plots
   n_copies: 5
   plot_space: True
   plot_label: True

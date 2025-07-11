@@ -32,15 +32,16 @@ def main():
 
     # get correct kernels if fast-resolve is used
     if 'radio' in fun and 'fast' in fun:
-        os.makedirs('kernels/', exist_ok=True)
+        kernel_dir = 'runs/kernels'
+        os.makedirs(kernel_dir, exist_ok=True)
         kname = cfg.sections['data.0']['fname'].split('/')[-1].split('.')[0]
         ksize = pipe_dct['space_bg']['shape'][0]
         kfov = pipe_dct['space_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
             psf_pixels = 3000,
-            response_kernel = f'kernels/rk_{kname}_{kfov}_{ksize}.pkl', 
-            noise_kernel = f'kernels/nk_{kname}_{kfov}_{ksize}.pkl',
+            response_kernel = f'{kernel_dir}/rk_{kname}_{kfov}_{ksize}.pkl', 
+            noise_kernel = f'{kernel_dir}/nk_{kname}_{kfov}_{ksize}.pkl',
         )
 
     # extract callback, extra, and transition keys from pipe_dct

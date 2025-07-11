@@ -104,7 +104,7 @@ class ImageDataGenerator():
         prefix : str, optional
             Prefix for the sample, by default 'data'
         '''
-        return ImageData(self.x[index, 0], self.y[index], self.model.space, prefix)
+        return ImageData(self.x[index, 0], self.model.space, prefix, self.y[index])
     
     def plot_samples(self, name, odir='', n_copies=10, space=False, label=False, **kwargs):
         '''
@@ -212,7 +212,7 @@ class ImageDataGenerator():
 
 
 class ImageData():
-    def __init__(self, val, maps, space, prefix='data'):
+    def __init__(self, val, space, prefix='data', maps=None):
         '''
         Store an image data object and its properties for nifty reconstructions.
 
@@ -220,22 +220,22 @@ class ImageData():
         ----------
         val : ArrayLike
             array containing the image data
-        maps : ArrayLike
-            array containing the output maps for the image data
         space : SignalSpace
             space of the image data
         prefix : str
             Prefix for the image data
+        maps : ArrayLike
+            array containing the output maps for the image data
         '''
         check_type(val, ArrayLike)
-        check_type(maps, ArrayLike)
         check_type(space, SignalSpace)
         check_type(prefix, str)
+        check_type(maps, (ArrayLike, type(None)))
 
         self.val = np.array(val)
-        self.maps = np.array(maps)
         self.space = space
         self.prefix = prefix
+        self.maps = np.array(maps) if isinstance(maps, ArrayLike) else np.zeros_like(self.val)
         self.noisy_val = None
 
     def __repr__(self) -> str:
@@ -282,7 +282,7 @@ class ImageData():
             os.makedirs(odir, exist_ok=True)
 
         with open(os.path.join(odir, name), 'wb') as f:
-            pickle.dump((self.val.astype(dtype), self.mask.astype(dtype), self.space, self.prefix), f)
+            pickle.dump((self.val.astype(dtype), self.space, self.prefix, self.maps.astype(dtype)), f)
 
     @classmethod
     def load(cls, name, odir='', dtype='float64'):
@@ -301,6 +301,6 @@ class ImageData():
         if not name.endswith('.pkl'):
             name += '.pkl'
         with open(os.path.join(odir, name), 'rb') as file:
-            val, mask, space, prefix = pickle.load(file)
+            val, space, prefix, maps = pickle.load(file)
 
-        return cls(val.astype(dtype), mask.astype(dtype), space, prefix)
+        return cls(val.astype(dtype), space, prefix, maps.astype(dtype))
