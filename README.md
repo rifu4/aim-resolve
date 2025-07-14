@@ -4,15 +4,17 @@
 
 This repository contains a [snakemake](https://snakemake.github.io) pipeline to automatically improve Bayesian imaging of complex systems like radio interferometric wide-field observations. It combines [NIFTy](http://ift.pages.mpcdf.de/nifty/) and [resolve](http://ift.pages.mpcdf.de/resolve/) with deep learning and clustering algorithms for object recognition and separation, respectively. More specifically, it utilizes different model descriptions for different types of identified objects to improve the overall reconstruction of radio interferometric data.
 
-Starting with a single background model capturing the whole field of view, the method produces a preliminary reconstruction of the data. Then, it iterates over the following steps:
+![image](docs/procedure.png)
 
-- **Identification**: By combining a [U-Net](https://arxiv.org/abs/1505.04597) trained on synthetic images and a clustering algorithm like [DBSCAN](https://scikit-learn.org/stable/modules/clustering.html#dbscan), point sources and extended objects are identified in the reconstruction.
+Initialized with a single background model capturing the whole field of view in step (0), the method produces a preliminary reconstruction of the data in step (d). Then, it iterates over the following steps:
 
-- **Modeling**: This step creates a model configuration file for the subsequent reconstruction iteration by adding the new components to the background model.
+- **(a) Identification**: By combining a [U-Net](https://arxiv.org/abs/1505.04597) trained on synthetic images and a clustering algorithm like [DBSCAN](https://scikit-learn.org/stable/modules/clustering.html#dbscan), point sources and extended objects are identified in the reconstruction.
 
-- **Pre-fit**: The new model is first fitted to the previous reconstructed image. By masking the background, this step efficiently separates the point sources and extended objects from the background.
+- **(b) Modeling**: This step creates a model configuration file for the subsequent reconstruction iteration by adding the new components to the background model.
 
-- **Reconstruction**: The pre-fitted model is further optimized on the data. The individual components can be added together to compose a full sky image, allowing for object detection in the next iteration.
+- **(c) Pre-fit and Separation**: The new model is first fitted to the previous reconstructed image. By masking the background, this step efficiently separates the point sources and extended objects from the background.
+
+- **(d) Reconstruction**: The pre-fitted model is further optimized on the data. The individual components can be added together to compose a full sky image, allowing for object detection in the next iteration.
 
 
 These individual steps are implemented as rules in the [snakefile](steering/snakefile) by building output files from input files using specific python scripts.
