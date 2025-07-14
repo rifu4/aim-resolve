@@ -1,46 +1,41 @@
 import numpy as np
-from sklearn.cluster import DBSCAN, KMeans
+from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 
 
 
-def clustering(oj_map, cl_alg='dbscan', print_cl=True, **cl_kwargs):
+def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
     '''
     function to cluster the extended objects in the output map of the U-Net.
 
     Parameters
     ----------
-    oj_map : np.ndarray
-        The output map of the U-Net.
-    clu_method : str
-        The clustering method to use. Default is 'dbscan'.
+    objects_map : np.ndarray
+        The objects map of the U-Net.
     print_clu : bool
         Whether to print the number of detected objects and noise points. Default is True.
-    **clu_kwargs
+    **cl_kwargs
         Necessary keyword arguments for the clustering method.
 
     Returns
     -------
-    cs_maps : np.ndarray
-        An array of output maps, one for each detected object and an empty map for the background.
+    cluster_maps : np.ndarray
+        An array of output maps, one for each detected object.
+    noise_map : np.ndarray
+        One output map containing the noise points.
     '''
     # extract locations of the extended objects from the output map
-    X = np.argwhere(oj_map == 1)
+    X = np.argwhere(objects_map == 1)
 
     # check if there are any objects to cluster, if not return empty array
     if X.size == 0:
         if print_cl:
             print('n objects:', 0)
             print('n noise points:', 0)
-        return np.zeros((0,) + oj_map.shape)
+        return np.zeros((0,) + objects_map.shape)
     
     # initialize clustering method
-    if cl_alg.lower() == 'dbscan':
-        cl_alg = DBSCAN(**cl_kwargs)
-    elif cl_alg.lower() == 'kmeans':
-        cl_alg = KMeans(**cl_kwargs)
-    else:
-        raise NotImplementedError('only DBSCAN is implemented so far')
+    cl_alg = DBSCAN(**cl_kwargs)
     
     # scale input and apply selected clustering method
     X_scaled = StandardScaler().fit_transform(X)
@@ -57,10 +52,60 @@ def clustering(oj_map, cl_alg='dbscan', print_cl=True, **cl_kwargs):
         print('n noise points: %d' % n_noise)
 
     # create one output map for each detected object and an empty map for the background
-    cs_maps = np.zeros((n_clusters,) + oj_map.shape)
+    cluster_maps = np.zeros((n_clusters,) + objects_map.shape)
     for k in range(n_clusters):
         mask = labels == k
         loc = X[mask].T
-        cs_maps[k][loc[0], loc[1]] = 1
+        cluster_maps[k][loc[0], loc[1]] = 1
 
-    return cs_maps
+    # sort the cluster maps by the sizes of the objects in descending order
+    ones_count = np.sum(cluster_maps, axis=(1, 2))
+    sorted_indices = np.argsort(-ones_count)
+    cluster_maps = cluster_maps[sorted_indices]
+
+    # create a map for the noise points
+    noise_map = np.zeros_like(objects_map)
+    mask = labels == -1
+    loc = X[mask].T
+    noise_map[loc[0], loc[1]] = 1
+
+    return cluster_maps, noise_map
+
+
+
+def objects2points(points_map, noise_map, print_ps=True, **cl_kwargs):
+    '''
+    function to add one-pixel sized objects to the points map.
+
+    Parameters
+    ----------
+    points_map : np.ndarray
+        The points map of the U-Net.
+    noise_map : np.ndarray
+        The noise map of clustering.
+    print_ps : bool
+        Whether to print the number of points in the points map. Default is True.
+    **cl_kwargs
+        Necessary keyword arguments for the clustering method.
+    
+    Returns
+    -------
+    points_map : np.ndarray
+        The updated points map with noise points converted to points.
+    '''
+    if np.sum(noise_map) == 0:
+        if print_ps:
+            print('n points:', np.sum(points_map == 1))
+        return points_map
+    
+    cl_kwargs.pop('min_samples', None)
+    noise_maps, _ = dbscan_clustering(noise_map, min_samples=1, **cl_kwargs)
+    mask = np.sum(noise_maps == 1, axis=(1, 2)) == 1
+    add_points = np.sum(noise_maps[mask], axis=0)
+
+    points_map += add_points
+
+    if print_ps:
+        print('n points:', np.sum(points_map == 1))
+
+    return points_map.clip(0, 1)

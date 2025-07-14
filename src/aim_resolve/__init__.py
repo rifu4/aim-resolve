@@ -6,7 +6,7 @@ from .resolve import *
 from .train import *
 
 from .builders import get_builders
-from .clustering import clustering
+from .clustering import dbscan_clustering, objects2points
 from .data import image_data, radio_data
 from .likelihood import image_likelihood, radio_likelihood, fast_likelihood, likelihood_sum
 from .mask import masks_from_maps, masks_from_model, masks_to_boxes

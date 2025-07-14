@@ -1,7 +1,7 @@
 import os
 import sys
 import numpy as np
-from aim_resolve import ImageData, yaml_load, plot_arrays, plot_classes, clustering, model_predict
+from aim_resolve import ImageData, yaml_load, model_predict, dbscan_clustering, objects2points, plot_arrays, plot_classes
 
 
 
@@ -18,17 +18,18 @@ def main():
     rec = ImageData.load(opt_pkl, dtype='float32')
 
     # detect point sources and objects in the reconstructed image using the U-Net model
-    ps_map, oj_map = model_predict(rec, **base_dct['base_seg'])
+    seg_dct = base_dct['base_seg']
+    ps_map, oj_map = model_predict(rec, **seg_dct)
 
     # load the clustering settings and cluster the detected objects
     cl_dct = base_dct['base_clu']
     cl_alg = cl_dct.pop('alg')
-    cl_map = clustering(oj_map, cl_alg, **cl_dct)
-    
-    # sort the cluster maps by the sizes of the objects in descending order
-    ones_count = np.sum(cl_map, axis=(1, 2))
-    sorted_indices = np.argsort(-ones_count)
-    cl_map = cl_map[sorted_indices]
+    cl_map = dbscan_clustering(oj_map, **cl_dct)
+
+    # convert one-pixel objects to point sources
+    print_cl = cl_dct.pop('print_cl')
+    print_ps = seg_dct.get('print_ps', False)
+    ps_map = objects2points(ps_map, cl_map, print_ps=print_ps, **cl_dct)
 
     # plot the detected point sources and clustered objects
     plot_classes(
