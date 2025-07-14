@@ -24,12 +24,10 @@ def main():
     # load the clustering settings and cluster the detected objects
     cl_dct = base_dct['base_clu']
     cl_alg = cl_dct.pop('alg')
-    cl_map = dbscan_clustering(oj_map, **cl_dct)
+    cl_map, noise_map = dbscan_clustering(oj_map, print_cl=False, **cl_dct)
 
     # convert one-pixel objects to point sources
-    print_cl = cl_dct.pop('print_cl')
-    print_ps = seg_dct.get('print_ps', False)
-    ps_map = objects2points(ps_map, cl_map, print_ps=print_ps, **cl_dct)
+    ps_map = objects2points(ps_map, noise_map, **cl_dct)
 
     # plot the detected point sources and clustered objects
     plot_classes(
