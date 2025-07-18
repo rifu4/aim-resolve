@@ -1,0 +1,165 @@
+---
+
+# specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
+odir: runs/exp_vi_512a
+key: 4
+
+n_it: 10
+
+# additional plots (saved if true)
+callback: true
+extra: true
+trans: true
+rerun: true
+
+--- 
+
+# specify the data to be reconstructed and the background space (shape and field of view)
+data:
+  fname: data/files/test512_10.pkl
+  fun: exp
+  idx: 6
+  max_std: 0.0001
+
+space_bg:
+  shape: [512, 512]
+  fov: [2, 2]
+
+---
+
+base_opt.0:
+  n_total_iterations: 10
+  n_samples: 4
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
+      energy_reduction_factor: 1.e-3
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
+
+base_opt.n:
+  n_total_iterations: 10
+  n_samples: 4
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 500
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 5
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 100
+      maxiter: 200
+      energy_reduction_factor: 1.e-3
+  sample_mode: nonlinear_resample
+
+base_trans:
+  n_total_iterations: 10
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
+      energy_reduction_factor: 1.e-3
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
+
+---
+
+# overwrite the default segmentation parameters
+base_seg:
+  seg_model:
+    name: unet512_dice15
+    odir: train/runs/files
+  transform:
+    log: true
+    normalize: true
+    standardize: false
+    rotate: false
+    flip: false
+  n_orders: 5
+  coordinates: false
+
+# overwrite the default clustering parameters
+base_clu:
+  alg: dbscan
+  eps: 0.1
+  min_samples: 2
+
+# overwrite the default modelling settings
+base_model:
+  zoom: 1
+  masks:
+    margin_fac: 0.2
+    margin_min: 10
+    max_objects: 5
+  points: true
+  objects:
+    gaussian:
+      mean_fac: 0.05
+      std_fac: 0.001
+    zero_pad: 1
+  tiles:
+    tile_size: 32
+    gaussian:
+      mean_fac: 0.05
+      std_fac: 0.001
+
+# overwrite the default plotting settings
+base_plot:
+  vmin: null
+  vmax: null
+  cbar: true
+  ticks: 0
+  plot_space: false
+  plot_label: false
