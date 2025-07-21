@@ -215,22 +215,19 @@ class SegmentationModel(pl.LightningModule):
         losses = torch.stack([x['loss'] for x in outputs])
         avg_loss = losses.mean()
 
-        # per image IoU means that we first calculate IoU score for each image
-        # and then compute mean over these scores
-        per_image_iou = smp.metrics.iou_score(
-            tp, fp, fn, tn, reduction='micro-imagewise'
+        # calculate per image per class IoU score
+        iou = smp.metrics.iou_score(
+            tp, fp, fn, tn, reduction=None
         )
 
-        # dataset IoU means that we aggregate intersection and union over whole dataset
-        # and then compute IoU score. The difference between dataset_iou and per_image_iou scores
-        # in this particular case will not be much, however for dataset
-        # with 'empty' images (images without target class) a large gap could be observed.
-        # Empty images influence a lot on per_image_iou and much less on dataset_iou.
-        dataset_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction='micro')
+        # get per class mIoU across all images
+        cls_iou = iou.mean(dim=0)
+
         metrics = {
-            f'{stage}_loss': avg_loss,
-            f'{stage}_per_image_iou': per_image_iou,
-            f'{stage}_dataset_iou': dataset_iou,
+            f'{stage} loss': avg_loss,
+            f'{stage} mIoU': cls_iou.mean(),
+            f'{stage}_cls0_mIoU': cls_iou[0],
+            f'{stage}_cls1_mIoU': cls_iou[1],
         }
 
         self.log_dict(metrics, prog_bar=True)

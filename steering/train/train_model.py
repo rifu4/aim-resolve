@@ -28,7 +28,7 @@ def main(config, cuda_device):
 
     # build new model or resume from saved model
     resume = dct.get('resume', False)
-    if resume in dct:
+    if resume:
         rname = resume if isinstance(resume, str) else name
         print('\nload model:\nname:', rname)
         model = SegmentationModel.load(rname, odir)
@@ -37,8 +37,8 @@ def main(config, cuda_device):
         model = SegmentationModel.build(**dct['model'])
 
     model = model.to(device)
-    print('\nModel: \n', model)
 
+    # setup the training
     train = dct.get('train', False)
     if train:
         # Initialize wandb if requested
