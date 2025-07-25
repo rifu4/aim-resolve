@@ -38,7 +38,7 @@ def main():
             plot_arrays(data.val, data.space, 'truth', f'0_truth.png', f'{odir}/plots', **plt_dct)
         elif isinstance(data, Observation):
             d_val = data.dirty_image(sky_mdl.space)
-            p_dct = plt_dct | dict(norm='linear', vmin=None, vmax=None)
+            p_dct = plt_dct | dict(vmin=None, vmax=None)
             plot_arrays(d_val, sky_mdl.space, 'data', f'0_data.png', f'{odir}/plots', **p_dct)
 
     # define a callback function to plot the results of the optimization after each iteration
