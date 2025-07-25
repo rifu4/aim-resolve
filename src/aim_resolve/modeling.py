@@ -203,4 +203,4 @@ def draw_boxes(cfg_sections, space, it):
             xi[1:-1, 1:-1] = 0
             box_map += map_signal(xi, si, space)
     
-    return box_map
+    return box_map.clip(0,1)
