@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
+from matplotlib.gridspec import GridSpec
 
 from .image import plot_image
 from .power import plot_power
@@ -21,15 +22,19 @@ def plot_arrays(
         vmin = None,
         vmax = None,
         cbar = True,
+        cbar_kwargs = {},
         ticks = 5,
+        origin = 'lower',
         marker = {},
+        contour = {},
         square = False,
         transpose = False,
         plot_space = True,
         plot_label = True,
         figsize = (5, 5),
-        dpi = 300,
+        dpi = 100,
         callback = None,
+        grid_kwargs = {},
         **kwargs,
 ):
     '''
@@ -61,12 +66,16 @@ def plot_arrays(
     vmax : float, optional
         The maximum value to use for the colormap. Default is None.
     cbar : bool, optional
-        Whether to show the colorbar. Default is True.
+        Whether to show the colorbar. Default is '{}'.
     ticks : int, optional
         The number of ticks to use. Default is 5. If set to 0, no ticks will be shown.
+    origin : str, optional
+        The origin parameter for imshow. Default is 'lower'.
     marker : dict or dict containing subdicts, optional
         The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
+    contour : dict, optional:
+        The contours to plot. Keywords are passed to plt.contour. Default is {}.
     square : bool, optional
         Whether to fillup non-square images with zeros. Default is False.
     transpose : bool, optional
@@ -82,6 +91,8 @@ def plot_arrays(
     callback : callable, optional
         A callback function. Can be used to customize the plots (e.g. by adding text).
         -> The function should take two arguments: figure and axes.
+    grid_kwargs : dict, optional
+        The keyword arguments to pass to the GridSpec. Default is {}.
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
     '''
@@ -96,15 +107,20 @@ def plot_arrays(
     vmins = to_shape(vmin, shape_T, default=-1, transpose=transpose)
     vmaxs = to_shape(vmax, shape_T, default=-1, transpose=transpose)
     norms = to_shape(norm, shape_T, default=-1, transpose=transpose)
+    cbars = to_shape(cbar, shape_T, default=-1, transpose=transpose)
+    cbar_kwargs = to_shape(cbar_kwargs, shape_T, default={}, transpose=transpose)
     markers = to_shape(marker, shape_T, default={}, transpose=transpose)
+    contours = to_shape(contour, shape_T, default={}, transpose=transpose)
 
     figsize = to_shape(figsize, (2,), dtype='float64') * np.array(shape[::-1])
     figure = plt.figure(figsize=figsize, dpi=dpi)
     axes = []
+    grid = GridSpec(rows, cols, figure=figure, **grid_kwargs)
+
     for i,(x,y) in enumerate(product(range(rows), range(cols))):
         if i >= nums:
             continue
-        axes.append(figure.add_subplot(rows, cols, i+1))
+        axes.append(figure.add_subplot(grid[x, y]))
 
         array = arrays[x, y]
 
@@ -118,9 +134,12 @@ def plot_arrays(
                 norm = norms[x, y],
                 vmin = vmins[x, y],
                 vmax = vmaxs[x, y],
-                cbar = cbar,
+                cbar = cbars[x, y],
+                cbar_kwargs = cbar_kwargs[x, y],
                 ticks = ticks,
+                origin = origin,
                 marker = markers[x, y],
+                contour = contours[x, y],
                 square = square,
                 plot_space = plot_space,
                 plot_label = plot_label,
@@ -139,5 +158,7 @@ def plot_arrays(
         
     if callable(callback):
         callback(figure, axes)
+
+    grid.tight_layout(figure)
 
     plot_figure(figure, odir, name)

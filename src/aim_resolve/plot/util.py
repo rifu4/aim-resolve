@@ -1,6 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 from ..model.space import SignalSpace
 
@@ -10,15 +11,10 @@ def plot_figure(
         figure,
         odir = None,
         name = None,
-        tight_layout = True,
-        
 ):
     '''Plot a figure using plt.show() or save it to a file.'''
     if not isinstance(figure, plt.Figure):
         raise TypeError('`fig` has to be of Type `matplotlib.figure.Figure`')
-    
-    if tight_layout:
-        figure.tight_layout()
 
     if odir and name:
         os.makedirs(odir, exist_ok=True)
@@ -28,6 +24,48 @@ def plot_figure(
     else:
         plt.show()
     plt.close()
+
+
+
+def set_cbar(
+        axes, 
+        image, 
+        cbar=True, 
+        loc='right', 
+        size='2.5%', 
+        pad='2.5%', 
+        label=None, 
+        labelpad=3, 
+        labelloc='center'
+):
+    '''Set the colorbar for a given axes.'''
+    div = make_axes_locatable(axes)
+    cax_bottom = div.append_axes('bottom', size=size, pad=pad)
+    cax_right = div.append_axes('right', size=size, pad=pad)
+    cax_left = div.append_axes('left', size=size, pad=pad)
+
+    if cbar and loc == 'bottom':
+        cbar = plt.colorbar(image, cax=cax_bottom, orientation='horizontal')
+        rot = 0
+    else:
+        cax_bottom.set_visible(False)
+
+    if cbar and loc == 'right':
+        cbar = plt.colorbar(image, cax=cax_right)
+        rot = 90
+    else:
+        cax_right.set_visible(False)
+
+    if cbar and loc == 'left':
+        cbar = plt.colorbar(image, cax=cax_left)
+        cbar.ax.yaxis.set_ticks_position('left')
+        cbar.ax.yaxis.set_label_position('left')
+        rot = 90
+    else:
+        cax_left.set_visible(False)
+
+    if cbar and label:
+        cbar.set_label(label, rotation=rot, labelpad=labelpad, loc=labelloc)
 
 
 
