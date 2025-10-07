@@ -10,7 +10,7 @@ from .util import check_type, is_val, to_shape
 class SignalSpace():
     '''Class to represent a signal space at a specific location in the sky. Use `build` function to create the space.'''
 
-    def __init__(self, shape, distances, center=None, rotation=None, n_copies=1):
+    def __init__(self, shape, distances, center=(0., 0.), rotation=0, n_copies=1):
         check_type(shape, tuple, int)
         check_type(distances, tuple, float)
         check_type(center, tuple, (tuple, float), float)
@@ -138,7 +138,7 @@ class SignalSpace():
         '''Multiply the shape of the space by a factor and keep the field of view.'''
         check_type(factor, (int, float))
         shape = tuple(int(round(si * factor)) for si in self.shape)
-        distances = tuple(fi / si for fi,si in zip(self.fov, shape))
+        distances = tuple(float(fi / si) for fi,si in zip(self.fov, shape))
         return SignalSpace(shape, distances, self.center, self.rotation)
 
     def multiply_fov(self, factor):
@@ -146,6 +146,13 @@ class SignalSpace():
         check_type(factor, (int, float))
         shape = tuple(int(round(si * factor)) for si in self.shape)
         return SignalSpace(shape, self.distances, self.center, self.rotation)
+
+    def transform(self, **kwargs):
+        '''Transform the space by updating its parameters.'''
+        for k in ('shape', 'distances', 'fov', 'center', 'rotation', 'n_copies'):
+            if k not in kwargs:
+                kwargs[k] = getattr(self, k)
+        return SignalSpace.build(**kwargs)
 
     def to_dict(self, mode='fov'):
         '''Convert the space to a dictionary ({shape: [sx,sy], ...}).'''
