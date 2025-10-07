@@ -1,8 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
-from .util import plot_figure, set_ticks
+from .util import plot_figure, set_cbar, set_ticks
 from ..model.map import map_signal 
 from ..model.space import SignalSpace
 
@@ -20,8 +19,11 @@ def plot_image(
         vmin = None,
         vmax = None,
         cbar = True,
+        cbar_kwargs = {},
         ticks = 5,
+        origin = 'lower',
         marker = {},
+        contour = {},
         square = False,
         plot_space = True,
         plot_label = True,
@@ -54,11 +56,17 @@ def plot_image(
         The maximum value to use for the colormap. Default is None.
     cbar : bool, optional
         Whether to show a colorbar. Default is True.
+    cbar_kwargs : dict, optional
+        The keyword arguments to pass to the colorbar. Default is {}.
     ticks : int, optional
         The number of ticks to use. Default is 5. If set to 0, no ticks will be shown.
+    origin : str, optional
+        The origin parameter for imshow. Default is 'lower'.
     marker : dict or dict containing subdicts, optional
         The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
+    contour : dict, optional:
+        The contours to plot. Keywords are passed to plt.contour. Default is {}.
     square : bool, optional
         Whether to plot the image in a square format. Default is False.
     plot_space : bool, optional
@@ -85,22 +93,24 @@ def plot_image(
         space = None
 
     if norm == 'log':
-        array[array<=0] = 1.
-    
+        amin = array[array > 0].min()
+        array[array <= 0] = amin
+
     img = plt.imshow(
         X = array.T, 
         cmap = cmap, 
         norm = norm, 
         vmin = vmin, 
         vmax = vmax, 
-        origin = 'lower',
+        origin = origin,
         **kwargs,
     )
 
-    if cbar:
-        div = make_axes_locatable(axes[-1])
-        cax = div.append_axes('right', size='3%', pad='2%')
-        plt.colorbar(img, cax)
+    if contour:
+        contour_array = contour.pop('array', array)
+        plt.contour(contour_array.T, origin='lower', **contour)
+
+    set_cbar(axes[-1], img, cbar, **cbar_kwargs)    
 
     if plot_label and label:
         axes[-1].set_title(label)
