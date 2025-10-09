@@ -117,7 +117,7 @@ def fast_likelihood(*,
         data = data.to_resolve_obs()
     obs = data.to_double_precision()
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.space, psf_pixels)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.space)
 
     noise_model = NoiseModel.build(shape=R.domain.shape, **noise)
 

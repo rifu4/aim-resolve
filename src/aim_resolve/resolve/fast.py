@@ -3,14 +3,14 @@ import pickle
 import jax.numpy as jnp
 import nifty8 as ift
 import numpy as np
-from jax.lax import slice as jax_slice
+
+from .convolve import fast_fftconvolve, split_fftconvolve
 
 
 
 def build_exact_responses(
         observation,
         space,
-        psf_pixels = 3000,
 ):
     '''
     Build the exact `RNR` responses for fast-resolve.
@@ -21,8 +21,6 @@ def build_exact_responses(
         The radio observation data.
     space : SignalSpace
         The space of the sky model.
-    psf_pixels : int
-        The maximal number of pixels of the PSF kernel.
     ''' 
     import resolve as rve
 
@@ -30,10 +28,7 @@ def build_exact_responses(
     sky_dom = rve.default_sky_domain(sdom=sdom)
     R = rve.InterferometryResponse(observation, sky_dom, True, 1e-9, verbosity=0, nthreads=8)
 
-    full_psf0 = min(2*psf_pixels, sdom.shape[0])
-    full_psf1 = min(2*psf_pixels, sdom.shape[1])
-    sdom_l = (sdom.shape[0] + full_psf0, sdom.shape[1] + full_psf1)
-    sdom_l = ift.RGSpace(sdom_l, distances=sdom.distances)
+    sdom_l = ift.RGSpace(tuple(2*s for s in space.shape), distances=sdom.distances)
     sky_dom_l = rve.default_sky_domain(sdom=sdom_l)
     R_l = rve.InterferometryResponse(observation, sky_dom_l, True, 1e-9, verbosity=0, nthreads=8)
 
@@ -67,35 +62,33 @@ def build_approximation_kernels(RNR, RNR_l, response_kernel_fn=None, noise_kerne
     noise_model : ift.Operator
         The noise model that should be used for the inference. Default is None.
     '''
-    shp = RNR.domain.shape
-    shp_l = RNR_l.domain.shape
-    # assert(shp[0] == shp[1])
-    # assert(shp_l[0] == shp_l[1])
-
-    # build approximate response kernel
-    n_psf_pix0 = (shp_l[0] - shp[0])
-    n_psf_pix1 = (shp_l[1] - shp[1])
-    n_padding0 = n_psf_pix0 // 2
-    n_padding1 = n_psf_pix1 // 2
-
     if os.path.isfile(response_kernel_fn):
-        psf_kernel = pickle.load(open(response_kernel_fn, "rb"))
+        response_kernel = pickle.load(open(response_kernel_fn, "rb"))
     else:
-        psf_kernel = build_response_kernel(RNR_l, n_psf_pix0, n_psf_pix1)
+        response_kernel = build_response_kernel(RNR_l)
         if response_kernel_fn:
-            pickle.dump(psf_kernel, open(response_kernel_fn, "wb"))
+            pickle.dump(response_kernel, open(response_kernel_fn, "wb"))
 
-    fft_l = fft_fun(RNR_l.domain)
-    ifft_l = ifft_fun(RNR_l.domain)
-    psf_kernel = jnp.array(psf_kernel)
-    apply_psf_kern = lambda x: ifft_l(psf_kernel * fft_l(x)).real
 
-    slicer = lambda x: jax_slice(
-        x, (n_padding0, n_padding1), (n_padding0+ shp[0], n_padding1+ shp[1])
-    )
-    padder = lambda x: jnp.pad(x, ((n_padding0, n_padding0), (n_padding1, n_padding1)))
+    RNR_approx = fast_fftconvolve(response_kernel, RNR.domain.shape, RNR.domain[0].scalar_dvol)
 
-    RNR_approx = lambda x: slicer(apply_psf_kern(padder(x)))
+
+    # size = 256
+    # RNR_approx = split_fftconvolve(response_kernel, RNR.domain.shape, size, RNR.domain[0].scalar_dvol)
+
+
+    # shp = RNR.domain.shape
+    # shp_l = RNR_l.domain.shape
+    # pad = tuple((l-s)//2 for l,s in zip(shp_l, shp))
+
+    # fft_l = fft_fun(RNR_l.domain)
+    # ifft_l = ifft_fun(RNR_l.domain)
+    # response_kernel = jnp.array(response_kernel)
+
+    # convolver = lambda x: ifft_l(response_kernel * fft_l(x)).real
+    # slicer = lambda x: jax_slice(x, (pad[0], pad[1]), (pad[0] + shp[0], pad[1] + shp[1]))
+    # padder = lambda x: jnp.pad(x, ((pad[0], pad[0]), (pad[1], pad[1])))
+    # RNR_approx = lambda x: slicer(convolver(padder(x)))
 
     # build approximate inverse noise kernel
     if os.path.isfile(noise_kernel_fn):
@@ -107,47 +100,34 @@ def build_approximation_kernels(RNR, RNR_l, response_kernel_fn=None, noise_kerne
 
     fft_s = fft_fun(RNR.domain)
     ifft_s = ifft_fun(RNR.domain)
-    noise_kernel_inv_sqrt = 1. / np.sqrt(noise_kernel)
-    noise_kernel_inv_sqrt = jnp.array(noise_kernel_inv_sqrt)
+    nk_inv_sqrt = jnp.array(1. / np.sqrt(noise_kernel))
 
     if noise_model and noise_model.scaling:
-        N_inv_approx = lambda x: ifft_s(noise_model(x) * noise_kernel_inv_sqrt * fft_s(x['model'])).real
+        N_inv_approx = lambda x: ifft_s(noise_model(x) * nk_inv_sqrt * fft_s(x['model'])).real
     elif noise_model and noise_model.varcov:
         FFT_s = ift.FFTOperator(RNR.domain)
         fl = ift.full(FFT_s.target, 1.)
         vol = FFT_s(FFT_s.adjoint(fl)).real.mean().val
         fac = np.sqrt(1/vol)
-        N_inv_approx = lambda x: fac * noise_kernel_inv_sqrt * fft_s(x['model'])        
+        N_inv_approx = lambda x: fac * nk_inv_sqrt * fft_s(x['model'])
     else:
-        N_inv_approx = lambda x: ifft_s(noise_kernel_inv_sqrt * fft_s(x['model'])).real
+        N_inv_approx = lambda x: ifft_s(nk_inv_sqrt * fft_s(x['model'])).real
 
     return RNR_approx, N_inv_approx
 
 
 
-def build_response_kernel(RNR_l, n_pix0, n_pix1):
-    '''Build the response kernel for the given padded RNR operator.'''
-    dom = RNR_l.domain
-    shp = dom.shape
-    FFT = ift.FFTOperator(RNR_l.domain)
+def build_response_kernel(RNR_l):
+    '''Build the response kernel for a padded RNR operator.'''
+    dom_l = RNR_l.domain
+    shp_l = dom_l.shape
 
-    delta = np.zeros(shp)
-    delta[shp[0]//2, shp[1]//2] = 1 / dom.scalar_weight()
-    delta = ift.makeField(dom, delta)
+    delta = np.zeros(shp_l)
+    delta[shp_l[0]//2, shp_l[1]//2] = 1 / dom_l.scalar_weight()
+    delta = ift.makeField(dom_l, delta)
     kernel = RNR_l(delta)
 
-    # zero kernel
-    sh0 = shp[0]//2
-    sh1 = shp[1]//2
-    z_kern = np.zeros_like(kernel.val)
-    z_kern[sh0-n_pix0:sh0+n_pix0,sh1-n_pix1:sh1+n_pix1] = kernel.val[sh0 - n_pix0:sh0+n_pix0,sh1-n_pix1:sh1+n_pix1]
-
-    pr_kern = np.roll(z_kern, -shp[0]//2, axis=0)
-    pr_kern = np.roll(pr_kern, -shp[1]//2, axis=1)
-    pr_kern = ift.makeField(FFT.domain, pr_kern)
-    fourier_kern = FFT(pr_kern)
-
-    return fourier_kern.val
+    return kernel.val
 
 
 
