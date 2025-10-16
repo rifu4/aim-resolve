@@ -3,7 +3,7 @@ from nifty8.re import Model, Vector
 from typing import Callable
 
 from ..model.prior import prior_model
-from ..model.space import SignalSpace
+from .space import SignalSpace
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 

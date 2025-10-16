@@ -3,7 +3,7 @@ import numpy as np
 from jax import vmap
 from nifty8.re import Model
 
-from .util import check_type, is_val, to_shape
+from ..model.util import check_type, is_val, to_shape
 
 
 

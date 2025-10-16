@@ -7,10 +7,10 @@ from nifty8.re import Model, Vector
 from typing import Callable
 
 from .jax_fun import rotate_data, flip_data
-from ..model.map import map_tiles
+from .map import map_tiles
 from ..model.prior import uniform_model
 from ..model.normal import normal_model
-from ..model.space import SignalSpace
+from .space import SignalSpace
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 

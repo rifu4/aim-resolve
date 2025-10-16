@@ -98,20 +98,18 @@ def masks_from_model(
     '''
     check_type(sky, ComponentModel)
     mask_dct = {}
-    zoom = int(np.mean(sky.background.space.dis / sky.space.dis))
-    margin_min *= zoom
 
     for sky_pi in sky.points:
-        mask_pi = np.array(map_points(np.ones(sky_pi.shape), sky_pi.points.space.coos, sky.space, vmap_sum=False))
+        mask_pi = np.array(map_points(sky_pi.points.grid, sky.grid, sum_up=False)(np.ones(sky_pi.shape)))
         for i in range(mask_pi.shape[0]):
             mask_pi[i] = add_margin(mask_pi[i], margin_min, round=True)
         mask_dct[sky_pi.prefix] = mask_pi
 
     for sky_oi in sky.objects:
-        mask_dct[sky_oi.prefix] = map_signal(np.ones(sky_oi.shape), sky_oi.space, sky.space)
+        mask_dct[sky_oi.prefix] = map_signal(sky_oi.grid, sky.grid)(np.ones(sky_oi.shape))
 
     for sky_ti in sky.tiles:
-        mask_dct[sky_ti.prefix] = map_signal(np.ones(sky_ti.shape), sky_ti.tiles.space, sky.space, vmap_sum=False)
+        mask_dct[sky_ti.prefix] = map_signal(sky_ti.tiles.grid, sky.grid, sum_up=False)(np.ones(sky_ti.shape))
 
     mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
 
@@ -126,7 +124,7 @@ def masks_to_boxes(
         mask_dct,
 ):
     '''
-    Maps the masks to the spaces of the model compoennts and subtracts other components from the masks.
+    Maps the masks to the grids of the model components and subtracts other components from the masks.
 
     Parameters
     ----------
@@ -141,27 +139,27 @@ def masks_to_boxes(
     mask_box = mask_dct.copy()
 
     sky_bg = sky.background
-    if mask_dct[sky_bg.prefix].shape != sky_bg.space.shape:
-        mask_box[sky_bg.prefix] = np.floor(map_signal(mask_dct[sky_bg.prefix], sky.space, sky_bg.space, order=1))
+    if mask_dct[sky_bg.prefix].shape != sky_bg.grid.shape:
+        mask_box[sky_bg.prefix] = np.floor(map_signal(sky.grid, sky_bg.grid)(mask_dct[sky_bg.prefix]))
 
     for sky_pi in sky.points:
-        if mask_dct[sky_pi.prefix].shape != sky_pi.space.shape:
-            mask_box[sky_pi.prefix] = np.ceil(map_signal(mask_dct[sky_pi.prefix], sky.space, sky_pi.space, order=1))
+        if mask_dct[sky_pi.prefix].shape != sky_pi.grid.shape:
+            mask_box[sky_pi.prefix] = np.ceil(map_signal(sky.grid, sky_pi.grid)(mask_dct[sky_pi.prefix]))
 
     for sky_oi in sky.objects:  
-        if mask_dct[sky_oi.prefix].shape != sky_oi.space.shape:
-            mask_oi = map_signal(mask_dct[sky_oi.prefix], sky.space, sky_oi.space)
+        if mask_dct[sky_oi.prefix].shape != sky_oi.grid.shape:
+            mask_oi = map_signal(sky.grid, sky_oi.grid)(mask_dct[sky_oi.prefix])
             if np.any((mask_oi > 0.) & (mask_oi < 1.)) and 'sum' in mask_dct:
                 mask_oi = (2 * mask_dct[sky_oi.prefix] - mask_dct['sum']).clip(0,1)
-                mask_oi = np.ceil(map_signal(mask_oi, sky.space, sky_oi.space))
+                mask_oi = np.ceil(map_signal(sky.grid, sky_oi.grid)(mask_oi))
             mask_box[sky_oi.prefix] = mask_oi
 
     for sky_ti in sky.tiles:
-        if mask_dct[sky_ti.prefix].shape != sky_ti.space.shape:
-            mask_ti = map_signal(mask_dct[sky_ti.prefix], sky.space, sky_ti.space)
+        if mask_dct[sky_ti.prefix].shape != sky_ti.grid.shape:
+            mask_ti = map_signal(sky.grid, sky_ti.grid)(mask_dct[sky_ti.prefix])
             if np.any((mask_ti > 0.) & (mask_ti < 1.)) and 'sum' in mask_dct:
                 mask_ti = (2 * mask_dct[sky_ti.prefix] - mask_dct['sum']).clip(0,1)
-                mask_ti = np.ceil(map_signal(mask_ti, sky.space, sky_ti.space))
+                mask_ti = np.ceil(map_signal(sky.grid, sky_ti.grid)(mask_ti))
             mask_box[sky_ti.prefix] = mask_ti
 
     return mask_box

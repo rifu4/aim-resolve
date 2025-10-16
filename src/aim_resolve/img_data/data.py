@@ -8,7 +8,7 @@ from jax.typing import ArrayLike
 from jax_tqdm import loop_tqdm
 
 from .components import ComponentGenerator
-from ..model.space import SignalSpace
+from .space import SignalSpace
 from ..model.util import check_type
 
 

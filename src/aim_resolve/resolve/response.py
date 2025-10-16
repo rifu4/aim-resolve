@@ -4,7 +4,7 @@ from functools import partial
 from jax import vmap
 
 from .observation import Observation
-from ..model.space import SignalSpace
+from ..img_data.space import SignalSpace
 from ..model.util import check_type
 
 

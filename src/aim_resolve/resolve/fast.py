@@ -10,7 +10,7 @@ from .convolve import fast_fftconvolve, split_fftconvolve
 
 def build_exact_responses(
         observation,
-        space,
+        grid,
 ):
     '''
     Build the exact `RNR` responses for fast-resolve.
@@ -19,16 +19,16 @@ def build_exact_responses(
     ----------
     observation : rve.Observation
         The radio observation data.
-    space : SignalSpace
-        The space of the sky model.
+    grid : SignalGrid
+        The grid of the sky model.
     ''' 
     import resolve as rve
 
-    sdom = ift.RGSpace(space.shape, distances=space.distances)
+    sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)
     sky_dom = rve.default_sky_domain(sdom=sdom)
     R = rve.InterferometryResponse(observation, sky_dom, True, 1e-9, verbosity=0, nthreads=8)
 
-    sdom_l = ift.RGSpace(tuple(2*s for s in space.shape), distances=sdom.distances)
+    sdom_l = ift.RGSpace(tuple(2*s for s in grid.shape), distances=sdom.distances)
     sky_dom_l = rve.default_sky_domain(sdom=sdom_l)
     R_l = rve.InterferometryResponse(observation, sky_dom_l, True, 1e-9, verbosity=0, nthreads=8)
 
@@ -45,7 +45,7 @@ def build_exact_responses(
 
 
 
-def build_approximation_kernels(RNR, RNR_l, response_kernel_fn=None, noise_kernel_fn=None, noise_model=None):
+def build_approximation_kernels(RNR, RNR_l, response_kernel_fn=None, noise_kernel_fn=None, noise_model=None, split=0):
     '''
     Build approximations for response and noise kernel.
 
@@ -69,26 +69,10 @@ def build_approximation_kernels(RNR, RNR_l, response_kernel_fn=None, noise_kerne
         if response_kernel_fn:
             pickle.dump(response_kernel, open(response_kernel_fn, "wb"))
 
-
-    RNR_approx = fast_fftconvolve(response_kernel, RNR.domain.shape, RNR.domain[0].scalar_dvol)
-
-
-    # size = 256
-    # RNR_approx = split_fftconvolve(response_kernel, RNR.domain.shape, size, RNR.domain[0].scalar_dvol)
-
-
-    # shp = RNR.domain.shape
-    # shp_l = RNR_l.domain.shape
-    # pad = tuple((l-s)//2 for l,s in zip(shp_l, shp))
-
-    # fft_l = fft_fun(RNR_l.domain)
-    # ifft_l = ifft_fun(RNR_l.domain)
-    # response_kernel = jnp.array(response_kernel)
-
-    # convolver = lambda x: ifft_l(response_kernel * fft_l(x)).real
-    # slicer = lambda x: jax_slice(x, (pad[0], pad[1]), (pad[0] + shp[0], pad[1] + shp[1]))
-    # padder = lambda x: jnp.pad(x, ((pad[0], pad[0]), (pad[1], pad[1])))
-    # RNR_approx = lambda x: slicer(convolver(padder(x)))
+    if split > 0:
+        RNR_approx = split_fftconvolve(response_kernel, RNR.domain.shape, split, RNR.domain[0].scalar_dvol)
+    else:
+        RNR_approx = fast_fftconvolve(response_kernel, RNR.domain.shape, RNR.domain[0].scalar_dvol)
 
     # build approximate inverse noise kernel
     if os.path.isfile(noise_kernel_fn):

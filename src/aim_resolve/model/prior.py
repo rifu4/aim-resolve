@@ -3,8 +3,9 @@ from nifty8.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, 
 from .gaussian import gaussian_model
 from .integer import integer_model
 from .normal import normal_model
-from .space import SignalSpace, PointSpace
+from .grid import SignalGrid, PointGrid
 from .util import check_type
+from ..img_data.space import SignalSpace, PointSpace
 
 
 
@@ -19,7 +20,7 @@ IM_KEYS = {'i_min', 'i_max', 'step'}
 
 def prior_model(
         prefix,
-        space,
+        grid,
         n_copies = 1,
         **i0_params,
 ):
@@ -30,8 +31,8 @@ def prior_model(
     ----------
     prefix : str
         The prefix for the model.
-    space : SignalSpace or PointSpace
-        The space for the model.
+    grid : SignalGrid or PointGrid
+        The grid for the model.
     n_copies : int
         The number of copies for the model. Default is 1.
     i0_params : dict
@@ -45,54 +46,54 @@ def prior_model(
         The power spectrum of the correlated field model. Otherwise None.
     '''
     check_type(prefix, str)
-    check_type(space, (SignalSpace, PointSpace))
+    check_type(grid, (SignalGrid, PointGrid, SignalSpace, PointSpace))
     check_type(n_copies, int)
 
     pspec = None
     match set(i0_params.keys()):
         case k if k.issubset(CFM_KEYS):
-            check_type(space, SignalSpace)
+            check_type(grid, (SignalGrid, SignalSpace))
             model, pspec = correlated_field_model(
                 prefix=prefix,
-                shape=space.shape,
-                distances=space.distances,
+                shape=grid.shape,
+                distances=grid.distances,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(NM_KEYS):
             model = normal_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(IGM_KEYS):
             model = inverse_gamma_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(GSM_KEYS):
-            check_type(space, SignalSpace)
+            check_type(grid, (SignalGrid, SignalSpace))
             model = gaussian_model(
                 prefix=prefix,
-                shape=space.shape,
-                distances=space.distances,
+                shape=grid.shape,
+                distances=grid.distances,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(UM_KEYS):
             model = uniform_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(IM_KEYS):
             model = integer_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )

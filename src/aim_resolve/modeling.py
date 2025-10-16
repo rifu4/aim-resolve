@@ -1,7 +1,7 @@
 import numpy as np
 
 from .model.map import map_signal
-from .model.space import SignalSpace
+from .img_data.space import SignalSpace
 from .model.util import check_type, to_shape
 
 

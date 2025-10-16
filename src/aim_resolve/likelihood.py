@@ -5,6 +5,7 @@ from nifty8 import makeOp
 from nifty8.re import Model
 from operator import add
 
+from .model.grid import SignalGrid
 from .model.noise import NoiseModel
 from .resolve.fast import build_exact_responses, build_approximation_kernels
 from .resolve.model import ComponentResponse
@@ -33,12 +34,16 @@ def image_likelihood(*,
         Used to differentiate between the different likelihood functions.
 
     '''
+    data_grid = SignalGrid.build(space=sky.grid.space, fov=sky.grid.fov, factor=data.space.shape[0]//sky.grid.space[0])
+    print('sky grid:', sky.grid)
+    print('data grid:', data_grid)
+
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
     noise_model = NoiseModel.build(shape=data.space.shape, **noise)
 
     lh_dct = dict(
         data = data.noisy_val,
-        model = Model(lambda x: sky(x, out_space=data.space), domain=sky.domain, init=sky.init),
+        model = Model(lambda x: sky(x, out_grid=data_grid), domain=sky.domain, init=sky.init),
         noise_cov_inv = None,
         noise_std_inv = (max_std * np.max(data.val))**-1,
         noise_model = noise_model,
@@ -87,11 +92,12 @@ def radio_likelihood(*,
 def fast_likelihood(*,
         sky,
         data,
-        psf_pixels = 3000,
         response_kernel = None,
         noise_kernel = None,
         noise = dict(parameters=dict()),
+        split = 0,
         fun = 'fast_radio',
+        **kwargs,
 ):
     '''
     Generate a fast likelihood function for the radio data (fast-resolve).
@@ -117,7 +123,7 @@ def fast_likelihood(*,
         data = data.to_resolve_obs()
     obs = data.to_double_precision()
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.space)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid)
 
     noise_model = NoiseModel.build(shape=R.domain.shape, **noise)
 
@@ -127,6 +133,7 @@ def fast_likelihood(*,
         response_kernel_fn = response_kernel,
         noise_kernel_fn = noise_kernel,
         noise_model = noise_model,
+        split = split,
     )
 
     N_inv = makeOp(obs.weight)

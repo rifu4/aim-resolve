@@ -5,7 +5,7 @@ from typing import Callable
 
 from .map import map_signal
 from .prior import prior_model
-from .space import SignalSpace, PointSpace
+from .grid import SignalGrid, PointGrid
 from .util import check_type, to_shape
 from ..optimize.samples import domain_tree, model_init
 
@@ -16,8 +16,8 @@ class SignalModel(Model):
 
     factor = None
 
-    def __init__(self, space, i0, offset=0, prefix='sm', func=jnp.exp, zero_pad=None, gaussian=None, pspec=None):
-        check_type(space, (SignalSpace, PointSpace))
+    def __init__(self, grid, i0, offset=0, prefix='sm', func=jnp.exp, zero_pad=None, gaussian=None, pspec=None):
+        check_type(grid, (SignalGrid, PointGrid))
         check_type(i0, (Model, VModel))
         check_type(offset, ArrayLike)
         check_type(prefix, str)
@@ -26,7 +26,7 @@ class SignalModel(Model):
         check_type(gaussian, (Model, type(None)))
         check_type(pspec, (Model, VModel, type(None)))
 
-        self.space = space
+        self.grid = grid
         self.i0 = i0
         self.offset = offset
         self.prefix = prefix
@@ -35,11 +35,11 @@ class SignalModel(Model):
         self.gaussian = gaussian
         self.pspec = pspec
         super().__init__(
-            domain = Vector(domain_tree((self.i0, self.space.coos, self.gaussian), error=False)), 
-            init = model_init((self.i0, self.space.coos, self.gaussian), error=False),
+            domain = Vector(domain_tree((self.i0, self.gaussian), error=False)), 
+            init = model_init((self.i0, self.gaussian), error=False),
         )
 
-    def __call__(self, x, *, out_space=None):
+    def __call__(self, x, *, out_grid=None):
         res = self.i0(x)
         res += self.offset
         if self.zero_pad:
@@ -50,20 +50,20 @@ class SignalModel(Model):
             res *= self.gaussian(x)
         if isinstance(self.factor, ArrayLike):
             res *= self.factor
-        if out_space:
-            return map_signal(res, self.space, out_space)
+        if out_grid:
+            return map_signal(self.grid, out_grid)(res)
         else:
             return res
 
     @classmethod
-    def build(cls, *, space, i0, offset=0, prefix='sm', func='exp', zero_pad=1.0, gaussian=None):
+    def build(cls, *, grid, i0, offset=0, prefix='sm', func='exp', zero_pad=1.0, gaussian=None):
         '''
         Build a SignalModel from the given parameters.
 
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
         i0 : dict
             Dictionary containing the prior model parameters of the signal (see prior_model)
         offset : float, optional
@@ -79,34 +79,34 @@ class SignalModel(Model):
             Dictionary containing the gaussian model parameters (see gaussian_model), by default None
             -> multiply the signal with a gaussian
         '''
-        if 'coordinates' in space:
-            space = PointSpace.build(**space)
+        if 'coordinates' in grid:
+            grid = PointGrid.build(**grid)
         else:
-            space = SignalSpace.build(**space)
+            grid = SignalGrid.build(**grid)
         
         offset = to_shape(offset, (), 'float64')
 
         check_type(prefix, str)
 
         check_type(zero_pad, (int, float))
-        pad_space, pad_func = space, None
-        if zero_pad != 1.0 and isinstance(space, SignalSpace):
-            pad_func = zero_pad_func(space, zero_pad)
-            pad_space = zero_pad * space
+        pad_grid, pad_func = grid, None
+        if zero_pad != 1.0 and isinstance(grid, SignalGrid):
+            pad_func = zero_pad_func(grid, zero_pad)
+            pad_grid = zero_pad * grid
         
-        i0, pspec = prior_model(f'{prefix} i0 ', pad_space, **i0)
+        i0, pspec = prior_model(f'{prefix} i0 ', pad_grid, **i0)
 
         if func:
             func = getattr(jnp, func, None)
 
-        if gaussian != None and isinstance(space, SignalSpace):
-            gaussian, _ = prior_model(f'{prefix} gm ', space, **gaussian)
+        if gaussian != None and isinstance(grid, SignalGrid):
+            gaussian, _ = prior_model(f'{prefix} gm ', grid, **gaussian)
 
-        return cls(space, i0, offset, prefix, func, pad_func, gaussian, pspec)
+        return cls(grid, i0, offset, prefix, func, pad_func, gaussian, pspec)
     
     @property
     def shape(self):
-        return self.space.shape
+        return self.grid.shape
     
     def set_offset(self, offset):
         '''
@@ -121,17 +121,17 @@ class SignalModel(Model):
         return
     
     def copy(self):
-        return SignalModel(self.space, self.i0, self.offset, self.prefix, self.func, self.zero_pad, self.gaussian, self.pspec)
+        return SignalModel(self.grid, self.i0, self.offset, self.prefix, self.func, self.zero_pad, self.gaussian, self.pspec)
 
 
 
-def zero_pad_func(space, zero_pad=1):
+def zero_pad_func(grid, zero_pad=1):
     '''Zero pad the signal with the given factor.'''
     if zero_pad == 1:
         return None
     elif not 1 < zero_pad <= 2:
         raise ValueError('zero_pad must be between 1 and 2')
     
-    pad_space = zero_pad * space
-    pad_slice = tuple(slice((os-ss)//2, ss+(os-ss)//2) for os,ss in zip(pad_space.shape, space.shape))
+    pad_grid = zero_pad * grid
+    pad_slice = tuple(slice((os-ss)//2, ss+(os-ss)//2) for os,ss in zip(pad_grid.shape, grid.shape))
     return lambda x: x[pad_slice]

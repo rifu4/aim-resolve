@@ -3,7 +3,7 @@ import numpy as np
 
 from .util import plot_figure, set_cbar, set_ticks
 from ..model.map import map_signal 
-from ..model.space import SignalSpace
+from ..img_data.space import SignalSpace
 
 
 

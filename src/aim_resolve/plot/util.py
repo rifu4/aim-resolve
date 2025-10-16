@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
-from ..model.space import SignalSpace
+from ..img_data.space import SignalSpace
 
 
 

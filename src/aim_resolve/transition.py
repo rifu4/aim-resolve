@@ -170,7 +170,7 @@ def transition_addt(*,
         
     # optimize the new background model on the old reconstruction (mask regions around point sources and the object boxes)
     sky_bg = sky_new.background.copy()
-    rec_bg = map_signal(rec_old, sky_old.space, sky_bg.space)
+    rec_bg = map_signal(sky_old.grid, sky_bg.grid)(rec_old)
     msk_bg = mask_box[sky_bg.prefix]
     sky_bg.factor = msk_bg
     pos_bg = optimize_and_plot(
@@ -183,13 +183,13 @@ def transition_addt(*,
     )
     ptree |= pos_bg.tree
 
-    rec_sub = map_signal(rec_old, sky_old.space, sky_new.space) - map_signal(sky_bg(pos_bg), sky_bg.space, sky_new.space)
+    rec_sub = map_signal(sky_old.grid, sky_new.grid)(rec_old) - map_signal(sky_bg.grid, sky_new.grid)(sky_bg(pos_bg))
     rec_sub = rec_sub.clip(0, None)
     ofs_dct = {}
 
     # optimize the new object and tile models on the corresponding regions of the old reconstruction
     for sky_oi in sky_new.points + sky_new.objects + sky_new.tiles:
-        sub_oi = map_signal(rec_sub, sky_new.space, sky_oi.space)
+        sub_oi = map_signal(sky_new.grid, sky_oi.grid)(rec_sub)
         msk_oi = mask_box[sky_oi.prefix]
         if offsets:
             ofs_dct[sky_oi.prefix] = get_offset(sky_oi, rec_sub, mask_dct[sky_oi.prefix])
@@ -214,7 +214,7 @@ def transition_addt(*,
     if domain_keys(pos_new) != domain_keys(models):
         pos_new = random_init(keys.pop(), models, pos_new, factor=0.01)
 
-    rec_sky = map_signal(rec_old, sky_old.space, sky_new.space)
+    rec_sky = map_signal(sky_old.grid, sky_new.grid)(rec_old)
     pos_new = optimize_and_plot(
         key = keys.pop(),
         sky = sky_new,
@@ -229,7 +229,8 @@ def transition_addt(*,
     nm_old = lh_old['noise_model']
     nm_new = lh_new['noise_model']
     if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
-        pos_new = Vector(domain_tree(pos_new) | {nm_new.prefix: domain_tree(samples)[nm_old.prefix]})
+        nm_pos = map_signal(sky_old.grid, sky_new.grid)(domain_tree(samples)[nm_old.prefix])
+        pos_new = Vector(domain_tree(pos_new) | {nm_new.prefix: nm_pos})
 
     samples = MySamples(pos=pos_new, samples=None, keys=None)
     

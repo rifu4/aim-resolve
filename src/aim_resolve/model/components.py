@@ -4,7 +4,7 @@ from nifty8.re import Model, Vector
 
 from .points import PointModel
 from .signal import SignalModel
-from .space import SignalSpace
+from .grid import SignalGrid
 from .tiles import TileModel
 from .util import check_type
 from ..optimize.samples import domain_keys, domain_tree, model_init
@@ -14,15 +14,15 @@ from ..optimize.samples import domain_keys, domain_tree, model_init
 class ComponentModel(Model):
     '''Generate a component model. Use `build` function to create the model.'''
 
-    def __init__(self, space, background, prefix='cm', *components):
+    def __init__(self, grid, background, prefix='cm', *components):
         models = (background, ) + components
-        check_type(space, SignalSpace)
+        check_type(grid, SignalGrid)
         check_type(background, SignalModel)
         check_type(prefix, str)
         [check_type(m, (SignalModel, PointModel, TileModel)) for m in models]
-        [check_type(m.space, SignalSpace) for m in models]
+        [check_type(m.grid, SignalGrid) for m in models]
 
-        self.space = space
+        self.grid = grid
         self.prefix = prefix
         self.background = background
         self.components = components
@@ -32,12 +32,11 @@ class ComponentModel(Model):
             init = model_init(self.models),
         )
 
-    def __call__(self, x, *, out_space=None):
-        out_space = out_space if out_space else self.space
-        res = jnp.zeros(out_space.shape)
-        #TODO: speed up the for loop with jax
+    def __call__(self, x, *, out_grid=None):
+        out_grid = out_grid if out_grid else self.grid
+        res = jnp.zeros(out_grid.shape)
         for m in self.models:
-            res += m(x, out_space=out_space)
+            res += m(x, out_grid=out_grid)
         return res
     
     @classmethod
@@ -58,21 +57,19 @@ class ComponentModel(Model):
         check_type(background, SignalModel)
         check_type(prefix, str)
         [check_type(m, (SignalModel, PointModel, TileModel)) for m in models]
-        [check_type(m.space, SignalSpace) for m in models]
+        [check_type(m.grid, SignalGrid) for m in models]
 
         for (i,mi), (j,mj) in product(enumerate(models), enumerate(models)):
             if i != j and domain_keys(mi) == domain_keys(mj):
                 raise ValueError(f'Two models have the same prefix `{mi.prefix}`.')
 
         if len(models) == 1:
-            space = background.space
+            grid = background.grid
         else:
-            bg_space = background.space
-            distances = min([m.space.distances for m in models])
-            shape = tuple(int(fi/di) for fi,di in zip(bg_space.fov, distances))
-            space = SignalSpace(shape, distances, center=bg_space.center, rotation=bg_space.rotation)
+            factor = max([m.grid.factor for m in models])
+            grid = background.grid.refine(factor)
         
-        return cls(space, background, prefix, *models[1:])
+        return cls(grid, background, prefix, *models[1:])
 
     @property
     def objects(self):
@@ -92,7 +89,7 @@ class ComponentModel(Model):
     
     @property
     def diffuse(self):
-        return ComponentModel(self.space, self.background, self.prefix, *self.objects)
+        return ComponentModel(self.grid, self.background, self.prefix, *self.objects)
     
     @property
     def separate(self):
