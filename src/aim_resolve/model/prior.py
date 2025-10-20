@@ -3,9 +3,7 @@ from nifty8.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, 
 from .gaussian import gaussian_model
 from .integer import integer_model
 from .normal import normal_model
-from .grid import SignalGrid, PointGrid
 from .util import check_type
-from ..img_data.space import SignalSpace, PointSpace
 
 
 
@@ -45,6 +43,9 @@ def prior_model(
     pspec : Callable
         The power spectrum of the correlated field model. Otherwise None.
     '''
+    from .grid import SignalGrid, PointGrid
+    from ..img_data.space import SignalSpace, PointSpace
+
     check_type(prefix, str)
     check_type(grid, (SignalGrid, PointGrid, SignalSpace, PointSpace))
     check_type(n_copies, int)
