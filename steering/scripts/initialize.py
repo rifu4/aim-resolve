@@ -1,6 +1,6 @@
 import os
 import sys
-from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts
+from aim_resolve import SetupKLConfig, SignalGrid, yaml_load, yaml_save, merge_dicts
 
 
 
@@ -35,11 +35,10 @@ def main():
         kernel_dir = 'runs/kernels'
         os.makedirs(kernel_dir, exist_ok=True)
         kname = cfg.sections['data.0']['fname'].split('/')[-1].split('.')[0]
-        ksize = pipe_dct['space_bg']['shape'][0]
-        kfov = pipe_dct['space_bg']['fov'][0]
+        ksize = pipe_dct['grid_bg']['space'][0]
+        kfov = pipe_dct['grid_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
-            psf_pixels = 3000,
             response_kernel = f'{kernel_dir}/rk_{kname}_{kfov}_{ksize}.pkl', 
             noise_kernel = f'{kernel_dir}/nk_{kname}_{kfov}_{ksize}.pkl',
         )
@@ -51,7 +50,7 @@ def main():
     key = pipe_dct.pop('key') if 'key' in pipe_dct else 0
     rerun = pipe_dct.pop('rerun') if 'rerun' in pipe_dct else True
 
-    # load and overwrite sections of the base yaml-file with pipe_dct sections (like opt, trans, i0, space,  plot, ...)
+    # load and overwrite sections of the base yaml-file with pipe_dct sections (like opt, trans, i0, grid,  plot, ...)
     base_dct = yaml_load(base_yml)
     base_dct = merge_dicts([dict(base_opt=dict(odir=odir, key=key, rerun=rerun)), base_dct, pipe_dct], merge_base='True')
 

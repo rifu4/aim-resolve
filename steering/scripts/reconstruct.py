@@ -34,12 +34,12 @@ def main():
         print(data, '\n')
         if isinstance(data, ImageData):
             d_val = data.noisy_val.clip(0,None)
-            plot_arrays(d_val, data.space, 'data', f'0_data.png', f'{odir}/plots', **plt_dct)
-            plot_arrays(data.val, data.space, 'truth', f'0_truth.png', f'{odir}/plots', **plt_dct)
+            plot_arrays(d_val, data.grid, 'data', f'0_data.png', f'{odir}/plots', **plt_dct)
+            plot_arrays(data.val, data.grid, 'truth', f'0_truth.png', f'{odir}/plots', **plt_dct)
         elif isinstance(data, Observation):
-            d_val = data.dirty_image(sky_mdl.space)
+            d_val = data.dirty_image(sky_mdl.grid)
             p_dct = plt_dct | dict(vmin=None, vmax=None)
-            plot_arrays(d_val, sky_mdl.space, 'data', f'0_data.png', f'{odir}/plots', **p_dct)
+            plot_arrays(d_val, sky_mdl.grid, 'data', f'0_data.png', f'{odir}/plots', **p_dct)
 
     # define a callback function to plot the results of the optimization after each iteration
     def callback(samples, state, *args):
@@ -81,8 +81,8 @@ def main():
         **plt_dct,
     )
 
-    # save the reconstructed sky model and space to a pkl-file
-    rec = ImageData(samples.mean(sky_mdl), sky_mdl.space, f'{it}_rec')
+    # save the reconstructed sky model and grid to a pkl-file
+    rec = ImageData(samples.mean(sky_mdl), sky_mdl.grid, f'{it}_rec')
     rec.save(name=f'{it}_rec', odir=f'{odir}/files')
 
     # extra plots: mean (and std) of the sky model components

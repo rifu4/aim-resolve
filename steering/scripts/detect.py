@@ -14,7 +14,7 @@ def main():
     plt_dct = base_dct['base_plot']
     odir = base_dct['base_opt']['odir']
 
-    # load the reconstructed image and space
+    # load the reconstructed image and grid
     rec = ImageData.load(opt_pkl, dtype='float32')
 
     # detect point sources and objects in the reconstructed image using the U-Net model
@@ -33,7 +33,7 @@ def main():
     plot_classes(
         points_map = ps_map,
         object_maps = cl_map,
-        space = rec.space, 
+        grid = rec.grid, 
         label = 'points & objects', 
         name = f'{it}_det.png',
         odir = f'{odir}/plots',
@@ -47,7 +47,7 @@ def main():
     if os.path.isdir(odir + '/extra/'):
         plot_classes(
             object_maps= cl_map,
-            space = rec.space, 
+            grid = rec.grid, 
             label = 'objects', 
             name = f'{it}_map_cl.png',
             odir = f'{odir}/extra',
@@ -57,7 +57,7 @@ def main():
         for val,lbl,nms in zip([ps_map, oj_map], ['points', 'objects'], ['map_ps', 'map_oj']):
             plot_arrays(
                 array = val,
-                space = rec.space, 
+                grid = rec.grid, 
                 label = lbl, 
                 name = f'{it}_{nms}.png',
                 odir = f'{odir}/extra',
