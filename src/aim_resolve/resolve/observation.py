@@ -4,7 +4,6 @@ import pandas as pd
 from nifty8 import makeOp
 
 from .constants import SPEEDOFLIGHT, DEG2RAD, AS2RAD
-from .fast import build_exact_responses
 
 
 TABLE = {5: 'RR', 6: 'RL', 7: 'LR', 8: 'LL', 9: 'XX', 10: 'XY', 11: 'YX', 12: 'YY'}
@@ -210,6 +209,7 @@ class Observation():
     
     def dirty_image(self, grid):
         '''Compute the dirty image of the observation.'''
+        from ..fast_resolve.response import build_exact_responses
         obs = self.to_resolve_obs()
         N_inv = makeOp(obs.weight)
         R, *_ = build_exact_responses(obs, grid)

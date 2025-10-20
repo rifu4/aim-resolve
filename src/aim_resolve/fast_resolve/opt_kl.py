@@ -1,7 +1,6 @@
 import os
 import logging
 import pickle
-from functools import partial
 from os import makedirs
 from typing import Callable, Optional, Union
 
@@ -11,45 +10,23 @@ import numpy as np
 from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
-from nifty8.re import Gaussian, OptimizeVIState, Samples, VariableCovarianceGaussian, logger
+from nifty8.re import Gaussian, Model, OptimizeVIState, Samples, logger
+from nifty8.re.optimize import _newton_cg
+from nifty8.re.conjugate_gradient import cg as _cg
 
-from .opt_kl import get_at_nit, _reduce, SMPL_MODE_GENERIC_TYP
-from .opt_vi import MyOptimizeVI
-from .samples import MySamples, get_samples
+from ..optimize.opt_kl import get_at_nit, _reduce, SMPL_MODE_GENERIC_TYP
+from ..optimize.opt_vi import MyOptimizeVI
+from ..optimize.samples import MySamples, get_samples
 
 
 
-def my_lh(*, model, R_approx, N_inv_sqrt, old_reconstruction, residual_data, noise_model, **kwargs):
+def my_lh(*, sky_response, old_reconstruction, residual_data, **kwargs):
     '''fast-resolve likelihood function. It builds a likelihood at each iteration.'''
 
-    def residual_signal_response(x, old_reconstruction):
-            return R_approx(model(x) - old_reconstruction)
-
-    def noise_weighted_residual(x, old_reconstruction, residual_data):
-        p = {'model': residual_signal_response(x, old_reconstruction) - residual_data}
-        if noise_model and noise_model.varcov:
-            return (N_inv_sqrt(p), noise_model(x))
-        if noise_model and noise_model.scaling:
-            p |= {noise_model.prefix: x[noise_model.prefix]}
-        return N_inv_sqrt(p)
+    model = Model(lambda x: sky_response(x, old_reconstruction, residual_data), domain=sky_response.domain, init=sky_response.init)
 
     logger.setLevel(logging.ERROR)
-    if noise_model and noise_model.varcov:
-        lh = VariableCovarianceGaussian(jnp.broadcast_to(0.0 + 0j, residual_data.shape), iscomplex=True).amend(
-            partial(
-                noise_weighted_residual,
-                old_reconstruction=old_reconstruction,
-                residual_data=residual_data,
-            )
-        )
-    else:
-        lh = Gaussian(jnp.broadcast_to(0.0, residual_data.shape)).amend(
-            partial(
-                noise_weighted_residual,
-                old_reconstruction=old_reconstruction,
-                residual_data=residual_data,
-            )
-        )
+    lh = Gaussian(jnp.broadcast_to(0.0, residual_data.shape)).amend(model)
     logger.setLevel(logging.DEBUG)
     return lh
 
@@ -72,8 +49,10 @@ def fast_optimize_kl(
     residual_map='lmap',
     kl_reduce=_reduce,
     mirror_samples=True,
+    # draw_linear_kwargs=dict(minimize=_cg, cg_name='SL', cg_kwargs=dict()),
     draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
     nonlinearly_update_kwargs=dict(minimize_kwargs=dict(name='SN', cg_kwargs=dict(name=None))),
+    # kl_kwargs=dict(minimize=_newton_cg, minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
     kl_kwargs=dict(minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
     sample_mode: SMPL_MODE_GENERIC_TYP = 'nonlinear_resample',
     resume: Union[str, bool] = False,
@@ -87,12 +66,12 @@ def fast_optimize_kl(
     ----------
     likelihood: dict or callable
         Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
-        - model: Model
-        - R_approx: callable
-        - N_inv_sqrt: callable
+        - data: array-like
+        - sky: Model
+        - RNR: callable
+        - sky_response: callable
         - old_reconstruction: array-like
         - residual_data: array-like
-        - noise_model: Model or None
     key : int or array-like
         Random key. If an integer is passed, it is used to seed a random key.
     n_major_iterations : int
@@ -232,9 +211,9 @@ def fast_optimize_kl(
         key, samples = get_samples(key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit)
 
         if opt_vi_st.nit > 0:
-            sub_val = samples.mean(lh_i['model'])
-            post_mean = ift.makeField(lh_i['R'].domain, np.array(sub_val))
-            residual_data = lh_i['data'] - lh_i['R'](post_mean).val
+            sub_val = samples.mean(lh_i['sky'])
+            post_mean = ift.makeField(lh_i['RNR'].domain, np.array(sub_val))
+            residual_data = lh_i['data'] - lh_i['RNR'](post_mean).val
 
         lh_i['old_reconstruction'] = sub_val
         lh_i['residual_data'] = residual_data
@@ -254,5 +233,7 @@ def fast_optimize_kl(
                     f.write(mj_msg + kl_msg)
             if not callback == None:
                 callback(samples, opt_vi_st, i_mj+1)
+
+        jax.clear_caches()
 
     return samples, opt_vi_st, n_major_iterations
