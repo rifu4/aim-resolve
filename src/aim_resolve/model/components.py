@@ -67,7 +67,7 @@ class ComponentModel(Model):
             grid = background.grid
         else:
             factor = max([m.grid.factor for m in models])
-            grid = background.grid.refine(factor)
+            grid = background.grid.refine(factor // background.grid.factor)
         
         return cls(grid, background, prefix, *models[1:])
 
