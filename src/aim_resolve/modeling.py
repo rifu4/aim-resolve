@@ -1,42 +1,8 @@
 import numpy as np
 
+from .model.grid import SignalGrid, PointGrid
 from .model.map import map_signal
-from .img_data.space import SignalSpace
-from .model.util import check_type, to_shape
-
-
-
-def adjust_zoom(
-        zoom, 
-        space, 
-        bg_space,
-    ):
-    '''Adjust the zoom factor if the space resolution is a multiple of the background space resolution.
-    
-    Parameters
-    ----------
-    zoom : int
-        The zoom factor.
-    space : SignalSpace
-        The space of the full sky model.
-    bg_space : SignalSpace
-        The space of the background model.
-
-    Returns
-    -------
-    zoom : int
-        The adjusted zoom factor.
-    '''
-    check_type(space, SignalSpace)
-    check_type(bg_space, SignalSpace)
-    if not isinstance(zoom, int) or zoom < 1:
-        raise TypeError('`zoom` has to be of type `int` and larger than 0')
-    
-    for zi in range(1, zoom+1):
-        if space == zi * bg_space:
-            zoom = zoom // zi
-
-    return zoom
+from .model.util import to_shape
 
 
 
@@ -63,8 +29,9 @@ def model_background(
 def model_points(
         ps_masks,
         ps_map,
-        space,
+        grid,
         rec_sub,
+        factor=1,
     ):
     # extract locations of the point sources from the output map
     ps_coos = np.argwhere(ps_map == 1).astype('float64')
@@ -73,23 +40,27 @@ def model_points(
     if ps_coos.size == 0:
         return False
     
-    # convert the pixel values of the point sources to coordinates in the space
-    ps_coos -= 0.5 * (space.shp - 1)
-    ps_coos *= space.dis
-    ps_coos += space.cen
+    # convert the pixel values of the point sources to coordinates on the grid
+    ps_coos -= 0.5 * (grid.shp - 1)
+    ps_coos /= grid.fac
+    ps_coos += grid.cen
+    point_grid = PointGrid.build(coordinates=ps_coos, factor=grid.factor, n_copies=ps_coos.shape[0])
 
     # get the i0 priors for the point sources from the reconstruction
     log_sum = np.log(np.sum(rec_sub[None] * ps_masks, axis=(1,2), where=(ps_masks > 0)))
-    offset = [round(float(ri), 1) for ri in log_sum]
+    offsets = [round(float(ri), 1) for ri in log_sum]
+
+    if factor > 1:
+        point_grid = point_grid.refine(factor)
+        offsets *= factor**2
 
     ps_dct = {
-        'space': space.to_dict(),
-        'coordinates': ps_coos.tolist(),
+        'point_grid': point_grid.to_dict(),
+        'grid': grid.to_dict(mode=None),
         'i0': {
             'base': 'i0_ps',
         },
-        'offset': offset,
-        'n_copies': len(offset),
+        'offset': offsets,
     }
     return ps_dct
 
@@ -97,26 +68,27 @@ def model_points(
 
 def model_objects(
         oj_mask,
-        space,
+        grid,
         rec_sub,
         gaussian = None,
         zero_pad = None,
 ):
     pix = np.argwhere(oj_mask > 0)
     lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
-    lim = lim.clip(0, space.shp-1)
+    lim = lim.clip(0, grid.shp-1)
     shp = 1 + lim[1] - lim[0]
     shp[shp%2 != 0] += 1
-    cen = lim.mean(axis=0)
-    cen[cen%1 == 0] += 0.5
-    cen = space.cen + space.dis * (cen - 0.5 * (space.shp - 1))
-    oj_space = SignalSpace.build(shape=shp, distances=space.distances, center=cen)
+    cen = lim.mean(axis=0).astype('int64')
+    spc = shp / grid.fac
+    cen = (cen - 0.5 * (grid.shp - 1)) / grid.fac + grid.cen
+    
+    oj_grid = SignalGrid.build(space=spc, center=cen, factor=grid.factor)
 
     log_mean = np.log(np.mean(rec_sub * oj_mask, where=(oj_mask > 0)))
     offset = round(float(log_mean), 1)
 
     oj_dct = {
-        'space': oj_space.to_dict(),
+        'grid': oj_grid.to_dict(),
         'i0': {
             'base': 'i0_os',
         },
@@ -124,7 +96,7 @@ def model_objects(
     }
     if gaussian:
         g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = oj_space.fov
+        fov_x, fov_y = oj_grid.fov
         oj_dct['gaussian'] = {
             'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
             'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
@@ -138,7 +110,7 @@ def model_objects(
 
 def model_tiles(
         ts_masks,
-        space,
+        grid,
         rec_sub,
         tile_size = 32,
         gaussian = None,
@@ -149,35 +121,27 @@ def model_tiles(
     for tm in ts_masks:
         pix = np.argwhere(tm > 0)
         lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
-        lim = lim.clip(0, space.shp-1)
-        cen = lim.mean(axis=0)
-        cen[cen%1 == 0] += 0.5
-        cen = space.cen + space.dis * (cen - 0.5 * (space.shp - 1))
+        cen = lim.mean(axis=0).astype('int64')
+        cen = cen.clip(tile_size // 2, grid.shp - (tile_size // 2) - 1)
+        cen = (cen - 0.5 * (grid.shp - 1)) / grid.fac + grid.cen
         ts_cen.append(cen.tolist())
 
-    tile_spaces = SignalSpace.build(shape=tile_size, distances=space.distances, center=ts_cen, n_copies=len(ts_cen))
-
-    # ts_vals = rec_sub[None] * ts_masks
-    # ts_sums = np.sum(ts_vals, axis=(1, 2), where=(ts_vals != 0))
-    # ncounts = np.count_nonzero(ts_vals, axis=(1, 2))
-    # offsets = np.log(np.divide(ts_sums, ncounts, out=np.zeros_like(ts_sums, dtype=float), where=(ncounts != 0)))
-    # offsets = [round(float(os), 1) for os in offsets]
+    tile_grid = SignalGrid.build(space=tile_size, center=ts_cen, factor=grid.factor, n_copies=len(ts_cen))
 
     log_mean = np.log(np.mean(rec_sub[None] * ts_masks, axis=(1,2), where=(ts_masks > 0)))
-    offset = [round(float(ri), 1) for ri in log_mean]
+    offsets = [round(float(ri), 1) for ri in log_mean]
 
     ts_dct = {
-        'space': space.to_dict(),
-        'tile_spaces': tile_spaces.to_dict(),
+        'tile_grid': tile_grid.to_dict(mode=None),
+        'grid': grid.to_dict(mode=None),
         'i0': {
             'base': 'i0_ts',
         },
-        'offset': offset,
-        'n_copies': len(ts_cen),
+        'offset': offsets,
     }
     if gaussian:
         g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = tile_spaces.fov
+        fov_x, fov_y = tile_grid.fov
         ts_dct['gaussian'] = {
             'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
             'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
@@ -187,20 +151,19 @@ def model_tiles(
 
 
 
-def draw_boxes(cfg_sections, space, it):
-    box_map = np.zeros(space.shape)
+def draw_boxes(cfg_sections, grid, it):
+    box_map = np.zeros(grid.shape)
 
     for k,v in cfg_sections.items():
         if 'sky_t' in k and f'.{it}' in k:
-            ni = v['n_copies']
-            si = SignalSpace.build(**v['tile_spaces'], n_copies=ni)
-            xi = np.ones((ni,)+si.shape)
+            si = SignalGrid.build(**v['tile_grid'])
+            xi = np.ones((si.n_copies,)+si.shape)
             xi[:, 1:-1, 1:-1] = 0
-            box_map += map_signal(xi, si, space)
+            box_map += map_signal(si, grid)(xi)
         elif 'sky_o' in k and f'.{it}' in k:
-            si = SignalSpace.build(**v['space'])
+            si = SignalGrid.build(**v['grid'])
             xi = np.ones(si.shape)
             xi[1:-1, 1:-1] = 0
-            box_map += map_signal(xi, si, space)
+            box_map += map_signal(si, grid)(xi)
     
     return box_map.clip(0,1)

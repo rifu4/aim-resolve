@@ -148,7 +148,7 @@ def transition_addt(*,
     check_type(samples, MySamples)
     check_type(sky_old, (ComponentModel, SignalModel, PointModel, TileModel))
     check_type(sky_new, ComponentModel)
-    plot_dct = plot_dct.copy() | dict(label=None, space=None, odir=odir)
+    plot_dct = plot_dct.copy() | dict(label=None, grid=None, odir=odir)
 
     # get reconstruction of the previous iteration
     rec_old = samples.mean(sky_old)
