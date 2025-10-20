@@ -30,7 +30,7 @@ sky.0:
 
 sky_bg.0:
   prefix: bg.0
-  space:
-    base: space_bg
+  grid:
+    base: grid_bg
   i0:
     base: i0_fs

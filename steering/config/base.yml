@@ -9,8 +9,8 @@ base_opt.0:
     cg_name: SL
     cg_kwargs:
       absdelta: 1.e-11
-      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
-      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
   nonlinearly_update_kwargs:
     minimize_kwargs:
       name: SN
@@ -25,11 +25,11 @@ base_opt.0:
       absdelta: 1.e-10
       cg_kwargs:
         name: null
-        miniter: 4*[5] + 4*[10] + [20]
-      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
-      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
       energy_reduction_factor: 1.e-3
-  sample_mode: linear_resample
+  sample_mode: 2*[linear_resample] + [nonlinear_resample]
 
 base_opt.n:
   n_total_iterations: 10
@@ -89,7 +89,7 @@ base_trans:
       miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
       maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
       energy_reduction_factor: 1.e-3
-  sample_mode: nonlinear_resample
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
 
 ---
 
@@ -142,7 +142,7 @@ base_plot:
   cols: ~
   cbar: true
   ticks: 5
-  plot_space: true
+  plot_grid: true
   plot_label: true
 
 ---
