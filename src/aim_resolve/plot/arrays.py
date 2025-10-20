@@ -11,7 +11,7 @@ from .util import plot_figure, to_shape
 
 def plot_arrays(
         array,
-        space = None,
+        grid = None,
         label = None,
         name = None,
         odir = None,
@@ -29,7 +29,7 @@ def plot_arrays(
         contour = {},
         square = False,
         transpose = False,
-        plot_space = True,
+        plot_grid = True,
         plot_label = True,
         figsize = (5, 5),
         dpi = 100,
@@ -45,8 +45,8 @@ def plot_arrays(
     array : np.ndarray or Iterable of np.ndarrays
         The array to plot. Plots an image for 2D arrays and a power spectrum for 1D arrays.
         If an Iterbale of arrays is provided or array.ndim > 2, multiple subplots will be created.
-    space : str, optional
-        The space of the (sub)arrays. Default is None.
+    grid : str, optional
+        The grid of the (sub)arrays. Default is None.
     label : str, optional
         The label of the (sub)plot. Default is None.
     name : str, optional
@@ -80,8 +80,8 @@ def plot_arrays(
         Whether to fillup non-square images with zeros. Default is False.
     transpose : bool, optional
         Whether to transpose the rows, columns of a multi-plot. Default is False.
-    plot_space : bool, optional
-        Whether to plot the space of the array. Default is True.
+    plot_grid : bool, optional
+        Whether to plot the grid of the array. Default is True.
     plot_label : bool, optional
         Whether to plot the label of the array. Default is True.
     figsize : tuple, optional
@@ -101,7 +101,7 @@ def plot_arrays(
     rows, cols = shape
 
     shape_T = shape[::-1] if transpose else shape
-    spaces = to_shape(space, shape_T, default=None, transpose=transpose)
+    grids = to_shape(grid, shape_T, default=None, transpose=transpose)
     labels = to_shape(label, shape_T, default=None, transpose=transpose)
     cmaps = to_shape(cmap, shape_T, default=-1, transpose=transpose)
     vmins = to_shape(vmin, shape_T, default=-1, transpose=transpose)
@@ -128,7 +128,7 @@ def plot_arrays(
             plot_image(
                 array = array,
                 axes = axes,
-                space = spaces[x, y],
+                grid = grids[x, y],
                 label = labels[x, y],
                 cmap = cmaps[x, y],
                 norm = norms[x, y],
@@ -141,7 +141,7 @@ def plot_arrays(
                 marker = markers[x, y],
                 contour = contours[x, y],
                 square = square,
-                plot_space = plot_space,
+                plot_grid = plot_grid,
                 plot_label = plot_label,
                 **kwargs,
             )

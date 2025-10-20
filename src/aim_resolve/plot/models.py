@@ -30,7 +30,7 @@ def plot_models(
         marker = (),
         square = False,
         transpose = False,
-        plot_space = True,
+        plot_grid = True,
         plot_label = True,
         figsize = (5, 5),
         dpi = 100,
@@ -72,8 +72,8 @@ def plot_models(
         Whether to fillup non-square images with zeros. Default is False.
     transpose : bool, optional
         Whether to transpose the rows, columns of a multi-plot. Default is False.
-    plot_space : bool, optional
-        Whether to plot the space of the array. Default is True.
+    plot_grid : bool, optional
+        Whether to plot the grid of the array. Default is True.
     plot_label : bool, optional
         Whether to plot the label of the array. Default is True.
     figsize : tuple, optional
@@ -115,7 +115,7 @@ def plot_models(
             plot_image(
                 array = array,
                 axes = axes,
-                space = models[x, y].space,
+                grid = models[x, y].grid,
                 label = models[x, y].prefix,
                 cmap = cmaps[x, y],
                 norm = norms[x, y],
@@ -125,7 +125,7 @@ def plot_models(
                 ticks = ticks,
                 marker = marker,
                 square = square,
-                plot_space = plot_space,
+                plot_grid = plot_grid,
                 plot_label = plot_label,
                 **kwargs,
             )

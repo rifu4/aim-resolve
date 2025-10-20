@@ -20,12 +20,12 @@ def plot_mean_and_std(
     vmin = kwargs.pop('vmin', None)
     vmax = kwargs.pop('vmax', None)
 
-    arrays, spaces, labels, vmins, vmaxs = [], [], [], [], []
+    arrays, grids, labels, vmins, vmaxs = [], [], [], [], []
     for md in models:
         pf, it = md.prefix.split('.')[0], md.prefix.split('.')[1]
         mean, std = samples.mean_and_std(md)
 
-        spaces += [md.space, ]
+        grids += [md.grid, ]
 
         if 'mean' in mode:
             arrays += [mean, ]
@@ -41,7 +41,7 @@ def plot_mean_and_std(
             
     plot_arrays(
         array = arrays,
-        space = spaces,
+        grid = grids,
         label = labels, 
         vmin = vmins,
         vmax = vmaxs,
@@ -75,7 +75,7 @@ def plot_samples(
 
     plot_arrays(
         array = array,
-        space = model.space,
+        grid = model.grid,
         label = [f'{model.prefix} sample {i}' for i in range(len(samples))],
         vmin = vmin,
         vmax = vmax,
@@ -108,13 +108,13 @@ def plot_agreement(
         vmax = mean.max()
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.space, data.space)
+        mean = map_signal(mean, model.grid, data.grid)
 
     [kwargs.pop(k, None) for k in ('rows', 'cols')]
 
     plot_arrays(
         array = [mean, mean - data.val, data.val],
-        space = data.space,
+        grid = data.grid,
         label = [f'{model.prefix} mean', 'mean - truth', f'{data.prefix} thruth'],
         vmin = [vmin, None, vmin],
         vmax = [vmax, None, vmax],
@@ -140,13 +140,13 @@ def plot_pullplot(
     mean, std = samples.mean_and_std(model)
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.space, data.space)
+        mean = map_signal(mean, model.grid, data.grid)
 
     [kwargs.pop(k, None) for k in ('vmin', 'vmax', 'norm', 'rows', 'cols')]
 
     plot_arrays(
         array = (mean - data.val) / std,
-        space = data.space,
+        grid = data.grid,
         label = f'{model.prefix} pullplot',
         norm = 'linear',
         vmin = -5.0,

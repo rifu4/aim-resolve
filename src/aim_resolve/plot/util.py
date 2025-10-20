@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
-from ..img_data.space import SignalSpace
+from ..model.grid import SignalGrid
 
 
 
@@ -71,20 +71,20 @@ def set_cbar(
 
 def set_ticks(
         axes,
-        space = None,
+        grid = None,
         ticks = 5,
-        plot_space = True,
+        plot_grid = True,
 ):
     '''Set the ticks of the axes.'''
     if ticks > 0:
-        if plot_space and isinstance(space, SignalSpace):
+        if plot_grid and isinstance(grid, SignalGrid):
             axes.set_xticks(
-                ticks = np.linspace(0, space.shape[0], ticks) - 0.5, 
-                labels = np.linspace(space.limits[0,0], space.limits[0,1], ticks).round(2),
+                ticks = np.linspace(0, grid.shape[0], ticks) - 0.5, 
+                labels = np.linspace(grid.lims[0,0], grid.lims[0,1], ticks).round(2),
             )
             axes.set_yticks(
-                ticks = np.linspace(0, space.shape[1], ticks) - 0.5, 
-                labels = np.linspace(space.limits[1,0], space.limits[1,1], ticks).round(2)
+                ticks = np.linspace(0, grid.shape[1], ticks) - 0.5, 
+                labels = np.linspace(grid.lims[1,0], grid.lims[1,1], ticks).round(2)
             )  
     else:
         axes.axis('off')

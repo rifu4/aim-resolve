@@ -2,15 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .util import plot_figure, set_cbar, set_ticks
+from ..model.grid import SignalGrid
 from ..model.map import map_signal 
-from ..img_data.space import SignalSpace
 
 
 
 def plot_image(
         array,
         axes = None,
-        space = None, 
+        grid = None, 
         label = None, 
         name = None,
         odir = None,
@@ -25,7 +25,7 @@ def plot_image(
         marker = {},
         contour = {},
         square = False,
-        plot_space = True,
+        plot_grid = True,
         plot_label = True,
         **kwargs,
 ):
@@ -38,8 +38,8 @@ def plot_image(
         The array to plot.
     axes : list of plt.Axes, optional
         The axes to plot on. If not provided, a new figure will be created.
-    space : str, optional
-        The space of the array. Default is None.
+    grid : str, optional
+        The grid of the array. Default is None.
     label : str, optional
         The label of the plot. Default is None.
     name : str, optional
@@ -69,8 +69,8 @@ def plot_image(
         The contours to plot. Keywords are passed to plt.contour. Default is {}.
     square : bool, optional
         Whether to plot the image in a square format. Default is False.
-    plot_space : bool, optional
-        Whether to plot the space of the array. Default is True.
+    plot_grid : bool, optional
+        Whether to plot the grid of the array. Default is True.
     plot_label : bool, optional
         Whether to plot the label of the array. Default is True.
     kwargs : additional keyword arguments
@@ -86,14 +86,14 @@ def plot_image(
     array = np.array(array, dtype='float64')
 
     if square:
-        spc_old = SignalSpace.build(shape=array.shape, fov=array.shape)
-        spc_new = SignalSpace.build(shape=spc_old.shp.max(), fov=spc_old.fov.max())
+        spc_old = SignalGrid.build(shape=array.shape, fov=array.shape)
+        spc_new = SignalGrid.build(shape=spc_old.shp.max(), fov=spc_old.fov.max())
         array = map_signal(array, spc_old, spc_new)
-        #TODO: fix space for squared images. Set to None for now
-        space = None
+        #TODO: fix grid for squared images. Set to None for now
+        grid = None
 
     if norm == 'log':
-        amin = array[array > 0].min()
+        amin = array[array > 0].min() if np.any(array > 0) else 1
         array[array <= 0] = amin
 
     img = plt.imshow(
@@ -115,7 +115,7 @@ def plot_image(
     if plot_label and label:
         axes[-1].set_title(label)
     
-    set_ticks(axes[-1], space, ticks, plot_space)
+    set_ticks(axes[-1], grid, ticks, plot_grid)
     
     marker = {'m0': marker} if all(k in marker for k in ['x', 'y']) else marker
     for mrk in marker.values():
