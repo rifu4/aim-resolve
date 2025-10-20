@@ -5,9 +5,9 @@ from nifty8 import makeOp
 from nifty8.re import Model
 from operator import add
 
-from .model.grid import SignalGrid
+from .fast_resolve.response import build_exact_responses
+from .fast_resolve.convolve import PSFConvolve, NInvConvolve
 from .model.noise import NoiseModel
-from .resolve.fast import build_exact_responses, build_approximation_kernels
 from .resolve.model import ComponentResponse
 from .resolve.observation import Observation
 
@@ -34,16 +34,12 @@ def image_likelihood(*,
         Used to differentiate between the different likelihood functions.
 
     '''
-    data_grid = SignalGrid.build(space=sky.grid.space, fov=sky.grid.fov, factor=data.space.shape[0]//sky.grid.space[0])
-    print('sky grid:', sky.grid)
-    print('data grid:', data_grid)
-
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
-    noise_model = NoiseModel.build(shape=data.space.shape, **noise)
+    noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
 
     lh_dct = dict(
         data = data.noisy_val,
-        model = Model(lambda x: sky(x, out_grid=data_grid), domain=sky.domain, init=sky.init),
+        model = Model(lambda x: sky(x, out_grid=data.grid), domain=sky.domain, init=sky.init),
         noise_cov_inv = None,
         noise_std_inv = (max_std * np.max(data.val))**-1,
         noise_model = noise_model,
@@ -125,15 +121,18 @@ def fast_likelihood(*,
 
     R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid)
 
-    noise_model = NoiseModel.build(shape=R.domain.shape, **noise)
-
-    RNR_approx, N_inv_approx = build_approximation_kernels(
-        RNR = RNR,
+    psf_conv = PSFConvolve.build(
+        sky = sky,
         RNR_l = RNR_l,
         response_kernel_fn = response_kernel,
-        noise_kernel_fn = noise_kernel,
-        noise_model = noise_model,
         split = split,
+    )
+
+    sky_response = NInvConvolve.build(
+        psf_conv = psf_conv,
+        RNR = RNR,
+        noise_kernel_fn = noise_kernel,
+        noise = noise,
     )
 
     N_inv = makeOp(obs.weight)
@@ -142,11 +141,10 @@ def fast_likelihood(*,
 
     lh_dct = dict(
         data = data,
-        model = sky,
-        R = RNR,
-        R_approx = RNR_approx,
-        N_inv_sqrt = N_inv_approx,
-        noise_model = noise_model,
+        sky = sky,
+        RNR = RNR,
+        sky_response = sky_response,
+        noise_model = sky_response.noise_model,
     )
     return lh_dct
 
