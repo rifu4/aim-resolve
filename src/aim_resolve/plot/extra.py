@@ -108,7 +108,7 @@ def plot_agreement(
         vmax = mean.max()
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.grid, data.grid)
+        mean = map_signal(model.grid, data.grid)(mean)
 
     [kwargs.pop(k, None) for k in ('rows', 'cols')]
 
@@ -140,7 +140,7 @@ def plot_pullplot(
     mean, std = samples.mean_and_std(model)
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.grid, data.grid)
+        mean = map_signal(model.grid, data.grid)(mean)
 
     [kwargs.pop(k, None) for k in ('vmin', 'vmax', 'norm', 'rows', 'cols')]
 
