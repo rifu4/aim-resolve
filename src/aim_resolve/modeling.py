@@ -1,7 +1,7 @@
 import numpy as np
 
 from .model.grid import SignalGrid, PointGrid
-from .model.map import map_signal
+from .model.map import map_signal, map_tiles
 from .model.util import to_shape
 
 
@@ -31,7 +31,6 @@ def model_points(
         ps_map,
         grid,
         rec_sub,
-        factor=1,
     ):
     # extract locations of the point sources from the output map
     ps_coos = np.argwhere(ps_map == 1).astype('float64')
@@ -47,20 +46,15 @@ def model_points(
     point_grid = PointGrid.build(coordinates=ps_coos, factor=grid.factor, n_copies=ps_coos.shape[0])
 
     # get the i0 priors for the point sources from the reconstruction
-    log_sum = np.log(np.sum(rec_sub[None] * ps_masks, axis=(1,2), where=(ps_masks > 0)))
-    offsets = [round(float(ri), 1) for ri in log_sum]
-
-    if factor > 1:
-        point_grid = point_grid.refine(factor)
-        offsets *= factor**2
+    offsets = np.log(np.sum(rec_sub[None] * ps_masks, axis=(1,2), where=(ps_masks > 0)))
 
     ps_dct = {
         'point_grid': point_grid.to_dict(),
-        'grid': grid.to_dict(mode=None),
+        'grid': grid.to_dict('center'),
         'i0': {
             'base': 'i0_ps',
         },
-        'offset': offsets,
+        'offset': [round(float(ri), 1) for ri in offsets],
     }
     return ps_dct
 
@@ -97,6 +91,7 @@ def model_objects(
     if gaussian:
         g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
         fov_x, fov_y = oj_grid.fov
+        #TODO: check if this is correct for grid
         oj_dct['gaussian'] = {
             'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
             'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
@@ -128,20 +123,20 @@ def model_tiles(
 
     tile_grid = SignalGrid.build(space=tile_size, center=ts_cen, factor=grid.factor, n_copies=len(ts_cen))
 
-    log_mean = np.log(np.mean(rec_sub[None] * ts_masks, axis=(1,2), where=(ts_masks > 0)))
-    offsets = [round(float(ri), 1) for ri in log_mean]
+    offsets = np.log(np.mean(rec_sub[None] * ts_masks, axis=(1,2), where=(ts_masks > 0)))
 
     ts_dct = {
-        'tile_grid': tile_grid.to_dict(mode=None),
-        'grid': grid.to_dict(mode=None),
+        'tile_grid': tile_grid.to_dict(),
+        'grid': grid.to_dict('center'),
         'i0': {
             'base': 'i0_ts',
         },
-        'offset': offsets,
+        'offset': [round(float(ri), 1) for ri in offsets],
     }
     if gaussian:
         g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
         fov_x, fov_y = tile_grid.fov
+        #TODO: check if this is correct for grid
         ts_dct['gaussian'] = {
             'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
             'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
@@ -159,7 +154,7 @@ def draw_boxes(cfg_sections, grid, it):
             si = SignalGrid.build(**v['tile_grid'])
             xi = np.ones((si.n_copies,)+si.shape)
             xi[:, 1:-1, 1:-1] = 0
-            box_map += map_signal(si, grid)(xi)
+            box_map += map_tiles(si, grid)(xi)
         elif 'sky_o' in k and f'.{it}' in k:
             si = SignalGrid.build(**v['grid'])
             xi = np.ones(si.shape)
