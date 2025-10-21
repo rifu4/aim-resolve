@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from nifty8.re import Model
 
 from .map import map_points
-from .prior import prior_model, normal_model
+from .prior import prior_model
 from .signal import SignalModel
 from .grid import SignalGrid, PointGrid
 from .util import check_type, to_shape
@@ -48,8 +48,8 @@ class PointModel(Model):
             Function to apply to the signal, by default 'exp'
         '''
         point_grid = PointGrid.build(**point_grid)
-        
-        grid = SignalGrid.build(**grid, factor=point_grid.factor)
+
+        grid = SignalGrid.build(**{'factor': point_grid.factor} | grid)
 
         i0_grid = SignalGrid.build(space=point_grid.shape)
         i0, _ = prior_model(f'{prefix} i0', i0_grid, point_grid.n_copies, **i0)

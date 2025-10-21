@@ -60,7 +60,7 @@ class TileModel(Model):
         '''
         tile_grid = SignalGrid.build(**tile_grid)
 
-        grid = SignalGrid.build(**grid, factor=tile_grid.factor)
+        grid = SignalGrid.build(**{'factor': tile_grid.factor} | grid)
 
         i0, pspec = prior_model(f'{prefix} i0 ', tile_grid, tile_grid.n_copies, **i0)
 
