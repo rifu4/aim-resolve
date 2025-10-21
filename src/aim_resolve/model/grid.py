@@ -1,8 +1,5 @@
-import jax.numpy as jnp
 import numpy as np
 from jax import vmap
-from jax.lax import dynamic_slice, dynamic_update_slice
-from functools import partial
 
 from .util import check_type, is_val, to_shape
 
@@ -148,25 +145,32 @@ class SignalGrid():
         '''Multiply the resolution of the grid by a factor.'''
         check_type(factor, int)
         return SignalGrid(self.space, self.center, self.factor * factor, self.distances, self.n_copies)
+    
+    def update(self, **kwargs):
+        dct = self.to_dict()
+        dct.update(kwargs)
+        return SignalGrid.build(**dct)
 
     def multiply_space(self, factor):
         '''Multiply the space of the grid by a factor.'''
         check_type(factor, (int, float))
         space = tuple(int(round(si * factor)) for si in self.space)
         return SignalGrid(space, self.center, self.factor, self.distances, self.n_copies)
-    
-    def to_dict(self, mode='fov'):
+
+    def to_dict(self, *keys):
         '''Convert the grid to a dictionary ({space: [sx,sy], ...}).'''
+        if not keys:
+            keys = ('center', 'factor', 'n_copies')
         dct = {'space': self.spc.tolist()}
-        if is_val(self.cen):
+        if 'center' in keys and is_val(self.cen):
             dct['center'] = self.cen.tolist()
-        if self.factor != 1:
+        if 'factor' in keys and self.factor != 1:
             dct['factor'] = int(self.factor)
-        if mode == 'fov':
+        if 'fov' in keys:
             dct['fov'] = self.fov.tolist()
-        elif mode == 'distances':
+        elif 'distances' in keys:
             dct['distances'] = self.dis.tolist()
-        if self.n_copies != 1:
+        if 'n_copies' in keys and self.n_copies != 1:
             dct['n_copies'] = int(self.n_copies)
         return dct
 
@@ -252,24 +256,24 @@ class PointGrid():
     
     def refine(self, factor):
         offsets = np.array([[-1, -1], [-1,  1], [ 1, -1], [ 1,  1]]) / (2 * self.fac * factor)
-        coos = self.coos[None, :, :] + offsets[:, None, :]
+        coos = self.coos.reshape(-1, 2)[None, :, :] + offsets[:, None, :]
         coos = coos.reshape(-1, 2)
+        order = np.concatenate([np.arange(i, coos.shape[0], 2) for i in range(2)])
+        coos = coos[order]
         return PointGrid(tuple(map(tuple, coos.tolist())), self.factor * factor, self.n_copies * factor**2)
+    
+    def update(self, **kwargs):
+        dct = self.to_dict()
+        dct.update(kwargs)
+        return PointGrid.build(**dct)
 
-    def to_dict(self):
+    def to_dict(self, *keys):
         '''Convert the grid to a dictionary ({coordinates: [[cx,cy], ...], ...}).'''
+        if not keys:
+            keys = ('factor', 'n_copies')
         dct = {'coordinates': self.coos.tolist()}
-        if self.factor != 1:
+        if 'factor' in keys and self.factor != 1:
             dct['factor'] = int(self.factor)
-        if self.n_copies != 1:
+        if 'n_copies' in keys and self.n_copies != 1:
             dct['n_copies'] = int(self.n_copies)
         return dct
-
-
-def extract_points(array, grid):
-    check_type(grid, PointGrid)
-    coos = np.argwhere(array > 0).astype('float64')
-    coos -= 0.5 * (grid.shp - 1)
-    coos /= grid.fac
-    coos += grid.cen
-    return coos
