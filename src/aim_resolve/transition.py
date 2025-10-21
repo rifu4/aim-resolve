@@ -192,8 +192,9 @@ def transition_addt(*,
         sub_oi = map_signal(sky_new.grid, sky_oi.grid)(rec_sub)
         msk_oi = mask_box[sky_oi.prefix]
         if offsets:
-            ofs_dct[sky_oi.prefix] = get_offset(sky_oi, rec_sub, mask_dct[sky_oi.prefix])
+            ofs_dct[sky_oi.prefix] = get_offset(sky_oi, sub_oi, msk_oi)
             sky_oi.set_offset(ofs_dct[sky_oi.prefix])
+        msk_oi = msk_oi.mean(axis=0) if msk_oi.ndim == 3 else msk_oi
         pos_oi = optimize_and_plot(
             key = keys.pop(),
             sky = sky_oi,
