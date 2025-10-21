@@ -6,6 +6,7 @@ from .background import BackgroundGenerator
 from .objects import ObjectGenerator
 from .points import PointGenerator
 from .tiles import TileGenerator
+from ..model.grid import SignalGrid
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 
@@ -14,13 +15,14 @@ from ..optimize.samples import domain_tree, model_init
 class ComponentGenerator(Model):
     '''Generate a component model. Use `build` function to create the model.'''
 
-    def __init__(self, background, points=None, tiles=None, objects=None):
+    def __init__(self, grid, background, points=None, tiles=None, objects=None):
+        check_type(grid, SignalGrid)
         check_type(background, BackgroundGenerator)
         check_type(points, (PointGenerator, type(None)))
         check_type(tiles, (TileGenerator, type(None)))
         check_type(objects, (ObjectGenerator, type(None)))
 
-        self.space = background.space
+        self.grid = grid
         self.background = background
         self.points = points
         self.tiles = tiles
@@ -47,14 +49,14 @@ class ComponentGenerator(Model):
         return val
     
     @classmethod
-    def build(cls, *, space, background, points=None, tiles=None, objects=None, func='exp'):
+    def build(cls, *, grid, background, points=None, tiles=None, objects=None, func='exp'):
         '''
         Build a component generator model.
 
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
+        grid : dict
+            Dictionary containing the grid parameters (see SignalGrid)
         background : dict
             Dictionary containing the background model parameters (see BackgroundGenerator)
         points : dict, optional 
@@ -66,6 +68,9 @@ class ComponentGenerator(Model):
         func : str, optional
             Function to apply to the signal, by default 'exp'
         '''
+        grid = SignalGrid.build(**grid)
+        space = dict(shape=grid.shape, fov=grid.fov)
+
         background = BackgroundGenerator.build(space=space, func=func, **background)
 
         if points:
@@ -77,4 +82,4 @@ class ComponentGenerator(Model):
         if objects:
             objects = ObjectGenerator.build(space=space, func=func, **objects)
 
-        return cls(background, points, tiles, objects)
+        return cls(grid, background, points, tiles, objects)

@@ -22,7 +22,7 @@ class ImageDataGenerator():
         check_type(samples, (np.ndarray, type(None)))
 
         self.model = model
-        self.grid = SignalGrid.build(space=model.space.shape, fov=model.space.fov)
+        self.grid = model.grid
         self.parameters = parameters
         self.samples = samples
 
