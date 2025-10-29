@@ -1,7 +1,7 @@
 from .components import ComponentModel
 from .gaussian import gaussian_model
 from .integer import IntegerPrior, integer_model
-from .map import map_signal, map_points, map_tiles
+from .map import map_signal
 from .noise import NoiseModel
 from .normal import normal_model
 from .points import PointModel

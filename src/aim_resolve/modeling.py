@@ -1,7 +1,7 @@
 import numpy as np
 
 from .model.grid import SignalGrid, PointGrid
-from .model.map import map_signal, map_tiles
+from .model.map import map_signal
 from .model.util import to_shape
 
 
@@ -117,7 +117,7 @@ def model_tiles(
         pix = np.argwhere(tm > 0)
         lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
         cen = lim.mean(axis=0).astype('int64')
-        cen = cen.clip(tile_size // 2, grid.shp - (tile_size // 2) - 1)
+        cen = cen.clip(tile_size * grid.fac // 2, grid.shp - (tile_size * grid.fac // 2) - 1)
         cen = (cen - 0.5 * (grid.shp - 1)) / grid.fac + grid.cen
         ts_cen.append(cen.tolist())
 
@@ -154,11 +154,11 @@ def draw_boxes(cfg_sections, grid, it):
             si = SignalGrid.build(**v['tile_grid'])
             xi = np.ones((si.n_copies,)+si.shape)
             xi[:, 1:-1, 1:-1] = 0
-            box_map += map_tiles(si, grid)(xi)
+            box_map += np.array(map_signal(si, grid)(xi))
         elif 'sky_o' in k and f'.{it}' in k:
             si = SignalGrid.build(**v['grid'])
             xi = np.ones(si.shape)
             xi[1:-1, 1:-1] = 0
-            box_map += map_signal(si, grid)(xi)
+            box_map += np.array(map_signal(si, grid)(xi))
     
     return box_map.clip(0,1)

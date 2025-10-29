@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from nifty8.re import Model, VModel, Vector
 
-from .map import map_tiles
+from .map import array_slice_indices, array_slice_shapes, map_array
 from .prior import prior_model
 from .signal import SignalModel
 from .grid import SignalGrid
@@ -24,17 +24,17 @@ class TileModel(Model):
         self.tiles = tiles
         self.prefix = prefix
         self.gaussian = gaussian
+        self.set_out_grid(grid)
         super().__init__(
             domain = Vector(domain_tree((self.tiles, self.gaussian), error=False)), 
             init = model_init((self.tiles, self.gaussian), error=False),
         )
 
-    def __call__(self, x, *, out_grid=None):
-        out_grid = out_grid if out_grid else self.grid
+    def __call__(self, x):
         res = self.tiles(x)
         if self.gaussian:
             res *= self.gaussian(x)
-        return map_tiles(self.tiles.grid, out_grid)(res)
+        return map_array(res, **self.map_kwargs)
 
     @classmethod
     def build(cls, *, grid, tile_grid, i0, offset=0, prefix='tm', func='exp', gaussian=None):
@@ -80,6 +80,27 @@ class TileModel(Model):
         tiles = SignalModel(tile_grid, i0, offset, prefix, func, pspec=pspec)
 
         return cls(grid, tiles, prefix, gaussian)
+    
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        in_grid = self.tiles.grid
+        print(in_grid, out_grid)
+        print(in_grid.lims.min(), in_grid.lims.max())
+        print(out_grid.lims.min(), out_grid.lims.max())
+
+        in_shape, out_shape = array_slice_shapes(in_grid, out_grid)
+        in_start, out_start = array_slice_indices(in_grid, out_grid)
+
+        self.map_kwargs = dict(
+            in_copies = in_grid.n_copies,
+            out_copies = out_grid.n_copies,
+            in_shape = in_shape,
+            out_shape = out_shape,
+            in_start = in_start,
+            out_start = out_start,
+            zoom = out_grid.fac / in_grid.fac,
+        )
+        return
     
     @property
     def shape(self):

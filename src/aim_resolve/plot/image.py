@@ -88,7 +88,7 @@ def plot_image(
     if square:
         spc_old = SignalGrid.build(shape=array.shape, fov=array.shape)
         spc_new = SignalGrid.build(shape=spc_old.shp.max(), fov=spc_old.fov.max())
-        array = map_signal(array, spc_old, spc_new)
+        array = map_signal(spc_old, spc_new)(array)
         #TODO: fix grid for squared images. Set to None for now
         grid = None
 

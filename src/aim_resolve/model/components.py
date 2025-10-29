@@ -27,16 +27,16 @@ class ComponentModel(Model):
         self.background = background
         self.components = components
         self.models = models
+        self.set_out_grid(grid)
         super().__init__(
             domain = Vector(domain_tree(self.models)), 
             init = model_init(self.models),
         )
 
-    def __call__(self, x, *, out_grid=None):
-        out_grid = out_grid if out_grid else self.grid
-        res = jnp.zeros(out_grid.shape)
+    def __call__(self, x):
+        res = jnp.zeros(self.out_grid.shape)
         for m in self.models:
-            res += m(x, out_grid=out_grid)
+            res += m(x)
         return res
     
     @classmethod
@@ -70,6 +70,15 @@ class ComponentModel(Model):
             grid = background.grid.refine(factor // background.grid.factor)
         
         return cls(grid, background, prefix, *models[1:])
+    
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        self.out_grid = out_grid
+
+        for m in self.models:
+            m.set_out_grid(out_grid)
+
+        return
 
     @property
     def objects(self):

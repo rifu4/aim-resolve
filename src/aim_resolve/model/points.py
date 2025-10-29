@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from nifty8.re import Model
 
-from .map import map_points
+from .map import point_slice_indices, point_slice_shapes, map_point
 from .prior import prior_model
 from .signal import SignalModel
 from .grid import SignalGrid, PointGrid
@@ -21,11 +21,11 @@ class PointModel(Model):
         self.grid = grid
         self.prefix = prefix
         self.points = points
+        self.set_out_grid(grid)
         super().__init__(domain=self.points.domain, init=self.points.init)
 
-    def __call__(self, x, *, out_grid=None):
-        out_grid = out_grid if out_grid else self.grid
-        return map_points(self.points.grid, out_grid)(self.points(x))
+    def __call__(self, x):
+        return map_point(self.points(x), **self.map_kwargs)
 
     @classmethod
     def build(cls, *, grid, point_grid, i0, offset=0, prefix='pm', func='exp'):
@@ -65,6 +65,22 @@ class PointModel(Model):
         points = SignalModel(point_grid, i0, offset, prefix, func)
 
         return cls(grid, prefix, points)
+    
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        in_grid = self.points.grid
+
+        out_shape = point_slice_shapes(in_grid, out_grid)
+        out_start = point_slice_indices(in_grid, out_grid)
+
+        self.map_kwargs = dict(
+            in_copies = in_grid.n_copies,
+            out_copies = out_grid.n_copies,
+            out_shape = out_shape,
+            out_start = out_start,
+            zoom = out_grid.fac / in_grid.fac,
+        )
+        return
     
     @property
     def shape(self):

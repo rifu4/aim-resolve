@@ -37,9 +37,11 @@ def image_likelihood(*,
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
     noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
 
+    sky.set_out_grid(data.grid)
+
     lh_dct = dict(
         data = data.noisy_val,
-        model = Model(lambda x: sky(x, out_grid=data.grid), domain=sky.domain, init=sky.init),
+        model = sky,
         noise_cov_inv = None,
         noise_std_inv = (max_std * np.max(data.val))**-1,
         noise_model = noise_model,

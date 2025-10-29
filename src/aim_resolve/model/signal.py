@@ -3,7 +3,7 @@ from jax.typing import ArrayLike
 from nifty8.re import Model, VModel, Vector
 from typing import Callable
 
-from .map import map_signal
+from .map import array_slice_indices, array_slice_shapes, map_array
 from .prior import prior_model
 from .grid import SignalGrid, PointGrid
 from .util import check_type, to_shape
@@ -34,12 +34,13 @@ class SignalModel(Model):
         self.zero_pad = zero_pad
         self.gaussian = gaussian
         self.pspec = pspec
+        self.map_kwargs = None
         super().__init__(
             domain = Vector(domain_tree((self.i0, self.gaussian), error=False)), 
             init = model_init((self.i0, self.gaussian), error=False),
         )
 
-    def __call__(self, x, *, out_grid=None):
+    def __call__(self, x):
         res = self.i0(x)
         res += self.offset
         if self.zero_pad:
@@ -50,8 +51,8 @@ class SignalModel(Model):
             res *= self.gaussian(x)
         if isinstance(self.factor, ArrayLike):
             res *= self.factor
-        if out_grid:
-            return map_signal(self.grid, out_grid)(res)
+        if self.map_kwargs:
+            return map_array(res, **self.map_kwargs)
         else:
             return res
 
@@ -104,6 +105,25 @@ class SignalModel(Model):
 
         return cls(grid, i0, offset, prefix, func, pad_func, gaussian, pspec)
     
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        in_grid = self.grid
+
+        in_shape, out_shape = array_slice_shapes(in_grid, out_grid)
+        in_start, out_start = array_slice_indices(in_grid, out_grid)
+        zoom = out_grid.fac / in_grid.fac
+
+        self.map_kwargs = dict(
+            in_copies = in_grid.n_copies,
+            out_copies = out_grid.n_copies,
+            in_shape = in_shape,
+            out_shape = out_shape,
+            in_start = in_start,
+            out_start = out_start,
+            zoom = zoom,
+        )
+        return
+
     @property
     def shape(self):
         return self.grid.shape

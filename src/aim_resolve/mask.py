@@ -2,7 +2,7 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 from .model.components import ComponentModel
-from .model.map import map_signal, map_points
+from .model.map import map_signal
 from .model.util import check_type, to_shape
 
 
@@ -104,7 +104,7 @@ def masks_from_model(
     margin_min *= factor
 
     for sky_pi in sky.points:
-        mask_pi = np.array(map_points(sky_pi.points.grid, sky.grid, sum_up=False)(np.ones(sky_pi.shape)))
+        mask_pi = np.array(map_signal(sky_pi.points.grid, sky.grid.update(n_copies=sky_pi.n_copies))(np.ones(sky_pi.shape)))
         for i in range(mask_pi.shape[0]):
             mask_pi[i] = add_margin(mask_pi[i], margin_min, round=True)
         mask_dct[sky_pi.prefix] = mask_pi
@@ -113,7 +113,7 @@ def masks_from_model(
         mask_dct[sky_oi.prefix] = map_signal(sky_oi.grid, sky.grid)(np.ones(sky_oi.shape))
 
     for sky_ti in sky.tiles:
-        mask_dct[sky_ti.prefix] = map_signal(sky_ti.tiles.grid, sky.grid, sum_up=False)(np.ones(sky_ti.shape))
+        mask_dct[sky_ti.prefix] = map_signal(sky_ti.tiles.grid, sky.grid.update(n_copies=sky_ti.n_copies))(np.ones(sky_ti.shape))
 
     mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
 
@@ -148,7 +148,7 @@ def masks_to_boxes(
 
     for sky_pi in sky.points:
         if mask_dct[sky_pi.prefix].shape != sky_pi.grid.shape:
-            mask_box[sky_pi.prefix] = np.ceil(map_signal(sky.grid, sky_pi.grid, sum_up=False)(mask_dct[sky_pi.prefix]))
+            mask_box[sky_pi.prefix] = np.ceil(map_signal(sky.grid, sky_pi.grid)(mask_dct[sky_pi.prefix]))
 
     for sky_oi in sky.objects:  
         if mask_dct[sky_oi.prefix].shape != sky_oi.grid.shape:
@@ -160,10 +160,10 @@ def masks_to_boxes(
 
     for sky_ti in sky.tiles:
         if mask_dct[sky_ti.prefix].shape != sky_ti.grid.shape:
-            mask_ti = map_signal(sky.grid, sky_ti.grid, sum_up=False)(mask_dct[sky_ti.prefix])
+            mask_ti = map_signal(sky.grid, sky_ti.grid)(mask_dct[sky_ti.prefix])
             if np.any((mask_ti > 0.) & (mask_ti < 1.)) and 'sum' in mask_dct:
                 mask_ti = (2 * mask_dct[sky_ti.prefix] - mask_dct['sum']).clip(0,1)
-                mask_ti = np.ceil(map_signal(sky.grid, sky_ti.grid, sum_up=False)(mask_ti))
+                mask_ti = np.ceil(map_signal(sky.grid, sky_ti.grid)(mask_ti))
             mask_box[sky_ti.prefix] = mask_ti
 
     return mask_box
