@@ -74,10 +74,8 @@ class ComponentModel(Model):
     def set_out_grid(self, out_grid):
         check_type(out_grid, SignalGrid)
         self.out_grid = out_grid
-
         for m in self.models:
             m.set_out_grid(out_grid)
-
         return
 
     @property

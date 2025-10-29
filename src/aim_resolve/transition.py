@@ -188,22 +188,23 @@ def transition_addt(*,
     ofs_dct = {}
 
     # optimize the new object and tile models on the corresponding regions of the old reconstruction
-    for sky_oi in sky_new.points + sky_new.objects + sky_new.tiles:
-        sub_oi = map_signal(sky_new.grid, sky_oi.grid)(rec_sub)
-        msk_oi = mask_box[sky_oi.prefix]
+    for sky_ci in sky_new.points + sky_new.objects + sky_new.tiles:
+        sky_ci.set_out_grid(sky_ci.grid)
+        sub_ci = map_signal(sky_new.grid, sky_ci.grid)(rec_sub)
+        msk_ci = mask_box[sky_ci.prefix]
         if offsets:
-            ofs_dct[sky_oi.prefix] = get_offset(sky_oi, sub_oi, msk_oi)
-            sky_oi.set_offset(ofs_dct[sky_oi.prefix])
-        msk_oi = msk_oi.sum(axis=0).clip(0, 1) if msk_oi.ndim == 3 else msk_oi
-        pos_oi = optimize_and_plot(
+            ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci)
+            sky_ci.set_offset(ofs_dct[sky_ci.prefix])
+        msk_ci = msk_ci.sum(axis=0).clip(0, 1) if msk_ci.ndim == 3 else msk_ci
+        pos_ci = optimize_and_plot(
             key = keys.pop(),
-            sky = sky_oi,
-            data = sub_oi * msk_oi,
+            sky = sky_ci,
+            data = sub_ci * msk_ci,
             noise = noise.copy(),
             opt_dct = opt_dct,
-            plot_dct = plot_dct | dict(name=f'{it}_{sky_oi.prefix}.png'),
+            plot_dct = plot_dct | dict(name=f'{it}_{sky_ci.prefix}.png'),
         )
-        ptree |= pos_oi.tree
+        ptree |= pos_ci.tree
 
     # create new position vector
     pos_new = Vector(ptree)
