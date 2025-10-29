@@ -49,11 +49,11 @@ def fast_optimize_kl(
     residual_map='lmap',
     kl_reduce=_reduce,
     mirror_samples=True,
-    # draw_linear_kwargs=dict(minimize=_cg, cg_name='SL', cg_kwargs=dict()),
-    draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
+    draw_linear_kwargs=dict(minimize=_cg, cg_name='SL', cg_kwargs=dict()),
+    # draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
     nonlinearly_update_kwargs=dict(minimize_kwargs=dict(name='SN', cg_kwargs=dict(name=None))),
-    # kl_kwargs=dict(minimize=_newton_cg, minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
-    kl_kwargs=dict(minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
+    kl_kwargs=dict(minimize=_newton_cg, minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
+    # kl_kwargs=dict(minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
     sample_mode: SMPL_MODE_GENERIC_TYP = 'nonlinear_resample',
     resume: Union[str, bool] = False,
     callback: Optional[Callable[[Samples, OptimizeVIState], None]] = None,
@@ -170,6 +170,7 @@ def fast_optimize_kl(
             f.write(msg)
 
     key = random.PRNGKey(key) if isinstance(key, int) else key
+    jax.clear_caches()
 
     opt_vi = MyOptimizeVI(
         lh_fun=my_lh,
