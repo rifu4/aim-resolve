@@ -43,7 +43,7 @@ def main():
     if zoom > 1:
         rec.val = map_signal(rec.grid, grid)(rec.val)
         ps_map = map_signal(rec.grid, grid)(ps_map)
-        cl_map = map_signal(rec.grid, grid, sum_up=False)(cl_map)
+        cl_map = map_signal(rec.grid, grid)(cl_map)
 
     # create a mask for the detected point sources and each extended object
     if mdl_dct['tiles'] and mdl_dct['tiles']['tile_size']:
