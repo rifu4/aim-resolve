@@ -1,7 +1,8 @@
+import dataclasses
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 from nifty8.re import Model, VModel, Vector
-from typing import Callable
+from typing import Any, Callable
 
 from .map import map_signal
 from .prior import prior_model
@@ -14,7 +15,7 @@ from ..optimize.samples import domain_tree, model_init
 class SignalModel(Model):
     '''Generate a signal model. Use `build` function to create the model.'''
 
-    factor = None
+    mask: Any = dataclasses.field(default=None, metadata=dict(static=False))
 
     def __init__(self, grid, i0, offset=0, prefix='sm', func=jnp.exp, zero_pad=None, gaussian=None, pspec=None):
         check_type(grid, (SignalGrid, PointGrid))
@@ -49,8 +50,8 @@ class SignalModel(Model):
             res = self.func(res)
         if self.gaussian:
             res *= self.gaussian(x)
-        if isinstance(self.factor, ArrayLike):
-            res *= self.factor
+        if isinstance(self.mask, ArrayLike):
+            res = jnp.where(self.mask, res, 0.0)
         return self.map_function(res)
 
     @classmethod
