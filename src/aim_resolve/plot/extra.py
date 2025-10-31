@@ -1,3 +1,5 @@
+import numpy as np
+
 from .arrays import plot_arrays
 from ..img_data.data import ImageData
 from ..model.map import map_signal
@@ -108,7 +110,7 @@ def plot_agreement(
         vmax = mean.max()
 
     if mean.shape != data.val.shape:
-        mean = map_signal(model.grid, data.grid)(mean)
+        mean = map_signal(model.grid, data.grid)(np.asarray(mean))
 
     [kwargs.pop(k, None) for k in ('rows', 'cols')]
 
@@ -140,7 +142,7 @@ def plot_pullplot(
     mean, std = samples.mean_and_std(model)
 
     if mean.shape != data.val.shape:
-        mean = map_signal(model.grid, data.grid)(mean)
+        mean = map_signal(model.grid, data.grid)(np.asarray(mean))
 
     [kwargs.pop(k, None) for k in ('vmin', 'vmax', 'norm', 'rows', 'cols')]
 

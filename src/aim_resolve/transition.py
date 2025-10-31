@@ -1,5 +1,6 @@
 import os
 import pickle
+import jax.numpy as jnp
 import numpy as np
 from jax import random
 from nifty8.re import Model, Vector, random_like
@@ -151,7 +152,7 @@ def transition_addt(*,
     plot_dct = plot_dct.copy() | dict(label=None, grid=None, odir=odir)
 
     # get reconstruction of the previous iteration
-    rec_old = samples.mean(sky_old)
+    rec_old = np.asarray(samples.mean(sky_old))
 
     # load or create masks for an efficient separation of the components
     mask_fn = mask if mask else ''
@@ -167,29 +168,28 @@ def transition_addt(*,
     # initialize an empty position tree
     ptree = {}
     keys = list(random.split(key, 2 + len(sky_new.models)))
-        
+
     # optimize the new background model on the old reconstruction (mask regions around point sources and the object boxes)
     sky_bg = sky_new.background.copy()
     rec_bg = map_signal(sky_old.grid, sky_bg.grid)(rec_old)
     msk_bg = mask_box[sky_bg.prefix]
-    sky_bg.factor = msk_bg
+    sky_bg.mask = msk_bg
     pos_bg = optimize_and_plot(
         key = keys.pop(),
         sky = sky_bg,
-        data = rec_bg * msk_bg,
+        data = np.where(msk_bg, rec_bg, 0.0),
         noise = noise.copy(),
         opt_dct = opt_dct,
         plot_dct = plot_dct | dict(name=f'{it}_{sky_bg.prefix}.png'),
     )
     ptree |= pos_bg.tree
 
-    rec_sub = map_signal(sky_old.grid, sky_new.grid)(rec_old) - map_signal(sky_bg.grid, sky_new.grid)(sky_bg(pos_bg))
+    rec_sub = map_signal(sky_old.grid, sky_new.grid)(rec_old) - map_signal(sky_bg.grid, sky_new.grid)(np.asarray(sky_bg(pos_bg)))
     rec_sub = rec_sub.clip(0, None)
     ofs_dct = {}
 
     # optimize the new object and tile models on the corresponding regions of the old reconstruction
     for sky_ci in sky_new.points + sky_new.objects + sky_new.tiles:
-        sky_ci.set_out_grid(sky_ci.grid)
         sub_ci = map_signal(sky_new.grid, sky_ci.grid)(rec_sub)
         msk_ci = mask_box[sky_ci.prefix]
         if offsets:
@@ -199,7 +199,7 @@ def transition_addt(*,
         pos_ci = optimize_and_plot(
             key = keys.pop(),
             sky = sky_ci,
-            data = sub_ci * msk_ci,
+            data = np.where(msk_ci, sub_ci, 0.0),
             noise = noise.copy(),
             opt_dct = opt_dct,
             plot_dct = plot_dct | dict(name=f'{it}_{sky_ci.prefix}.png'),
@@ -231,12 +231,12 @@ def transition_addt(*,
     nm_old = lh_old['noise_model']
     nm_new = lh_new['noise_model']
     if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
-        nm_pos = map_signal(sky_old.grid, sky_new.grid)(domain_tree(samples)[nm_old.prefix])
+        nm_pos = map_signal(sky_old.grid, sky_new.grid)(np.asarray(domain_tree(samples)[nm_old.prefix]))
         pos_new = Vector(domain_tree(pos_new) | {nm_new.prefix: nm_pos})
 
-    samples = MySamples(pos=pos_new, samples=None, keys=None)
-    
-    return samples, ofs_dct
+    samples_new = MySamples(pos=pos_new, samples=None, keys=None)
+
+    return samples_new, ofs_dct
 
 
 
@@ -279,7 +279,8 @@ def optimize_and_plot(
 
         k_n, k_o = random.split(key)
         noise_std = max_std * np.max(data)
-        data += noise_std * random_like(k_n, sky.target)
+        noise_init = np.asarray(noise_std * random_like(k_n, sky.target))
+        data = data + noise_init
 
         lh_dct = dict(
             data = data,
