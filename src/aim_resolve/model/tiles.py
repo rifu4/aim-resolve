@@ -102,3 +102,6 @@ class TileModel(Model):
         offset_shape = (self.tiles.grid.n_copies, 1, 1) if self.tiles.grid.n_copies > 1 else (1, 1)
         self.tiles.offset = to_shape(offset, offset_shape, 'float64')
         return
+    
+    def copy(self):
+        return TileModel(self.grid, self.tiles, self.prefix, self.gaussian)

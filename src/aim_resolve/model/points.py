@@ -87,3 +87,6 @@ class PointModel(Model):
         offset_shape = (self.points.grid.n_copies, 1, 1) if self.points.grid.n_copies > 1 else (1, 1)
         self.points.offset = to_shape(offset, offset_shape, 'float64')
         return
+
+    def copy(self):
+        return PointModel(self.grid, self.prefix, self.points)
