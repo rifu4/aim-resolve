@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 from functools import reduce
 from nifty8 import makeOp
-from nifty8.re import Model
+from nifty.re import Model
 from operator import add
 
 from .fast_resolve.response import build_exact_responses
@@ -90,8 +90,8 @@ def radio_likelihood(*,
 def fast_likelihood(*,
         sky,
         data,
-        response_kernel = None,
-        noise_kernel = None,
+        psf_kernel_fn = '',
+        n_inv_kernel_fn = '',
         noise = dict(parameters=dict()),
         split = 0,
         fun = 'fast_radio',
@@ -121,19 +121,19 @@ def fast_likelihood(*,
         data = data.to_resolve_obs()
     obs = data.to_double_precision()
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
 
     psf_conv = PSFConvolve.build(
         sky = sky,
         RNR_l = RNR_l,
-        response_kernel_fn = response_kernel,
+        psf_kernel_fn = psf_kernel_fn,
         split = split,
     )
 
     sky_response = NInvConvolve.build(
         psf_conv = psf_conv,
         RNR = RNR,
-        noise_kernel_fn = noise_kernel,
+        n_inv_kernel_fn = n_inv_kernel_fn,
         noise = noise,
     )
 

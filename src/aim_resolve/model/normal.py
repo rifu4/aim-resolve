@@ -1,7 +1,7 @@
 from functools import partial
 from jax import vmap
 from typing import Union
-from nifty8.re import Model, NormalPrior, WrappedCall, random_like
+from nifty.re import Model, NormalPrior, WrappedCall, random_like
 
 from .util import to_shape
 
@@ -30,7 +30,7 @@ def normal_model(*,
     n_copies : int
         The number of copies of the model. The copies can have diffeerent means and stds.
         If 0: every entry of the model gets its own mean and std.
-        If 1: The NormalPrior of nifty8.re is used.    
+        If 1: The NormalPrior of nifty.re is used.    
     '''
     if n_copies == 0:
         mean = to_shape(mean, shape, 'float64')

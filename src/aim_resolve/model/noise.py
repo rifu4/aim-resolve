@@ -1,4 +1,4 @@
-from nifty8.re import Initializer, Model
+from nifty.re import Initializer, Model
 
 from .prior import inverse_gamma_model
 from .util import check_type

@@ -1,27 +1,27 @@
 import numpy as np
 
+from .mask import remove_freq_axis
 from .model.grid import SignalGrid, PointGrid
 from .model.map import map_signal
+from .model.points import PointModel
+from .model.signal import SignalModel
+from .model.tiles import TileModel
 from .model.util import to_shape
 
 
 
 def model_background(
         bg_mask,
+        freq,
         rec_val,
     ):
-    log_val = np.log(rec_val[bg_mask > 0])
-
-    bg_mean = round(float(log_val.mean()), 1)
-    bg_std = round(float(log_val.std()), 1)
-
-    bg_dct = {
-        'i0': {
-            'base': 'i0_bg',
-            'offset_mean': bg_mean,
-            'offset_std': [max(bg_std, 1.0), 1.0],
-        },
-    }
+    # create background model dictionary
+    bg_dct = dict(
+        params = dict(
+            base = 'params_bg',
+        ),
+        offset =  get_offset('background', rec_val, bg_mask, freq),
+    )
     return bg_dct
 
 
@@ -30,6 +30,7 @@ def model_points(
         ps_masks,
         ps_map,
         grid,
+        freq,
         rec_sub,
     ):
     # extract locations of the point sources from the output map
@@ -45,17 +46,16 @@ def model_points(
     ps_coos += grid.cen
     point_grid = PointGrid.build(coordinates=ps_coos, factor=grid.factor, n_copies=ps_coos.shape[0])
 
-    # get the i0 priors for the point sources from the reconstruction
-    offsets = np.log(np.sum(rec_sub[None] * ps_masks, axis=(1,2), where=(ps_masks > 0)))
-
-    ps_dct = {
-        'point_grid': point_grid.to_dict(),
-        'grid': grid.to_dict('center'),
-        'i0': {
-            'base': 'i0_ps',
-        },
-        'offset': [round(float(ri), 1) for ri in offsets],
-    }
+    # create point model dictionary
+    ps_dct = dict(
+        point_grid = point_grid.to_dict(),
+        grid = grid.to_dict('center'),
+        freq = freq,
+        params = dict(
+            base = 'params_ps',
+        ),
+        offset = get_offset('point', rec_sub, ps_masks, freq),
+    )
     return ps_dct
 
 
@@ -63,11 +63,11 @@ def model_points(
 def model_objects(
         oj_mask,
         grid,
+        freq,
         rec_sub,
         gaussian = None,
-        zero_pad = None,
 ):
-    pix = np.argwhere(oj_mask > 0)
+    pix = np.argwhere(remove_freq_axis(oj_mask, freq) > 0)
     lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
     lim = lim.clip(0, grid.shp-1)
     shp = 1 + lim[1] - lim[0]
@@ -78,26 +78,21 @@ def model_objects(
     
     oj_grid = SignalGrid.build(space=spc, center=cen, factor=grid.factor)
 
-    log_mean = np.log(np.mean(rec_sub * oj_mask, where=(oj_mask > 0)))
-    offset = round(float(log_mean), 1)
+    # create object model dictionary
+    oj_dct = dict(
+        grid = oj_grid.to_dict(),
+        freq = freq,
+        params = dict(
+            base = 'params_os',
+        ),
+        offset = get_offset('object', rec_sub, oj_mask, freq),
+    )
 
-    oj_dct = {
-        'grid': oj_grid.to_dict(),
-        'i0': {
-            'base': 'i0_os',
-        },
-        'offset': offset,
-    }
     if gaussian:
-        g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = oj_grid.fov
-        #TODO: check if this is correct for grid
-        oj_dct['gaussian'] = {
-            'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
-            'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
-        }
-    if zero_pad:
-        oj_dct['zero_pad'] = zero_pad
+        oj_dct['gaussian'] = dict(
+            cov_x = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+            cov_y = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+        )
 
     return oj_dct
 
@@ -106,6 +101,7 @@ def model_objects(
 def model_tiles(
         ts_masks,
         grid,
+        freq,
         rec_sub,
         tile_size = 32,
         gaussian = None,
@@ -114,7 +110,7 @@ def model_tiles(
 
     ts_cen = []
     for tm in ts_masks:
-        pix = np.argwhere(tm > 0)
+        pix = np.argwhere(remove_freq_axis(tm, freq) > 0)
         lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
         cen = lim.mean(axis=0).astype('int64')
         cen = cen.clip(tile_size * grid.fac // 2, grid.shp - (tile_size * grid.fac // 2) - 1)
@@ -123,26 +119,55 @@ def model_tiles(
 
     tile_grid = SignalGrid.build(space=tile_size, center=ts_cen, factor=grid.factor, n_copies=len(ts_cen))
 
-    offsets = np.log(np.mean(rec_sub[None] * ts_masks, axis=(1,2), where=(ts_masks > 0)))
+    # create tile model dictionary
+    ts_dct = dict(
+        tile_grid = tile_grid.to_dict(),
+        grid = grid.to_dict('center'),
+        freq = freq,
+        params = dict(
+            base = 'params_ts',
+        ),
+        offset = get_offset('tile', rec_sub, ts_masks, freq),
+    )
 
-    ts_dct = {
-        'tile_grid': tile_grid.to_dict(),
-        'grid': grid.to_dict('center'),
-        'i0': {
-            'base': 'i0_ts',
-        },
-        'offset': [round(float(ri), 1) for ri in offsets],
-    }
     if gaussian:
-        g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = tile_grid.fov
-        #TODO: check if this is correct for grid
-        ts_dct['gaussian'] = {
-            'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
-            'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
-        }
+        ts_dct['gaussian'] = dict(
+            cov_x = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+            cov_y = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+        )
 
     return ts_dct
+
+
+
+def get_offset(
+        model,
+        rec_sub,
+        mask,
+        freq,
+):
+    '''Sets the offsets of the sky model based on the background reconstruction and the mask.'''
+    rec_sub = remove_freq_axis(rec_sub, freq)
+    mask = remove_freq_axis(mask, freq).astype(bool)
+
+    if isinstance(model, PointModel) or (isinstance(model, str) and 'point' in model):
+        log_sum = np.log(np.sum(np.broadcast_to(rec_sub, mask.shape), axis=(1, 2), where=mask))
+        offset = [round(float(ri), 1) for ri in log_sum]
+
+    elif isinstance(model, SignalModel) or (isinstance(model, str) and any(m in model for m in ('signal', 'object', 'background'))):
+        log_mean = np.log(np.mean(rec_sub, where=mask))
+        offset = round(float(log_mean), 1)
+
+    elif isinstance(model, TileModel) or (isinstance(model, str) and 'tile' in model):
+        log_mean = np.log(np.mean(np.broadcast_to(rec_sub, mask.shape), axis=(1, 2), where=mask))
+        offset = [round(float(ri), 1) for ri in log_mean]
+
+    if isinstance(model, str):
+        print(f'{model} offset:', offset)
+    else:
+        print(f'{model.prefix} offset:', offset)
+
+    return offset
 
 
 

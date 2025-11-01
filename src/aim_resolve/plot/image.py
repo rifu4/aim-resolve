@@ -92,9 +92,14 @@ def plot_image(
         #TODO: fix grid for squared images. Set to None for now
         grid = None
 
-    if norm == 'log':
-        amin = array[array > 0].min() if np.any(array > 0) else 1
-        array[array <= 0] = amin
+    if norm == 'log' and vmin == None:
+        if array.min() > 0:
+            amin = array.min()
+        elif np.any(array > 0):
+            amin = array[array > 0].min() / 100
+        else:
+            amin = 1.0
+        array = array.clip(amin, None)
 
     img = plt.imshow(
         X = array.T, 

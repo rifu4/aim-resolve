@@ -65,3 +65,15 @@ def is_val(array):
         return True
     else:
         return False
+
+
+
+def extend_shape(n_copies, freq, shape, *, offset=False):
+    '''expand a shape depending on number of copies and frequencies'''
+    if len(freq) > 1 and offset:
+        shape = (1,) + shape
+    elif len(freq) > 1:
+        shape = (len(freq),) + shape
+    if n_copies > 1:
+        shape = (n_copies,) + shape
+    return shape

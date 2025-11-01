@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from nifty8.re import Model
+from nifty.re import Model
 
 from .observation import Observation
 from .response import point_response, signal_response

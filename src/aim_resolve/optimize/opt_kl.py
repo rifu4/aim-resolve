@@ -11,9 +11,9 @@ from jax import numpy as jnp
 from jax import random
 from jax.tree_util import tree_map
 from jax.typing import ArrayLike
-from nifty8.re import Gaussian, OptimizeVIState, VariableCovarianceGaussian, logger
-from nifty8.re.optimize import _newton_cg
-from nifty8.re.conjugate_gradient import cg as _cg
+from nifty.re import Gaussian, OptimizeVIState, VariableCovarianceGaussian, logger
+from nifty.re.optimize import _newton_cg
+from nifty.re.conjugate_gradient import cg as _cg
 
 from .opt_vi import MyOptimizeVI
 from .samples import MySamples, get_samples

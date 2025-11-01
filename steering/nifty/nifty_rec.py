@@ -15,7 +15,7 @@ def main(config, mode, cuda_device):
         os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
     import jax
-    from aim_resolve import OptimizeKLConfig, ImageData, Observation, get_builders, plot_arrays, domain_keys
+    from aim_resolve import OptimizeKLConfig, ImageData, Observation, SignalModel, get_builders, plot_arrays, domain_keys
 
     jax.config.update("jax_enable_x64", True)
 
@@ -33,13 +33,15 @@ def main(config, mode, cuda_device):
         if isinstance(dv, ImageData):
             plot_arrays(dv.val, name=dk, odir=odir, norm='log')
         elif isinstance(dv, Observation):
-            plot_arrays(dv.dirty_image(next(iter(sig_dct.values())).space), name=dk, odir=odir)
+            plot_arrays(dv.dirty_image(next(iter(sig_dct.values())).grid), name=dk, odir=odir)
 
     # Define a callback function to plot the results of the optimization after each iteration
     def callback(samples, opt_state, *_):
         for key,sig in sig_dct.items():
             if domain_keys(sig).issubset(domain_keys(samples)):
-                plot_arrays(samples.mean(sig), name=f'{opt_state.nit}_{key}', odir=odir, norm='log')
+                plot_arrays(samples.mean(sig), name=f'{opt_state.nit}_{key}', odir=odir, norm='log', rows=1)
+                if isinstance(sig, SignalModel):
+                    plot_arrays(samples.mean(sig.model.spectral_index_distribution), name=f'{opt_state.nit}_{key}_alpha', odir=odir, rows=1)
 
     # Run the optimization
     samples, *_ = cfg.optimize_kl(callback=callback)

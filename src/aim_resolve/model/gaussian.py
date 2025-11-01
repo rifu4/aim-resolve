@@ -3,7 +3,7 @@ import numpy as np
 from collections.abc import Mapping
 from functools import partial
 from typing import Union
-from nifty8.re import Model, VModel, WrappedCall, random_like, lognormal_prior, normal_prior
+from nifty.re import Model, VModel, WrappedCall, random_like, lognormal_prior, normal_prior
 
 
 

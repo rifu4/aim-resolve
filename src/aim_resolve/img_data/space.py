@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 from jax import vmap
-from nifty8.re import Model
+from nifty.re import Model
 
 from ..model.util import check_type, is_val, to_shape
 

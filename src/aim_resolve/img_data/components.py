@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import random
-from nifty8.re import Model, Vector
+from nifty.re import Model, Vector
 
 from .background import BackgroundGenerator
 from .objects import ObjectGenerator

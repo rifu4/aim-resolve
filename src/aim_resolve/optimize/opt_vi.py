@@ -1,7 +1,7 @@
 import jax
 from functools import partial
-from nifty8.re import OptimizeVI
-from nifty8.re.optimize_kl import _kl_vg, _kl_met, draw_linear_residual, nonlinearly_update_residual, get_status_message
+from nifty.re import OptimizeVI
+from nifty.re.optimize_kl import _kl_vg, _kl_met, draw_linear_residual, nonlinearly_update_residual, get_status_message
 
 from .samples import MySamples
 

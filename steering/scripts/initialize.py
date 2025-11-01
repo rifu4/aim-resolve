@@ -1,6 +1,7 @@
 import os
 import sys
-from aim_resolve import SetupKLConfig, SignalGrid, yaml_load, yaml_save, merge_dicts
+import numpy as np
+from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts, radio_data
 
 
 
@@ -22,6 +23,18 @@ def main():
     cfg.modify_sec('lh.0', fun=fun)
     cfg.modify_sec('data.0', **pipe_dct.pop('data'))
 
+    # extract frequency channels if specified
+    if 'freq' in pipe_dct:
+        freq = pipe_dct.pop('freq')
+        if isinstance(freq, list) and len(freq) > 1:
+            cfg.modify_sec('sky_bg.0', freq=freq)
+            freq = np.array(freq)
+        elif isinstance(freq, str):
+            freq = radio_data(**cfg.sections['data.0']).freq
+            cfg.modify_sec('sky_bg.0', freq=freq.tolist())
+    else:
+        freq = np.ones((1,))
+
     # add noise scaling configuration for the likelihood
     if 'noise' in pipe_dct:
         cfg.modify_sec('lh.0', noise=pipe_dct.pop('noise'))
@@ -39,8 +52,8 @@ def main():
         kfov = pipe_dct['grid_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
-            response_kernel = f'{kernel_dir}/rk_{kname}_{kfov}_{ksize}.pkl', 
-            noise_kernel = f'{kernel_dir}/nk_{kname}_{kfov}_{ksize}.pkl',
+            psf_kernel_fn = f'{kernel_dir}/pk_{kname}_{freq.size}f_{kfov}_{ksize}.pkl', 
+            n_inv_kernel_fn = f'{kernel_dir}/nk_{kname}_{freq.size}f_{kfov}_{ksize}.pkl',
         )
 
     # extract callback, extra, and transition keys from pipe_dct

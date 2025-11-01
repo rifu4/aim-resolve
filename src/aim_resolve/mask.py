@@ -11,6 +11,7 @@ def masks_from_maps(
         points_map,
         object_maps,
         it,
+        freq = [1.],
         factor = 1,
         margin_fac = 0.2,
         margin_min = 2,
@@ -77,6 +78,10 @@ def masks_from_maps(
 
     mask_dct[f'bg.{it}'] = np.floor(1 - mask_dct['sum']).clip(0,1)
 
+    if len(freq) > 1:
+        for k, v in mask_dct.items():
+            mask_dct[k] = add_freq_axis(v, freq)
+
     return mask_dct
 
 
@@ -104,22 +109,29 @@ def masks_from_model(
     margin_min *= factor
 
     for sky_pi in sky.points:
-        mask_pi = map_signal(sky_pi.points.grid, sky.grid.update(n_copies=sky_pi.n_copies))(np.ones(sky_pi.shape))
+        ones_pi = remove_freq_axis(np.ones(sky_pi.shape), sky.freq)
+        mask_pi = np.array(map_signal(sky_pi.points.grid, sky.grid.update(n_copies=sky_pi.n_copies))(ones_pi))
         for i in range(mask_pi.shape[0]):
             mask_pi[i] = add_margin(mask_pi[i], margin_min, round=True)
         mask_dct[sky_pi.prefix] = np.asarray(mask_pi)
 
     for sky_oi in sky.objects:
-        mask_oi = map_signal(sky_oi.grid, sky.grid)(np.ones(sky_oi.shape))
+        ones_oi = remove_freq_axis(np.ones(sky_oi.shape), sky.freq)
+        mask_oi = map_signal(sky_oi.grid, sky.grid)(ones_oi)
         mask_dct[sky_oi.prefix] = np.asarray(mask_oi)
 
     for sky_ti in sky.tiles:
-        mask_ti = map_signal(sky_ti.tiles.grid, sky.grid.update(n_copies=sky_ti.n_copies))(np.ones(sky_ti.shape))
+        ones_ti = remove_freq_axis(np.ones(sky_ti.shape), sky.freq)
+        mask_ti = map_signal(sky_ti.tiles.grid, sky.grid.update(n_copies=sky_ti.n_copies))(ones_ti)
         mask_dct[sky_ti.prefix] = np.asarray(mask_ti)
 
     mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
 
     mask_dct[sky.background.prefix] = np.floor(1 - mask_dct['sum']).clip(0,1)
+
+    if sky.freq.size > 1:
+        for k, v in mask_dct.items():
+            mask_dct[k] = add_freq_axis(v, sky.freq)
     
     return mask_dct
 
@@ -142,7 +154,7 @@ def masks_to_boxes(
     '''
     check_type(sky, ComponentModel)
 
-    mask_box = {}
+    mask_box = mask_dct.copy()
 
     sky_bg = sky.background
     if mask_dct[sky_bg.prefix].shape != sky_bg.grid.shape:
@@ -186,3 +198,21 @@ def add_margin(array, margin, round=False):
     if round:
         new_array = np.ceil(new_array)
     return new_array
+
+
+def add_freq_axis(array, freq):
+    if len(freq) > 1:
+        if array.ndim == 2:
+            return array[None, :, :]
+        elif array.ndim == 3:
+            return array[:, None, :, :]
+    return array
+
+
+def remove_freq_axis(array, freq):
+    if len(freq) > 1:
+        if array.ndim == 4:
+            return array[:, 0, :, :]
+        elif array.ndim == 3:
+            return array[0, :, :]
+    return array

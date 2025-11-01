@@ -10,9 +10,9 @@ import numpy as np
 from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
-from nifty8.re import Gaussian, Model, OptimizeVIState, Samples, logger
-from nifty8.re.optimize import _newton_cg
-from nifty8.re.conjugate_gradient import cg as _cg
+from nifty.re import Gaussian, Model, OptimizeVIState, Samples, logger
+from nifty.re.optimize import _newton_cg
+from nifty.re.conjugate_gradient import cg as _cg
 
 from ..optimize.opt_kl import get_at_nit, _reduce, SMPL_MODE_GENERIC_TYP
 from ..optimize.opt_vi import MyOptimizeVI

@@ -1,11 +1,11 @@
 import os
 import pickle
-import jax.numpy as jnp
 import numpy as np
 from jax import random
-from nifty8.re import Model, Vector, random_like
+from nifty.re import Model, Vector, random_like
 
-from .mask import masks_from_model, masks_to_boxes
+from .mask import masks_from_model, masks_to_boxes, remove_freq_axis
+from .modeling import get_offset
 from .model.map import map_signal
 from .model.components import ComponentModel
 from .model.noise import NoiseModel
@@ -32,7 +32,7 @@ def transition_func(
     
     Parameters:
     -----------
-    lh_new : nifty8.re.Likelihood
+    lh_new : nifty.re.Likelihood
         Likelihood model for the new optimiztion iteration
     mode : str
         Transition mode. Can be `anew`, `addt` or `zoom`. Default is `addt`.
@@ -84,12 +84,12 @@ def transition_anew(*,
     -----------
     key : jax.random.PRNGKey
         Random key for the JAX random number generator.
-    lh_new : nifty8.re.Likelihood
+    lh_new : nifty.re.Likelihood
         Likelihood model for the new optimiztion iteration
     '''
     models = [v for v in lh_new.values() if isinstance(v, Model)]
     if domain_keys(models) == set():
-        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty8.re.Model`')
+        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty.re.Model`')
     
     key, k_p = random.split(key)
     pos_new = random_init(k_p, models, factor=0.01)
@@ -121,17 +121,17 @@ def transition_addt(*,
     -----------
     key : jax.random.PRNGKey
         Random key for the JAX random number generator.
-    samples : nifty8.re.Samples
+    samples : nifty.re.Samples
         Samples from the previous iteration.
     it : int
         Current iteration number of the optimization.
-    lh_old : nifty8.re.Likelihood
+    lh_old : nifty.re.Likelihood
         Likelihood model for the previous optimiztion iteration.
-    lh_new : nifty8.re.Likelihood
+    lh_new : nifty.re.Likelihood
         Likelihood model for the new optimiztion iteration.
-    sky_old : nifty8.re.Model
+    sky_old : nifty.re.Model
         Sky model of the previous iteration.
-    sky_new : nifty8.re.Model
+    sky_new : nifty.re.Model
         Sky model of the new iteration.
     offsets : bool
         If True, sets the offsets of the signal components depending on the background reconstruction and returns a dict containing the offsets.
@@ -163,7 +163,8 @@ def transition_addt(*,
     mask_box = masks_to_boxes(sky_new, mask_dct)
     if odir:
         p_dct = plot_dct | dict(name=f'{it}_masks.png', norm='linear', vmin=0, vmax=1)
-        plot_arrays([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_box.values()], **p_dct)
+        mask_val = [remove_freq_axis(v, sky_new.freq) for v in mask_dct.values()]
+        plot_arrays([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val], **p_dct)
 
     # initialize an empty position tree
     ptree = {}
@@ -184,6 +185,7 @@ def transition_addt(*,
     )
     ptree |= pos_bg.tree
 
+    sky_bg.mask = None
     rec_sub = map_signal(sky_old.grid, sky_new.grid)(rec_old) - map_signal(sky_bg.grid, sky_new.grid)(np.asarray(sky_bg(pos_bg)))
     rec_sub = rec_sub.clip(0, None)
     ofs_dct = {}
@@ -193,9 +195,10 @@ def transition_addt(*,
         sub_ci = map_signal(sky_new.grid, sky_ci.grid)(rec_sub)
         msk_ci = mask_box[sky_ci.prefix]
         if offsets:
-            ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci)
+            ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci, sky_ci.freq)
             sky_ci.set_offset(ofs_dct[sky_ci.prefix])
-        msk_ci = msk_ci.sum(axis=0).clip(0, 1) if msk_ci.ndim == 3 else msk_ci
+        if isinstance(sky_ci, (PointModel, TileModel)):
+            msk_ci = msk_ci.sum(axis=0).clip(0, 1)
         pos_ci = optimize_and_plot(
             key = keys.pop(),
             sky = sky_ci,
@@ -212,7 +215,7 @@ def transition_addt(*,
     # randomly initialize the point source priors and noise model
     models = [v for v in lh_new.values() if isinstance(v, Model)]
     if domain_keys(models) == set():
-        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty8.re.Model`')
+        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty.re.Model`')
     if domain_keys(pos_new) != domain_keys(models):
         pos_new = random_init(keys.pop(), models, pos_new, factor=0.01)
 
@@ -231,35 +234,12 @@ def transition_addt(*,
     nm_old = lh_old['noise_model']
     nm_new = lh_new['noise_model']
     if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
-        nm_pos = map_signal(sky_old.grid, sky_new.grid)(np.asarray(domain_tree(samples)[nm_old.prefix]))
+        nm_pos = map_signal(sky_old.grid, sky_new.grid)(domain_tree(samples)[nm_old.prefix])
         pos_new = Vector(domain_tree(pos_new) | {nm_new.prefix: nm_pos})
 
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
 
     return samples_new, ofs_dct
-
-
-
-def get_offset(
-        model,
-        rec_sub,
-        mask,
-):
-    '''Sets the offsets of the sky model based on the background reconstruction and the mask.'''
-    if isinstance(model, PointModel):
-        log_sum = np.log(np.sum(rec_sub[None] * mask, axis=(1,2), where=(mask > 0)))
-        offset = [round(float(ri), 1) for ri in log_sum]
-
-    elif isinstance(model, SignalModel):
-        log_mean = np.log(np.mean(rec_sub * mask, where=(mask > 0)))
-        offset = round(float(log_mean), 1)
-
-    elif isinstance(model, TileModel):
-        log_mean = np.log(np.mean(rec_sub[None] * mask, axis=(1,2), where=(mask > 0)))
-        offset = [round(float(ri), 1) for ri in log_mean]
-
-    print(f'{model.prefix} offset:', offset)
-    return offset
 
 
 
@@ -305,10 +285,18 @@ def optimize_and_plot(
     if plot_dct['odir']:
         [plot_dct.pop(k) for k in ['vmin', 'vmax'] if k in plot_dct]
         if isinstance(sky, SignalModel):
-            sky.factor = None
+            sky.mask = None
+
+        arrays = []
+        for a in (data, sky(pos)):
+            if a.ndim == 2:
+                arrays += [a, ]
+            elif a.ndim == 3:
+                arrays += [a[i] for i in range(a.shape[0])]
 
         plot_arrays(
-            array = [data, sky(pos)],
+            array = arrays,
+            rows = 2,
             vmin = max(sky(pos).min(), 1),
             vmax = sky(pos).max(),
             **plot_dct,

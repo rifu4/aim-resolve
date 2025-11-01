@@ -1,4 +1,4 @@
-from nifty8.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
+from nifty.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
 
 from .gaussian import gaussian_model
 from .integer import integer_model
@@ -119,7 +119,7 @@ def correlated_field_model(*,
         n_copies = 1,
 ):
     '''
-    Initialize the correlated field model of nifty8.re (correlation model).
+    Initialize the correlated field model of nifty.re (correlation model).
     
     Parameters
     ----------
@@ -132,15 +132,15 @@ def correlated_field_model(*,
     offset_mean : float
         The offset mean parameter
     offset_std : tuple
-        The offset standard deviation parameter (nifty8.re.LognormalPrior)
+        The offset standard deviation parameter (nifty.re.LognormalPrior)
     fluctuations : tuple
-        The fluctuations parameter (nifty8.re.LognormalPrior)
+        The fluctuations parameter (nifty.re.LognormalPrior)
     loglogavgslope : float
-        The log-log average slope parameter (nifty8.re.NormalPrior)
+        The log-log average slope parameter (nifty.re.NormalPrior)
     flexibility : float, optional
-        The flexibility parameter (nifty8.re.LognormalPrior). Default is None.
+        The flexibility parameter (nifty.re.LognormalPrior). Default is None.
     asperity : float, optional
-        The asperity parameter (nifty8.re.LognormalPrior). Default is None.
+        The asperity parameter (nifty.re.LognormalPrior). Default is None.
     non_parametric_kind : str, optional
         Either use a power or an amplitude spectrum. Default is 'power'.
     n_copies : int, optional

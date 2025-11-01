@@ -32,5 +32,7 @@ sky_bg.0:
   prefix: bg.0
   grid:
     base: grid_bg
-  i0:
-    base: i0_fs
+  freq: [1.]
+  params:
+    base: params_fs
+  offset: 12

@@ -19,15 +19,15 @@ def main():
 
     # detect point sources and objects in the reconstructed image using the U-Net model
     seg_dct = base_dct['base_seg']
-    ps_map, oj_map = model_predict(rec, **seg_dct)
+    ps_map, oj_map = model_predict(rec, **seg_dct, print_ps=False)
 
     # load the clustering settings and cluster the detected objects
     cl_dct = base_dct['base_clu']
     cl_alg = cl_dct.pop('alg')
-    cl_map, noise_map = dbscan_clustering(oj_map, print_cl=False, **cl_dct)
+    cl_map, noise_map = dbscan_clustering(oj_map, print_cl=True, **cl_dct)
 
     # convert one-pixel objects to point sources
-    ps_map = objects2points(ps_map, noise_map, **cl_dct)
+    ps_map = objects2points(ps_map, noise_map, print_ps=True, **cl_dct)
 
     # plot the detected point sources and clustered objects
     plot_classes(

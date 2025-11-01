@@ -58,7 +58,7 @@ def get_builders(sections : dict):
                     builders[sec] = PointModel.build
                 case v if 'tile_grid' in v:
                     builders[sec] = TileModel.build
-                case v if 'i0' in v:
+                case v if 'params' in v:
                     builders[sec] = SignalModel.build
                 case _:
                     raise ValueError(f'Cannot determine the type of the sky model `{sec}`')

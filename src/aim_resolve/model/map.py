@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpy as np
 from jax import vmap
 from jax.lax import dynamic_slice, dynamic_update_slice, fori_loop
 from functools import partial

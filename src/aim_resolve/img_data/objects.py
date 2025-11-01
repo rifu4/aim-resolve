@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import random
 from jax.typing import ArrayLike
-from nifty8.re import Model, Vector
+from nifty.re import Model, Vector
 from typing import Callable
 
 from .jax_fun import rotate_data, flip_data

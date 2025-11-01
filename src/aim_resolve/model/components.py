@@ -1,6 +1,7 @@
 import jax.numpy as jnp
+import numpy as np
 from itertools import product
-from nifty8.re import Model, Vector
+from nifty.re import Model, Vector
 
 from .points import PointModel
 from .signal import SignalModel
@@ -23,10 +24,9 @@ class ComponentModel(Model):
         [check_type(m.grid, SignalGrid) for m in models]
 
         self.grid = grid
-        self.prefix = prefix
-        self.background = background
-        self.components = components
+        self.freq = models[0].freq
         self.models = models
+        self.prefix = prefix
         self.set_out_grid(grid)
         super().__init__(
             domain = Vector(domain_tree(self.models)), 
@@ -36,7 +36,7 @@ class ComponentModel(Model):
     def __call__(self, x):
         res = jnp.zeros(self.out_grid.shape)
         for m in self.models:
-            res += m(x)
+            res += m(x, map=True)
         return res
     
     @classmethod
@@ -62,6 +62,8 @@ class ComponentModel(Model):
         for (i,mi), (j,mj) in product(enumerate(models), enumerate(models)):
             if i != j and domain_keys(mi) == domain_keys(mj):
                 raise ValueError(f'Two models have the same prefix `{mi.prefix}`.')
+            if i != j and np.any(mi.freq != mj.freq):
+                raise ValueError(f'Two models have different frequencies: `{mi.prefix}` and `{mj.prefix}`.')
 
         if len(models) == 1:
             grid = background.grid
@@ -77,6 +79,14 @@ class ComponentModel(Model):
         for m in self.models:
             m.set_out_grid(out_grid)
         return
+
+    @property
+    def background(self):
+        return self.models[0]
+
+    @property
+    def components(self):
+        return self.models[1:]
 
     @property
     def objects(self):
@@ -101,3 +111,11 @@ class ComponentModel(Model):
     @property
     def separate(self):
         return (self.diffuse, ) + self.points
+    
+    @property
+    def spectral_index(self):
+        '''Return the spectral index model.'''
+        models = []
+        for m in self.models:
+            models += [m.spectral_index]
+        return ComponentModel(self.grid, models[0], self.prefix, *models[1:])

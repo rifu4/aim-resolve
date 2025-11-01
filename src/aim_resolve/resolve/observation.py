@@ -207,12 +207,12 @@ class Observation():
         else:
             raise ValueError('unknown precision')
     
-    def dirty_image(self, grid):
+    def dirty_image(self, grid, freq=np.ones((1,))):
         '''Compute the dirty image of the observation.'''
         from ..fast_resolve.response import build_exact_responses
         obs = self.to_resolve_obs()
         N_inv = makeOp(obs.weight)
-        R, *_ = build_exact_responses(obs, grid)
+        R, *_ = build_exact_responses(obs, grid, freq)
         dirty = R.adjoint(N_inv(obs.vis))
         return np.array(dirty.val)
         

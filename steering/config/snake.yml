@@ -14,15 +14,15 @@ rerun: true
 
 --- 
 
-# specify the data to be reconstructed and the background space (shape and field of view)
+# specify the data to be reconstructed and the background grid (space and field of view)
 # data:
 #   fname: data/files/test512_10.pkl
 #   fun: exp
 #   idx: 6 # zoom: 0, points: 1, normal: 11
 #   max_std: 0.0001
 
-# space_bg:
-#   shape: [512, 512]
+# grid_bg:
+#   space: [512, 512]
 #   fov: [2, 2]
 
 data:
@@ -31,8 +31,8 @@ data:
   # fname: /Users/rf/Development/data/eso_986-1137mhz.npz
   fun: fast_radio
 
-space_bg:
-  shape: [1024, 1024]
+grid_bg:
+  space: [1024, 1024]
   fov: [2deg, 2deg]
 
 noise:
@@ -223,5 +223,5 @@ base_plot:
   vmax: 2.e+8
   cbar: true
   ticks: 0
-  plot_space: false
+  plot_grid: false
   plot_label: false

@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from nifty8.re import Model, Vector, VModel
+from nifty.re import Model, Vector, VModel
 from typing import Callable
 
 from ..model.integer import integer_model

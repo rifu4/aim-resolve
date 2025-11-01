@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from jax.scipy.stats import norm
 from jax.tree_util import Partial, tree_map
-from nifty8.re import VModel, WrappedCall
+from nifty.re import VModel, WrappedCall
 
 
 

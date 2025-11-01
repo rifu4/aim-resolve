@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
-from nifty8.re import Vector
+from nifty.re import Vector
 
 from .image import plot_image
 from .power import plot_power
