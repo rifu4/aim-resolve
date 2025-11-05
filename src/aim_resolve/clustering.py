@@ -99,7 +99,7 @@ def objects2points(points_map, noise_map, print_ps=True, **cl_kwargs):
         return points_map
     
     cl_kwargs.pop('min_samples', None)
-    noise_maps, _ = dbscan_clustering(noise_map, min_samples=1, **cl_kwargs)
+    noise_maps, _ = dbscan_clustering(noise_map, min_samples=1, print_cl=False, **cl_kwargs)
     mask = np.sum(noise_maps == 1, axis=(1, 2)) == 1
     add_points = np.sum(noise_maps[mask], axis=0).astype(points_map.dtype)
 
