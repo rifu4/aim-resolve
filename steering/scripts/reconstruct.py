@@ -125,13 +125,13 @@ def main():
                         odir = f'{odir}/extra',
                         **p_dct,
                     )
-        plot_samples(
-            model = frq_mdl,
-            samples = samples,
-            name = f'{it}_alpha_samples.png',
-            odir = f'{odir}/extra',
-            **p_dct,
-        )
+            plot_samples(
+                model = frq_mdl,
+                samples = samples,
+                name = f'{it}_alpha_samples.png',
+                odir = f'{odir}/extra',
+                **p_dct,
+            )
         
         data = cfg.instantiate_sec('data.0')
         if isinstance(data, ImageData):
