@@ -162,7 +162,10 @@ params_mf:
   spectral_index:
     mean: [-1, 0.5]
     fluctuations: [3, 1]
-  spectral_amplitude: null
+  spectral_amplitude:
+    loglogavgslope: [-2, 0.5]
+    flexibility: [1.2, 0.4]
+    asperity: [0.2, 0.2]
   deviations: null
 
 params_ps:
