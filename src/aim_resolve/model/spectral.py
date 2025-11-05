@@ -145,7 +145,7 @@ def spectral_prior_model(*,
     Parameters
     ----------
     '''
-    i0, _ = prior_model(f'{prefix} i0 ', space, **i0)
+    i0, _ = prior_model(f'{prefix}i0 ', space, **i0)
 
     if freq.size == 1:
         model = MultiFrequencyModel(i0, nonlinearity=nonlinearity)
@@ -158,7 +158,7 @@ def spectral_prior_model(*,
         if not alpha:
             raise ValueError('Need alpha parameters to build multi-frequency model.')
 
-        alpha, _ = prior_model(f'{prefix} alpha ', space, **alpha)
+        alpha, _ = prior_model(f'{prefix}alpha ', space, **alpha)
 
         if deviations:
             deviations = build_frequency_deviations_model_with_degeneracies(
