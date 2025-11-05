@@ -17,9 +17,6 @@ def model_background(
     ):
     # create background model dictionary
     bg_dct = dict(
-        params = dict(
-            base = 'params_bg',
-        ),
         offset =  get_offset('background', rec_val, bg_mask, freq),
     )
     return bg_dct
@@ -83,7 +80,7 @@ def model_objects(
         grid = oj_grid.to_dict(),
         freq = freq,
         params = dict(
-            base = 'params_os',
+            base = 'params_mf' if len(freq) > 1 else 'params_sf',
         ),
         offset = get_offset('object', rec_sub, oj_mask, freq),
     )
@@ -125,7 +122,7 @@ def model_tiles(
         grid = grid.to_dict('center'),
         freq = freq,
         params = dict(
-            base = 'params_ts',
+            base = 'params_mf' if len(freq) > 1 else 'params_sf',
         ),
         offset = get_offset('tile', rec_sub, ts_masks, freq),
     )

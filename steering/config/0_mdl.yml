@@ -34,5 +34,5 @@ sky_bg.0:
     base: grid_bg
   freq: [1.]
   params:
-    base: params_fs
+    base: params_sf
   offset: 12
