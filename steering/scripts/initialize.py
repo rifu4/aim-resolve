@@ -27,13 +27,15 @@ def main():
     if 'freq' in pipe_dct:
         freq = pipe_dct.pop('freq')
         if isinstance(freq, list) and len(freq) > 1:
-            cfg.modify_sec('sky_bg.0', freq=freq)
-            freq = np.array(freq)
+            cfg.modify_sec('sky_bg.0', freq=freq, params=dict(base='params_mf'))
         elif isinstance(freq, str):
             freq = radio_data(**cfg.sections['data.0']).freq
-            cfg.modify_sec('sky_bg.0', freq=freq.tolist())
+            cfg.modify_sec('sky_bg.0', freq=freq.tolist(), params=dict(base='params_mf'))
     else:
-        freq = np.ones((1,))
+        freq = [1.]
+
+    # do split in fast-resolve convolution if specified
+    split = pipe_dct.pop('split', 0)
 
     # add noise scaling configuration for the likelihood
     if 'noise' in pipe_dct:
@@ -52,8 +54,9 @@ def main():
         kfov = pipe_dct['grid_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
-            psf_kernel_fn = f'{kernel_dir}/pk_{kname}_{freq.size}f_{kfov}_{ksize}.pkl', 
-            n_inv_kernel_fn = f'{kernel_dir}/nk_{kname}_{freq.size}f_{kfov}_{ksize}.pkl',
+            split=split,
+            psf_kernel_fn = f'{kernel_dir}/pk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl', 
+            n_inv_kernel_fn = f'{kernel_dir}/nk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl',
         )
 
     # extract callback, extra, and transition keys from pipe_dct
