@@ -175,3 +175,4 @@ params_ps:
   alpha:
     mean: -1
     std: 0.5
+  deviations: null
