@@ -166,7 +166,7 @@ def spectral_prior_model(*,
                 log_freq,
                 reference_frequency_index,
                 deviations,
-                prefix=f'{prefix} dev ',
+                prefix=f'{prefix}dev ',
             )
 
         model = MultiFrequencyModel(i0, log_freq, alpha, deviations, nonlinearity)
