@@ -41,18 +41,19 @@ def main(base, config, mode, cuda_device):
             aim.plot_arrays(dv.dirty_image(sky_models[0].grid), name=dk, odir=odir)
 
     # Define a callback function to plot the results of the optimization after each iteration
-    def callback(samples, opt_state, *_):
+    def callback(samples, state, *args):
+        nit = args[0] if len(args) > 0 else state.nit
         for sky in sky_models:
             if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
                 sky_val = samples.mean(sky)
                 sky_min = sky_val.max()/1e4
-                aim.plot_arrays(sky_val, name=f'{opt_state.nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
+                aim.plot_arrays(sky_val, name=f'{nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
                 if sky.freq.size > 1:
                      sky_ref = sky_val[sky.freq.size // 2]
-                     aim.plot_arrays(sky_ref, name=f'{opt_state.nit}_{sky.prefix}_ref', odir=odir, norm='log', rows=1, vmin=sky_min)
+                     aim.plot_arrays(sky_ref, name=f'{nit}_{sky.prefix}_ref', odir=odir, norm='log', rows=1, vmin=sky_min)
                      alpha = samples.mean(sky.spectral_index)
                      contours = {'array': sky_ref, 'colors': 'white', 'levels': [sky_val.max() / d for d in [1e3, 1e2, 10]], 'linewidths': 0.25}
-                     aim.plot_arrays(np.where(sky_ref > sky_min, alpha, np.nan), name=f'{opt_state.nit}_{sky.prefix}_alpha', odir=odir, contour=contours)
+                     aim.plot_arrays(np.where(sky_ref > sky_min, alpha, np.nan), name=f'{nit}_{sky.prefix}_alpha', odir=odir, contour=contours)
 
     # Run the optimization
     samples, *_ = cfg.optimize_kl(callback=callback)
