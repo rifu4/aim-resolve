@@ -1,8 +1,8 @@
 ---
 
 # specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
-odir: runs/fast_mf_map_512c
-key: 4
+odir: runs/fast_vi_7f_1024a
+key: 42
 
 n_it: 3
 
@@ -10,19 +10,18 @@ n_it: 3
 callback: true
 extra: true
 trans: true
-rerun: false
+rerun: true
 
 --- 
 
 # specify the data to be reconstructed and the background grid (space and field of view)
 data:
-  fname: /Users/rf/Development/data/eso_986-1137mhz.npz
+  fname: /scratch/users/rfuchs/data/eso_986-1137mhz.npz
   fun: fast_radio
-  freq: [0,3,6]
 
 grid_bg:
-  space: [512, 512]
-  fov: [1deg, 1deg]
+  space: [1024, 1024]
+  fov: [2deg, 2deg]
 
 freq: =data.0
 
@@ -34,51 +33,102 @@ noise:
 
 ---
 
-# overwrite the default optimization and transition parameters
+# overwrite the default inference settings
 base_opt.0:
-  n_major_iterations: 5
-  n_minor_iterations: 1
-  n_samples: 0
+  n_major_iterations: 20
+  n_minor_iterations: 2
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
   kl_kwargs:
     minimize_kwargs:
       name: M
-      absdelta: 1.e-4
+      absdelta: 1.0e-10
       cg_kwargs:
         name: null
-      miniter: 10
-      maxiter: 10
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 0.001
+  sample_mode: 8*[linear_resample] + [nonlinear_resample]
 
 base_opt.n:
-  n_major_iterations: 5
-  n_minor_iterations: 1
-  n_samples: 0
-  kl_kwargs:
+  n_major_iterations: 20
+  n_minor_iterations: 2
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 1000
+      maxiter: 2000
+  nonlinearly_update_kwargs:
     minimize_kwargs:
-      name: M
-      absdelta: 1.e-4
+      name: SN
+      xtol: 0.0001
       cg_kwargs:
         name: null
       miniter: 10
-      maxiter: 10
-
-base_trans:
-  n_total_iterations: 1
-  n_samples: 0
+      maxiter: 20
   kl_kwargs:
     minimize_kwargs:
       name: M
-      absdelta: 1.e-4
+      absdelta: 1.0e-10
       cg_kwargs:
         name: null
-      miniter: 25
-      maxiter: 100
+        miniter: 20
+      miniter: 100
+      maxiter: 200
+      energy_reduction_factor: 0.001
+  sample_mode: nonlinear_resample
+
+base_trans:
+  n_total_iterations: 20
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 0.001
+  sample_mode: 8*[linear_resample] + [nonlinear_resample]
 
 ---
 
 # overwrite the default segmentation parameters
 base_seg:
   seg_model:
-    name: unet512_dice15
+    name: unet1024_dice30
     odir: train/runs/files
   transform:
     log: true
@@ -97,7 +147,7 @@ base_clu:
 
 # overwrite the default modelling settings
 base_model:
-  zoom: 2
+  zoom: 1
   masks:
     margin_fac: 0.2
     margin_min: 5
@@ -118,6 +168,6 @@ base_plot:
   vmin: null
   vmax: null
   cbar: true
-  ticks: 5
+  ticks: 0
   plot_grid: false
   plot_label: false

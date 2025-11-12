@@ -1,10 +1,10 @@
 ---
 
-name: test512_10
+name: zoom512_10
 odir: runs/files
 dtype: float32
 
-seed: 21
+seed: 11
 n_copies: 10
 batch_size: 10
 
@@ -12,9 +12,10 @@ batch_size: 10
 
 parameters:
 
-  space:
-    shape: [512, 512]
+  grid:
+    space: [256, 256]
     fov: [2, 2]
+    factor: 2
 
   background:
     i0:

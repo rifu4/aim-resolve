@@ -238,4 +238,6 @@ def optimize_kl(
         if callback is not None:
             callback(samples, opt_vi_st)
 
+        jax.clear_caches()
+
     return samples, opt_vi_st

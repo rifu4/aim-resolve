@@ -51,7 +51,7 @@ def masks_from_maps(
         for i,co in enumerate(ps_coos):
             ps_maps[i, co[0], co[1]] = 1
             ps_maps[i] = add_margin(ps_maps[i], margin_min, round=False)
-        mask_dct[f'p0.{it}'] = ps_maps
+        mask_dct[f'p0.{it}'] = np.asarray(ps_maps)
 
     oj_maps, ts_maps = [], []
     for i in range(object_maps.shape[0]):
@@ -68,11 +68,11 @@ def masks_from_maps(
             oj_maps.append(o_map)
 
     for i in range(len(oj_maps)):
-        mask_dct[f'o{i}.{it}'] = oj_maps[i]
+        mask_dct[f'o{i}.{it}'] = np.asarray(oj_maps[i])
 
     if len(ts_maps) > 0:
         ts_maps = np.concatenate([ti[None] for ti in ts_maps], axis=0)
-        mask_dct[f't0.{it}'] = ts_maps
+        mask_dct[f't0.{it}'] = np.asarray(ts_maps)
 
     mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
 
