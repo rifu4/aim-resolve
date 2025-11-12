@@ -118,4 +118,6 @@ class ComponentModel(Model):
         models = []
         for m in self.models:
             models += [m.spectral_index]
-        return ComponentModel(self.grid, models[0], self.prefix, *models[1:])
+        comp_model = ComponentModel(self.grid, models[0], self.prefix, *models[1:])
+        comp_model.models = comp_model.models[1:]
+        return comp_model

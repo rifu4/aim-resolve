@@ -141,7 +141,7 @@ class SignalModel(Model):
                 alpha = Model(lambda x: model.spectral_index_distribution(x), domain=model.domain, init=model.init)
             if n_copies > 1:
                 alpha = VModel(alpha, n_copies)
-            return SignalModel(self.grid, self.freq, alpha, self.prefix, 0, None, self.gaussian)
+            return SignalModel(self.grid, self.freq, alpha, self.prefix, 0, None, None)
         else:
             raise ValueError('Spectral index is only defined for multi-frequency models.')
     
