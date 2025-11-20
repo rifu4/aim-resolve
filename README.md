@@ -2,6 +2,12 @@
 
 **Automatic Identification and Modeling for Bayesian Radio Interferometric Imaging**
 
+<p align="center">
+  <img src="docs/repo_qr_code.png" alt="Repository QR Code" width="200"/>
+  <br>
+  <em>Scan to visit the repository</em>
+</p>
+
 This repository contains a [snakemake](https://snakemake.github.io) pipeline to automatically improve Bayesian imaging of complex systems like radio interferometric wide-field observations. It combines [NIFTy](http://ift.pages.mpcdf.de/nifty/) and [resolve](http://ift.pages.mpcdf.de/resolve/) with deep learning and clustering algorithms for object recognition and separation, respectively. More specifically, it utilizes different model descriptions for different types of identified objects to improve the overall reconstruction of radio interferometric data.
 
 ![image](docs/procedure.png)
