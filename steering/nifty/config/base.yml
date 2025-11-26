@@ -93,38 +93,35 @@ base_trans:
 
 ---
 
-i0_fs:
-  offset_mean: 12.0
-  offset_std: [3.0, 1.0]
-  fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 0.5]
-  flexibility: [1.2, 0.4]
-  asperity: [0.2, 0.2]
+params_sf:
+  i0:
+    offset_std: [1, 1]
+    fluctuations: [5, 1]
+    loglogavgslope: [-2, 0.5]
+    flexibility: [1.2, 0.4]
+    asperity: [0.2, 0.2]
 
-i0_bg:
-  offset_mean: 12.0
-  offset_std: [3.0, 1.0]
-  fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 0.5]
-  flexibility: [1.2, 0.4]
-  asperity: [0.2, 0.2]
+params_mf:
+  zero_mode: [1, 1]
+  spatial_amplitude:
+    fluctuations: [5, 1]
+    loglogavgslope: [-2, 0.5]
+    flexibility: [1.2, 0.4]
+    asperity: [0.2, 0.2]
+  spectral_index:
+    mean: [-1, 0.5]
+    fluctuations: [3, 1]
+  spectral_amplitude:
+    loglogavgslope: [-2, 0.5]
+    flexibility: [1.2, 0.4]
+    asperity: [0.2, 0.2]
+  deviations: null
 
-i0_ps:
-  mean: 0.0
-  std: 3.0
-
-i0_os:
-  offset_mean: 0.0
-  offset_std: [3.0, 1.0]
-  fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 0.5]
-  flexibility: [1.2, 0.4]
-  asperity: [0.2, 0.2]
-
-i0_ts:
-  offset_mean: 0.0
-  offset_std: [3.0, 1.0]
-  fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 0.5]
-  flexibility: [1.2, 0.4]
-  asperity: [0.2, 0.2]
+params_ps:
+  i0:
+    mean: 0
+    std: 3
+  alpha:
+    mean: -1
+    std: 0.5
+  deviations: null

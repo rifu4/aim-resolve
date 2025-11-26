@@ -23,7 +23,8 @@ grid_bg:
   space: [1024, 1024]
   fov: [2deg, 2deg]
 
-freq: =data.0
+# freq: =data.0
+# split: 128
 
 noise:
   parameters:

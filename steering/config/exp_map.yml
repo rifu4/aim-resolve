@@ -1,10 +1,10 @@
 ---
 
 # specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
-odir: runs/exp_map_512c
+odir: runs/exp_map_512d
 key: 4
 
-n_it: 5
+n_it: 3
 
 # additional plots (saved if true)
 callback: true
@@ -42,8 +42,8 @@ base_opt.0:
       absdelta: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 10
-      maxiter: 10
+      miniter: 15
+      maxiter: 15
 
 base_opt.n:
   n_major_iterations: 5
@@ -55,8 +55,8 @@ base_opt.n:
       absdelta: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 10
-      maxiter: 20
+      miniter: 15
+      maxiter: 30
 
 base_trans:
   n_total_iterations: 1
@@ -67,7 +67,7 @@ base_trans:
       absdelta: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 25
+      miniter: 30
       maxiter: 100
 
 ---

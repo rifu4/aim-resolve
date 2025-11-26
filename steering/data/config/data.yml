@@ -6,7 +6,7 @@ dtype: float32
 
 seed: 11
 n_copies: 10
-batch_size: 10
+batch_size: 100
 
 ---
 

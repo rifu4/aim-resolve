@@ -1,7 +1,7 @@
 import numpy as np
 from torch.utils.data import DataLoader
 
-from .dataset import TensorDataset, transform_data, add_coordinates
+from .dataset import TensorDataset, transform_data, add_coordinates, merge_facet_array
 from .model import SegmentationModel
 from ..img_data.data import ImageData
 from ..model.util import check_type
@@ -51,11 +51,17 @@ def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinat
 
     dataset = TensorDataset(dataset)
     
-    rec_loader = DataLoader(dataset, batch_size=1, shuffle=False)
+    rec_loader = DataLoader(dataset, batch_size=dataset.x.shape[0], shuffle=False)
 
     sample = next(iter(rec_loader))
     pred = seg_model.forward_sigmoid(sample['x'])
     pred = pred.detach().numpy()
+
+    facet_size = transform.get('facet_size', None)
+    if isinstance(facet_size, int):
+        factor = rec_val.shape[-1] // facet_size
+        pred = merge_facet_array(pred, factor)
+        pred = pred.squeeze()
 
     if print_ps:
         print('n points:', np.sum(pred[0] == 1))

@@ -83,6 +83,7 @@ class TensorDataset(Dataset):
         x, y = data
         self.x = x
         self.y = y
+        print(f'TensorDataset: {self.x.shape}, {self.y.shape}')
 
     def __getitem__(self, index):
         x = self.x[index]
@@ -104,6 +105,7 @@ def transform_data(
         rotate = True,
         flip = True,
         batch_size = 1000,
+        facet_size = None,
 ):  
     '''
     Apply various transformations to the data.
@@ -126,6 +128,8 @@ def transform_data(
         Whether to apply random flipping to the images and labels, by default True.
     batch_size : int, optional
         The size of the batches to process the data, by default 1000.
+    facet_size : int, optional
+        The size of the facets, by default None.
     '''
     if normalize and standardize:
         raise ValueError('normalize and standardize cannot both be True')
@@ -152,47 +156,74 @@ def transform_data(
             img_i = jax.vmap(lambda x: (x-x.mean())/x.std())(img_i)
         if rotate:
             ks = np.random.randint(0, 3, size=img_i.shape[0])
-            img_i = jax.vmap(lambda x, k: rotate_data(x, k, axes=(1, 2)))(img_i, ks)
-            lbl_i = jax.vmap(lambda y, k: rotate_data(y, k, axes=(1, 2)))(lbl_i, ks)
+            img_i = jax.vmap(lambda x, k: rotate_array(x, k, axes=(1, 2)))(img_i, ks)
+            lbl_i = jax.vmap(lambda y, k: rotate_array(y, k, axes=(1, 2)))(lbl_i, ks)
         if flip:
             axs = np.random.randint(0, 3, size=img_i.shape[0])
-            img_i = jax.vmap(lambda x, a: flip_data(x, a))(img_i, axs)
-            lbl_i = jax.vmap(lambda y, a: flip_data(y, a))(lbl_i, axs)
+            img_i = jax.vmap(lambda x, a: flip_array(x, a))(img_i, axs)
+            lbl_i = jax.vmap(lambda y, a: flip_array(y, a))(lbl_i, axs)
 
         images[start:end] = np.array(img_i)
         labels[start:end] = np.array(lbl_i)
+
+    if isinstance(facet_size, int):
+        factor = images.shape[-1] // facet_size
+        images = build_facet_array(images, factor)
+        labels = build_facet_array(labels, factor)
 
     return (images, labels)
 
 
 
-def rotate_data(
-        m : ArrayLike,
-        k : int = 1,
+def rotate_array(
+        array: ArrayLike,
+        n_rot: int = 1,
         axes: tuple[int, int] = (0, 1),
 ):
-    k = k % 4
+    n_rot = n_rot % 4
     return jax.lax.switch(
-        k,
-        [lambda: m,
-         lambda: jnp.rot90(m, k=1, axes=axes),
-         lambda: jnp.rot90(m, k=2, axes=axes),
-         lambda: jnp.rot90(m, k=3, axes=axes),]
+        n_rot,
+        [lambda: array,
+         lambda: jnp.rot90(array, 1, axes=axes),
+         lambda: jnp.rot90(array, 2, axes=axes),
+         lambda: jnp.rot90(array, 3, axes=axes),]
     )
 
 
 
-def flip_data(
-        m : ArrayLike,
+def flip_array(
+        array: ArrayLike,
         axis: int = 0,
 ):
     axis = axis % 3
     return jax.lax.switch(
         axis,
-        [lambda: m,
-         lambda: jnp.flip(m, axis=1),
-         lambda: jnp.flip(m, axis=2)],
+        [lambda: array,
+         lambda: jnp.flip(array, axis=1),
+         lambda: jnp.flip(array, axis=2)],
     )
+
+
+
+def build_facet_array(array, factor):
+    if array.ndim != 4:
+        raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
+    n, l, h, w = array.shape
+    f_array = array.reshape(n, l, factor, h//factor, factor, w//factor)
+    f_array = f_array.transpose(0, 2, 4, 1, 3, 5)
+    f_array = f_array.reshape(n*factor**2, l, h//factor, w//factor)
+    return f_array
+
+
+
+def merge_facet_array(array, factor):
+    if array.ndim != 4:
+        raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
+    n, l, h, w = array.shape
+    m_array = array.reshape(n//(factor**2), factor, factor, l, h, w)
+    m_array = m_array.transpose(0, 3, 1, 4, 2, 5)
+    m_array = m_array.reshape(n//(factor**2), l, h*factor, w*factor)
+    return m_array
 
 
 
