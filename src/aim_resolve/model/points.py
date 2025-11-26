@@ -27,10 +27,12 @@ class PointModel(Model):
         self.set_out_grid(grid)
         super().__init__(domain=self.points.domain, init=self.points.init)
 
-    def __call__(self, x, *, map=True):
+    def __call__(self, x, *, map=True, nans=False):
         res = self.points(x)
         if map:
-            return self.map_function(res)
+            res = self.map_function(res)
+        if nans:
+            res = jnp.where(self.mask, res, jnp.nan)
         return res
 
     @classmethod
@@ -91,6 +93,11 @@ class PointModel(Model):
     def n_copies(self):
         return self.points.grid.n_copies
     
+    @property
+    def mask(self):
+        res = self.map_function(np.ones(self.points.target.shape))
+        return res > 0
+    
     def set_offset(self, offset):
         '''
         Set the offset for the point model.
@@ -108,6 +115,21 @@ class PointModel(Model):
         return PointModel(self.grid, self.freq, self.points, self.prefix)
 
     @property
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        return PointModel(self.grid, np.ones((1,)), self.points.ref_freq_model, self.prefix)
+
+    @property
     def spectral_index(self):
         '''Return the spectral index model.'''
-        return PointModel(self.grid, self.freq, self.points.spectral_index, self.prefix)
+        return PointModel(self.grid, np.ones((1,)), self.points.spectral_index, self.prefix)
+
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return PointModel(self.grid, self.freq, self.points.spectral_deviations, self.prefix)
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return PointModel(self.grid, self.freq, self.points.spectral_model, self.prefix) 

@@ -34,13 +34,15 @@ class TileModel(Model):
             init = model_init((self.tiles, self.gaussian), error=False),
         )
 
-    def __call__(self, x, *, map=True):
+    def __call__(self, x, *, map=True, nans=False):
         res = self.tiles(x)
         if self.gaussian:
             gsm = self.gaussian(x)
             res *= gsm[:, None] if res.ndim == gsm.ndim + 1 else gsm
         if map:
-            return self.map_function(res)
+            res = self.map_function(res)
+        if nans:
+            res = jnp.where(self.mask, res, jnp.nan)
         return res
 
     @classmethod
@@ -105,6 +107,11 @@ class TileModel(Model):
     @property
     def n_copies(self):
         return self.tiles.grid.n_copies
+    
+    @property
+    def mask(self):
+        res = self.map_function(np.ones(self.tiles.target.shape))
+        return res > 0
 
     def set_offset(self, offset):
         '''
@@ -123,6 +130,22 @@ class TileModel(Model):
         return TileModel(self.grid, self.freq, self.tiles, self.prefix, self.gaussian)
 
     @property
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        tile = TileModel(self.grid, np.ones((1,)), self.tiles.ref_freq_model, self.prefix, self.gaussian)
+        return tile
+
+    @property
     def spectral_index(self):
         '''Return the spectral index model.'''
-        return TileModel(self.grid, self.freq, self.tiles.spectral_index, self.prefix, self.gaussian)
+        return TileModel(self.grid, np.ones((1,)), self.tiles.spectral_index, self.prefix, None)
+
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return TileModel(self.grid, self.freq, self.tiles.spectral_deviations, self.prefix, None)
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return TileModel(self.grid, self.freq, self.tiles.spectral_model, self.prefix, None)    

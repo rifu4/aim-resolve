@@ -7,7 +7,7 @@ from .points import PointModel
 from .signal import SignalModel
 from .grid import SignalGrid
 from .tiles import TileModel
-from .util import check_type
+from .util import check_type, extend_shape
 from ..optimize.samples import domain_keys, domain_tree, model_init
 
 
@@ -32,10 +32,12 @@ class ComponentModel(Model):
             init = model_init(self.models),
         )
 
-    def __call__(self, x):
-        res = jnp.zeros(self.out_grid.shape)
+    def __call__(self, x, nans=False):
+        res = jnp.zeros(self.out_shape)
         for m in self.models:
             res += m(x, map=True)
+        if nans:
+            res = jnp.where(self.mask, res, jnp.nan)
         return res
     
     @classmethod
@@ -63,6 +65,7 @@ class ComponentModel(Model):
                 raise ValueError(f'Two models have the same prefix `{mi.prefix}`.')
             if i != j and np.any(mi.freq != mj.freq):
                 raise ValueError(f'Two models have different frequencies: `{mi.prefix}` and `{mj.prefix}`.')
+            #TODO: ensure that ref_freq_indices are the same
 
         if len(models) == 1:
             grid = background.grid
@@ -75,9 +78,21 @@ class ComponentModel(Model):
     def set_out_grid(self, out_grid):
         check_type(out_grid, SignalGrid)
         self.out_grid = out_grid
+        self.out_shape = extend_shape(1, self.freq, self.out_grid.shape)
         for m in self.models:
             m.set_out_grid(out_grid)
         return
+    
+    @property
+    def shape(self):
+        return extend_shape(1, self.freq, self.out_grid.shape)
+    
+    @property
+    def mask(self):
+        res = np.zeros(self.out_shape)
+        for m in self.models:
+            res += m.map_function(np.ones(m.shape))
+        return res > 0
 
     @property
     def background(self):
@@ -116,11 +131,28 @@ class ComponentModel(Model):
         return ComponentModel(self.grid, self.components[0], self.prefix, *self.components[1:])
     
     @property
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        return self._spectral_property('ref_freq_model')
+
+    @property
     def spectral_index(self):
         '''Return the spectral index model.'''
+        return self._spectral_property('spectral_index')
+
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return self._spectral_property('spectral_deviations')
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return self._spectral_property('spectral_model')
+
+    def _spectral_property(self, attr):
+        '''Helper function to create spectral properties.'''
         models = []
         for m in self.models:
-            models += [m.spectral_index]
-        if len(models) > 1:
-            models = models[1:]
+            models += [getattr(m, attr)]
         return ComponentModel(self.grid, models[0], self.prefix, *models[1:])

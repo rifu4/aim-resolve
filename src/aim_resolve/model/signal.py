@@ -8,7 +8,7 @@ from typing import Any, Callable
 from .grid import SignalGrid, PointGrid
 from .map import map_signal
 from .prior import prior_model
-from .spectral import spectral_model
+from .spectral import MultiFrequencyModel, spectral_model
 from .util import check_type, to_shape, extend_shape
 from ..optimize.samples import domain_tree, model_init
 
@@ -125,23 +125,49 @@ class SignalModel(Model):
     
     def copy(self):
         return SignalModel(self.grid, self.freq, self.model, self.prefix, self.offset, self.nonlinearity, self.gaussian)
-    
+
+    @property
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        offset = self.offset[:,0] if self.offset.ndim == 4 else self.offset
+        return self._spectral_property('i0', 'reference_frequency_distribution', offset, self.nonlinearity, self.gaussian)
+
     @property
     def spectral_index(self):
         '''Return the spectral index model.'''
+        return self._spectral_property('alpha', 'spectral_index_distribution', 0, None, None)
+
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return self._spectral_property('deviations', 'spectral_deviations_distribution', 0, None, None)
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return self._spectral_property('', 'spectral_distribution', 0, None, None)
+
+    def _spectral_property(self, mfm_attr, ubik_attr, offset=0, nonlinearity=None, gaussian=None):
+        '''Helper function to create spectral properties.'''
         if self.freq.size > 1:
             model = self.model
             n_copies = 1
             if isinstance(model, VModel):
                 n_copies = model.target.shape[0]
                 model = model.model
-            if hasattr(model, 'alpha'):
-                alpha = model.alpha
+            if isinstance(model, MultiFrequencyModel):
+                if mfm_attr in ('alpha', 'deviations'):
+                    prop = getattr(model, mfm_attr)
+                elif mfm_attr == 'i0':
+                    prop = MultiFrequencyModel(model.i0, None, None, None, self.nonlinearity)
+                else:
+                    prop = MultiFrequencyModel(None, model.log_freq, model.alpha, model.deviations, None)
             else:
-                alpha = Model(lambda x: model.spectral_index_distribution(x), domain=model.domain, init=model.init)
+                prop = Model(lambda x: getattr(model, ubik_attr)(x), domain=model.domain, init=model.init)
             if n_copies > 1:
-                alpha = VModel(alpha, n_copies)
-            return SignalModel(self.grid, self.freq, alpha, self.prefix, 0, None, None)
+                prop = VModel(prop, n_copies)
+            freq = np.ones((1,)) if mfm_attr in ('i0', 'alpha') else self.freq
+            sig = SignalModel(self.grid, freq, prop, self.prefix, offset, nonlinearity, gaussian)
+            return sig
         else:
-            raise ValueError('Spectral index is only defined for multi-frequency models.')
-    
+            raise ValueError(f'spectral properties are only defined for multi-frequency models.')
