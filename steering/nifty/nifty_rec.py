@@ -12,7 +12,6 @@ def main(base, config, mode, cuda_device):
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:
         os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_device)
-        os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.9'
         os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
     import jax

@@ -17,8 +17,8 @@ base_opt.0:
       xtol: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 5
-      maxiter: 20
+      miniter: 0
+      maxiter: 10
   kl_kwargs:
     minimize_kwargs:
       name: M
@@ -29,7 +29,7 @@ base_opt.0:
       miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
       maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
       energy_reduction_factor: 1.e-3
-  sample_mode: 2*[linear_resample] + [nonlinear_resample]
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
 
 base_opt.n:
   n_total_iterations: 10
@@ -40,7 +40,7 @@ base_opt.n:
     cg_name: SL
     cg_kwargs:
       absdelta: 1.e-11
-      miniter: 200
+      miniter: 1000
       maxiter: 2000
   nonlinearly_update_kwargs:
     minimize_kwargs:
@@ -48,7 +48,7 @@ base_opt.n:
       xtol: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 5
+      miniter: 10
       maxiter: 20
   kl_kwargs:
     minimize_kwargs:
@@ -57,7 +57,7 @@ base_opt.n:
       cg_kwargs:
         name: null
         miniter: 20
-      miniter: 20
+      miniter: 100
       maxiter: 200
       energy_reduction_factor: 1.e-3
   sample_mode: nonlinear_resample
@@ -77,8 +77,8 @@ base_trans:
       xtol: 1.e-4
       cg_kwargs:
         name: null
-      miniter: 5
-      maxiter: 20
+      miniter: 0
+      maxiter: 10
   kl_kwargs:
     minimize_kwargs:
       name: M
@@ -89,7 +89,7 @@ base_trans:
       miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
       maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
       energy_reduction_factor: 1.e-3
-  sample_mode: 4*[linear_resample] + [nonlinear_resample]
+  sample_mode: 8*[linear_resample] + [nonlinear_resample]
 
 ---
 
@@ -115,7 +115,9 @@ params_mf:
     loglogavgslope: [-2, 0.5]
     flexibility: [1.2, 0.4]
     asperity: [0.2, 0.2]
-  deviations: null
+  deviations:
+    process: wiener
+    sigma: [0.2, 0.08]
 
 params_ps:
   i0:
@@ -124,4 +126,6 @@ params_ps:
   alpha:
     mean: -1
     std: 0.5
-  deviations: null
+  deviations:
+    process: wiener
+    sigma: [0.2, 0.08]
