@@ -13,8 +13,8 @@ from ..optimize.samples import domain_tree, model_init
 
 
 
-UBIK_KEYS = {'zero_mode', 'spatial_amplitude', 'spectral_index', 'spectral_amplitude', 'deviations', 'nonlinearity'}
-MF_KEYS = {'i0', 'alpha', 'deviations', 'nonlinearity'}
+UBIK_KEYS = {'zero_mode', 'spatial_amplitude', 'spectral_index', 'spectral_amplitude', 'deviations', 'nonlinearity', 'ref_freq_index'}
+MF_KEYS = {'i0', 'alpha', 'deviations', 'nonlinearity', 'ref_freq_index'}
 
 
 
@@ -94,26 +94,22 @@ def spectral_ubik_model(*,
         spectral_amplitude = None,
         deviations = None,
         nonlinearity = jnp.exp,
+        ref_freq_index = None,
         n_copies = 1,
     ):
-    '''
-    Function to create a diffuse signal model on a specific space.
-
-    Parameters
-    ----------
-    '''
+    '''Function to create a diffuse signal model on a specific space using the ubik spectral sky model.'''
     if freq.size == 1:
         raise ValueError('Need at least two frequencies for spectral ubik model.')
     
     log_freq = np.log(freq)
-    reference_frequency_index = len(freq) // 2
+    ref_freq_index = ref_freq_index if isinstance(ref_freq_index, int) else len(freq) // 2
 
     model = build_simple_spectral_sky(
         prefix,
         space.shape,
         space.distances,
         log_freq,
-        reference_frequency_index,
+        ref_freq_index,
         zero_mode,
         spatial_amplitude,
         spectral_index,
@@ -137,14 +133,10 @@ def spectral_prior_model(*,
         alpha = None,
         deviations = None,
         nonlinearity = jnp.exp,
+        ref_freq_index = None,
         n_copies = 1,
 ):
-    '''
-    Function to create a point signal model on a specific space.
-
-    Parameters
-    ----------
-    '''
+    '''Function to create a single- or multi-frequency diffuse or point signal model on a specific space.'''
     i0, _ = prior_model(f'{prefix}i0 ', space, **i0)
 
     if freq.size == 1:
@@ -152,8 +144,8 @@ def spectral_prior_model(*,
 
     else:
         log_freq = np.log(freq)
-        reference_frequency_index = len(freq) // 2
-        log_freq -= log_freq[reference_frequency_index]
+        ref_freq_index = ref_freq_index if isinstance(ref_freq_index, int) else len(freq) // 2
+        log_freq -= log_freq[ref_freq_index]
 
         if not alpha:
             raise ValueError('Need alpha parameters to build multi-frequency model.')
@@ -164,7 +156,7 @@ def spectral_prior_model(*,
             deviations = build_frequency_deviations_model_with_degeneracies(
                 space.shape,
                 log_freq,
-                reference_frequency_index,
+                ref_freq_index,
                 deviations,
                 prefix=f'{prefix}dev ',
             )
@@ -179,13 +171,14 @@ def spectral_prior_model(*,
 
 
 class MultiFrequencyModel(Model):
-    def __init__(self, i0, log_freq=None, alpha=None, deviations=None, nonlinearity=jnp.exp):
-        check_type(i0, Model)
+    def __init__(self, i0=None, log_freq=None, alpha=None, deviations=None, nonlinearity=jnp.exp):
+        check_type(i0, (Model, type(None)))
         check_type(log_freq, (np.ndarray, type(None)))
         check_type(alpha, (Model, type(None)))
         check_type(deviations, (Model, type(None)))
         check_type(nonlinearity, (Callable, type(None)))
 
+        self.shape = i0.target.shape if i0 else alpha.target.shape if alpha else deviations.target.shape
         self.i0 = i0
         self.log_freq = log_freq
         self.alpha = alpha
@@ -197,7 +190,9 @@ class MultiFrequencyModel(Model):
         ) 
 
     def __call__(self, x):
-        res = self.i0(x)
+        res = jnp.zeros(self.shape)
+        if self.i0:
+            res += self.i0(x)
         if self.alpha:
             res += jnp.outer(self.log_freq, self.alpha(x)).reshape(self.log_freq.shape + self.alpha.target.shape)
         if self.deviations:
