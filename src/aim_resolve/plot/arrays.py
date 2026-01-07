@@ -154,7 +154,8 @@ def plot_arrays(
                 **kwargs,
             )
         else:
-            raise ValueError('`array` has to be 1D or 2D')
+            continue
+            # raise ValueError('`array` has to be 1D or 2D')
         
     if callable(callback):
         callback(figure, axes)
