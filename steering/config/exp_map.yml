@@ -1,0 +1,121 @@
+---
+
+# specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
+odir: runs/exp_map_512d
+key: 4
+
+n_it: 3
+
+# additional plots (saved if true)
+callback: true
+extra: true
+trans: true
+rerun: true
+
+--- 
+
+# specify the data to be reconstructed and the background grid (space and field of view)
+data:
+  fname: /Users/rf/Development/data/exp_986-1137mhz.pkl
+  fun: fast_radio
+
+grid_bg:
+  space: [512, 512]
+  fov: [2deg, 2deg]
+
+noise:
+  parameters:
+    mode: 1.0
+    mean: 1.1
+  scaling: true
+
+---
+
+# overwrite the default optimization and transition parameters
+base_opt.0:
+  n_major_iterations: 5
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 15
+      maxiter: 15
+
+base_opt.n:
+  n_major_iterations: 5
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 15
+      maxiter: 30
+
+base_trans:
+  n_total_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 30
+      maxiter: 100
+
+---
+
+# overwrite the default segmentation parameters
+base_seg:
+  seg_model:
+    name: unet512_dice15
+    odir: train/runs/files
+  transform:
+    log: true
+    normalize: true
+    standardize: false
+    rotate: false
+    flip: false
+  n_orders: 5
+  coordinates: false
+
+# overwrite the default clustering parameters
+base_clu:
+  alg: dbscan
+  eps: 0.2
+  min_samples: 2
+
+# overwrite the default modelling settings
+base_model:
+  zoom: 1
+  masks:
+    margin_fac: 0.2
+    margin_min: 5
+    max_objects: 5
+  points: true
+  objects:
+    gaussian:
+      mean_fac: 0.1
+      std_fac: 0.01
+    zero_pad: 1
+  tiles:
+    tile_size: 32
+    gaussian:
+      mean_fac: 0.1
+      std_fac: 0.01
+
+# overwrite the default plotting settings
+base_plot:
+  vmin: null
+  vmax: null
+  cbar: true
+  ticks: 0
+  plot_grid: false
+  plot_label: false

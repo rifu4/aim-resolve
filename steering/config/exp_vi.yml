@@ -14,15 +14,15 @@ rerun: true
 
 --- 
 
-# specify the data to be reconstructed and the background space (shape and field of view)
+# specify the data to be reconstructed and the background grid (space and field of view)
 data:
   fname: data/files/test512_10.pkl
   fun: exp
   idx: 6
   max_std: 0.0001
 
-space_bg:
-  shape: [512, 512]
+grid_bg:
+  space: [512, 512]
   fov: [2, 2]
 
 ---
@@ -161,5 +161,5 @@ base_plot:
   vmax: null
   cbar: true
   ticks: 0
-  plot_space: false
+  plot_grid: false
   plot_label: false

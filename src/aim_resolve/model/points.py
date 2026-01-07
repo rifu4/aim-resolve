@@ -1,78 +1,102 @@
 import jax.numpy as jnp
-from nifty8.re import Model
+import numpy as np
+from nifty.re import Model, VModel
 
-from .map import map_points
-from .prior import prior_model, normal_model
+from .grid import SignalGrid, PointGrid
+from .map import map_signal
 from .signal import SignalModel
-from .space import SignalSpace, PointSpace
-from .util import check_type, to_shape
-    
+from .spectral import spectral_model
+from .util import check_type, to_shape, extend_shape
+
 
 
 class PointModel(Model):
     '''Generate a point model. Use `build` function to create the model.'''
 
-    def __init__(self, space, prefix='pm', points=None, n_copies=1):
-        check_type(space, SignalSpace)
-        check_type(prefix, str)
+    def __init__(self, grid, freq, points, prefix='pm'):
+        check_type(grid, SignalGrid)
+        check_type(freq, np.ndarray)
         check_type(points, SignalModel)
-        check_type(points.space, PointSpace)
-        check_type(n_copies, int)
+        check_type(points.grid, PointGrid)
+        check_type(prefix, str)
 
-        self.space = space
-        self.prefix = prefix
+        self.grid = grid
+        self.freq = freq
         self.points = points
-        self.n_copies = n_copies
+        self.prefix = prefix
+        self.set_out_grid(grid)
         super().__init__(domain=self.points.domain, init=self.points.init)
 
-    def __call__(self, x, *, out_space=None):
-        out_space = out_space if out_space else self.space
-        return map_points(self.points(x), self.points.space(x), out_space)
+    def __call__(self, x, *, map=True, nans=False):
+        res = self.points(x)
+        if map:
+            res = self.map_function(res)
+        if nans:
+            res = jnp.where(self.mask, res, jnp.nan)
+        return res
 
     @classmethod
-    def build(cls, *, space, coordinates, i0, offset=0, n_copies=1, prefix='pm', func='exp'):
+    def build(cls, *, grid, point_grid, freq=[1.], params, prefix='pm', offset=0, nonlinearity='exp'):
         '''
         Build a PointModel from the given parameters.
         
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
-        coordinates : dict
-            Dictionary containing the point source coordinates (see PointSpace)
-        i0 : dict
-            Dictionary containing the prior model parameters (see prior_model)
-        offset : float or list of floats, optional
-            Offsets for the individual point signals, by default '0'
-        n_copies : int, optional
-            Number of point sources, by default 1
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
+        point_grid : dict
+            Dictionary containing the point grid parameters (see PointGrid)
+        freq : list or np.ndarray or Observation
+            Frequencies of the signal model. If an Observation is given, the frequencies are extracted from it, by default '[1.]'
+        params : dict
+            Dictionary containing the spectral model parameters of the signal (see spectral_model)
         prefix : str, optional
             Prefix for the model, by default 'pm'
-        func : str, optional
+        offset : float or list of floats, optional
+            Offsets for the individual point signals, by default '0'
+        nonlinearity : str, optional
             Function to apply to the signal, by default 'exp'
         '''
-        space = SignalSpace.build(**space)
+        from ..resolve.observation import Observation
 
-        point_space = PointSpace.build(coordinates=coordinates, n_copies=n_copies, prefix=f'{prefix} cm')
+        point_grid = PointGrid.build(**point_grid)
 
-        i0_space = SignalSpace.build(shape=point_space.shape)
-        i0, _ = prior_model(f'{prefix} i0', i0_space, n_copies, **i0)
+        grid = SignalGrid.build(**{'factor': point_grid.factor} | grid)
 
-        offset_shape = (n_copies, 1, 1) if n_copies > 1 else (1, 1)
+        if isinstance(freq, Observation):
+            freq = freq.freq
+        freq = to_shape(freq, (len(freq),), 'float64')
+
+        if nonlinearity:
+            nonlinearity = getattr(jnp, nonlinearity, None)
+
+        model_grid = SignalGrid.build(space=point_grid.shape)
+        model = spectral_model(f'{prefix} ', model_grid, freq, nonlinearity, point_grid.n_copies, **params)
+
+        offset_shape = extend_shape(point_grid.n_copies, freq, (1, 1), offset=True)
         offset = to_shape(offset, offset_shape, 'float64')
 
-        check_type(prefix, str)
+        points = SignalModel(point_grid, freq, model, prefix, offset, nonlinearity)
 
-        if func:
-            func = getattr(jnp, func, None)
-
-        points = SignalModel(point_space, i0, offset, prefix, func)
-
-        return cls(space, prefix, points, n_copies)
+        return cls(grid, freq, points, prefix)
+    
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        self.map_function = map_signal(self.points.grid, out_grid)
+        return
     
     @property
     def shape(self):
-        return (self.n_copies, ) + self.points.space.shape
+        return extend_shape(self.points.grid.n_copies, self.freq, self.points.grid.shape)
+    
+    @property
+    def n_copies(self):
+        return self.points.grid.n_copies
+    
+    @property
+    def mask(self):
+        res = self.map_function(np.ones(self.points.target.shape))
+        return res > 0
     
     def set_offset(self, offset):
         '''
@@ -83,51 +107,29 @@ class PointModel(Model):
         offset : float or list of floats
             Offsets for the individual point signals
         '''
-        offset_shape = (self.n_copies, 1, 1) if self.n_copies > 1 else (1, 1)
+        offset_shape = extend_shape(self.points.grid.n_copies, self.freq, (1, 1), offset=True)
         self.points.offset = to_shape(offset, offset_shape, 'float64')
         return
-
-
-
-class CoordinateModel(Model):
-    '''Generate a coordinate model. Use `build` function to create the model.'''
-
-    def __init__(self, coordinates, n_copies=1):
-        check_type(coordinates, Model)
-        check_type(n_copies, int)
-
-        self.coordinates = coordinates
-        self.n_copies = n_copies
-        super().__init__(domain=coordinates.domain, init=coordinates.init)
-
-    def __call__(self, x):
-        return self.coordinates(x)
     
-    def __len__(self):
-        return self.n_copies
+    def copy(self):
+        return PointModel(self.grid, self.freq, self.points, self.prefix)
 
-    @classmethod
-    def build(cls, *, coordinates, n_copies=1, prefix='cm'):
-        '''
-        Build a CoordinateModel from the given parameters.
-        
-        Parameters
-        ----------
-        coordinates : dict
-            Dictionary containing the point source coordinates (mean and std)
-        n_copies : int, optional
-            Number of point sources, by default 1
-        prefix : str, optional
-            Prefix for the model, by default 'cm'
-        '''
-        coos = normal_model(
-            prefix=prefix,
-            shape=(n_copies, 2),
-            n_copies=0,
-            **coordinates
-        )
-        return cls(coos, n_copies)
-    
     @property
-    def shape(self):
-        return (self.n_copies, 2)
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        return PointModel(self.grid, np.ones((1,)), self.points.ref_freq_model, self.prefix)
+
+    @property
+    def spectral_index(self):
+        '''Return the spectral index model.'''
+        return PointModel(self.grid, np.ones((1,)), self.points.spectral_index, self.prefix)
+
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return PointModel(self.grid, self.freq, self.points.spectral_deviations, self.prefix)
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return PointModel(self.grid, self.freq, self.points.spectral_model, self.prefix) 

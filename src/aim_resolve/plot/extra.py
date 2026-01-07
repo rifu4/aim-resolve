@@ -1,3 +1,5 @@
+import numpy as np
+
 from .arrays import plot_arrays
 from ..img_data.data import ImageData
 from ..model.map import map_signal
@@ -10,6 +12,7 @@ def plot_mean_and_std(
         model,
         samples,
         mode = 'mean_and_std',
+        freq = False,
         **kwargs,
 ):
     '''Plot the mean and standard deviation of samples for a given model.'''
@@ -20,29 +23,39 @@ def plot_mean_and_std(
     vmin = kwargs.pop('vmin', None)
     vmax = kwargs.pop('vmax', None)
 
-    arrays, spaces, labels, vmins, vmaxs = [], [], [], [], []
+    arrays, grids, labels, vmins, vmaxs = [], [], [], [], []
     for md in models:
         pf, it = md.prefix.split('.')[0], md.prefix.split('.')[1]
         mean, std = samples.mean_and_std(md)
 
-        spaces += [md.space, ]
+        if mean.ndim == 2:
+            mean = mean[None]
+            std = std[None]
+        if not freq:
+            mean = mean[mean.shape[0]//2:mean.shape[0]//2+1]
+            std = std[std.shape[0]//2:std.shape[0]//2+1]
 
         if 'mean' in mode:
-            arrays += [mean, ]
-            labels += [f'{pf}.{it} mean', ]
-            vmins += [vmin, ]
-            vmaxs += [vmax, ]
+            for i in range(mean.shape[0]):
+                arrays += [mean[i], ]
+                grids += [md.grid, ] 
+                labels += [f'{pf}.{it} mean', ]
+                vmins += [vmin, ]
+                vmaxs += [vmax, ]
 
         if 'std' in mode:
-            arrays += [std / mean, ]
-            labels += [f'{pf}.{it} std', ]
-            vmins += [None, ]
-            vmaxs += [None, ]
+            for i in range(mean.shape[0]):
+                arrays += [std[i] / mean[i], ]
+                grids += [md.grid, ] 
+                labels += [f'{pf}.{it} std', ]
+                vmins += [None, ]
+                vmaxs += [None, ]
             
     plot_arrays(
         array = arrays,
-        space = spaces,
-        label = labels, 
+        grid = grids,
+        label = labels,
+        rows = 2 if all(m in mode for m in ['mean', 'std']) else 1,
         vmin = vmins,
         vmax = vmaxs,
         **kwargs,
@@ -62,20 +75,23 @@ def plot_samples(
     if len(samples) < 2:
         return
     
-    array = [model(s) for s in samples]
+    arrays = [model(s) for s in samples]
     
     vmin = kwargs.pop('vmin', None)
     vmax = kwargs.pop('vmax', None)
     if vmin is None:
-        vmin = min([a.min() for a in array])
+        vmin = min([a.min() for a in arrays])
     if vmax is None:
-        vmax = max([a.max() for a in array])
+        vmax = max([a.max() for a in arrays])
 
     [kwargs.pop(k, None) for k in ('rows', 'cols')]
 
+    for i,a in enumerate(arrays):
+        arrays[i] = a[a.shape[0]//2] if a.ndim == 3 else a
+
     plot_arrays(
-        array = array,
-        space = model.space,
+        array = arrays,
+        grid = model.grid,
         label = [f'{model.prefix} sample {i}' for i in range(len(samples))],
         vmin = vmin,
         vmax = vmax,
@@ -108,13 +124,18 @@ def plot_agreement(
         vmax = mean.max()
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.space, data.space)
+        mean = map_signal(model.grid, data.grid)(np.asarray(mean))
 
     [kwargs.pop(k, None) for k in ('rows', 'cols')]
 
+    arrays = [mean, mean - data.val, data.val]
+
+    for i,a in enumerate(arrays):
+        arrays[i] = a[a.shape[0]//2] if a.ndim == 3 else a
+
     plot_arrays(
-        array = [mean, mean - data.val, data.val],
-        space = data.space,
+        array = arrays,
+        grid = data.grid,
         label = [f'{model.prefix} mean', 'mean - truth', f'{data.prefix} thruth'],
         vmin = [vmin, None, vmin],
         vmax = [vmax, None, vmax],
@@ -140,13 +161,16 @@ def plot_pullplot(
     mean, std = samples.mean_and_std(model)
 
     if mean.shape != data.val.shape:
-        mean = map_signal(mean, model.space, data.space)
+        mean = map_signal(model.grid, data.grid)(np.asarray(mean))
 
     [kwargs.pop(k, None) for k in ('vmin', 'vmax', 'norm', 'rows', 'cols')]
 
+    array = (mean - data.val) / std
+    array = array[array.shape[0]//2] if array.ndim == 3 else array
+
     plot_arrays(
-        array = (mean - data.val) / std,
-        space = data.space,
+        array = array,
+        grid = data.grid,
         label = f'{model.prefix} pullplot',
         norm = 'linear',
         vmin = -5.0,

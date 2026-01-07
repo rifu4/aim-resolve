@@ -14,7 +14,7 @@ def plot_power(
         plot_label = True,
     ):
     '''
-    Plot a 1D power spectrum of the nifty8.re correlated field model.
+    Plot a 1D power spectrum of the nifty.re correlated field model.
     
     Parameters
     ----------

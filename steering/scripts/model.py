@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from aim_resolve import ImageData, SignalSpace, SetupKLConfig, yaml_load, map_signal, masks_from_maps, plot_arrays, adjust_zoom, draw_boxes, model_background, model_points, model_objects, model_tiles
+from aim_resolve import ImageData, SetupKLConfig, yaml_load, map_signal, masks_from_maps, plot_arrays, draw_boxes, model_background, model_points, model_objects, model_tiles, remove_freq_axis
 
 
 
@@ -22,15 +22,15 @@ def main():
     cfg.modify_sec(f'opt.{it}', base='base_opt.n')
 
     # update fast-resolve kernels depending on the new resolution
-    if 'psf_pixels' in cfg.sections[f'lh.{it}']:
-        rkdir = '_'.join(cfg.sections[f'lh.{it}']['response_kernel'].split('_')[:-1])
-        nkdir = '_'.join(cfg.sections[f'lh.{it}']['noise_kernel'].split('_')[:-1])
-        ksize = mdl_dct['zoom'] * base_dct['space_bg']['shape'][0]
-        cfg.modify_sec(f'lh.{it}', response_kernel=f'{rkdir}_{ksize}.pkl', noise_kernel=f'{nkdir}_{ksize}.pkl')
+    fun = cfg.sections[f'lh.{it}']['fun']
+    if 'radio' in fun and 'fast' in fun:
+        pkdir = '_'.join(cfg.sections[f'lh.{it}']['psf_kernel_fn'].split('_')[:-1])
+        nkdir = '_'.join(cfg.sections[f'lh.{it}']['n_inv_kernel_fn'].split('_')[:-1])
+        ksize = mdl_dct['zoom'] * base_dct['grid_bg']['space'][0]
+        cfg.modify_sec(f'lh.{it}', psf_kernel_fn=f'{pkdir}_{ksize}.pkl', n_inv_kernel_fn=f'{nkdir}_{ksize}.pkl')
 
-    # load the reconstructed image and setup the model tile space
+    # load the reconstructed image and setup the model grid
     rec = ImageData.load(opt_pkl, dtype='float32')
-    bg_space = SignalSpace.build(**base_dct['space_bg'])
 
     # load the detected point sources and extended objects
     det_dct = dict(np.load(det_npz))
@@ -38,39 +38,41 @@ def main():
     cl_map = det_dct['cl_map'].astype(float)
 
     # adjust the zoom level of the sky model and zoom the reconstructed image if necessary
-    zoom = adjust_zoom(mdl_dct['zoom'], rec.space, bg_space)
+    zoom = mdl_dct['zoom'] // rec.grid.factor
+    grid = rec.grid.refine(zoom)
+    freq = cfg.sections[f'sky_bg.{it}']['freq']
     if zoom > 1:
-        rec.val = map_signal(rec.val, rec.space, zoom * rec.space)
-        ps_map = map_signal(ps_map, rec.space, zoom * rec.space)
-        cl_map = map_signal(cl_map, rec.space, zoom * rec.space, vmap_sum=False)
+        rec.val = map_signal(rec.grid, grid)(rec.val)
+        ps_map = map_signal(rec.grid, grid)(ps_map)
+        cl_map = map_signal(rec.grid, grid)(cl_map)
 
     # create a mask for the detected point sources and each extended object
     if mdl_dct['tiles'] and mdl_dct['tiles']['tile_size']:
         mdl_dct['masks'] |= {'tile_size': mdl_dct['tiles']['tile_size']}
-    mask_dct = masks_from_maps(ps_map, cl_map, it, mdl_dct['zoom'], **mdl_dct['masks'])
+    mask_dct = masks_from_maps(ps_map, cl_map, it, freq, mdl_dct['zoom'], **mdl_dct['masks'])
 
-    bg_dct = model_background(mask_dct[f'bg.{it}'], rec.val)
+    bg_dct = model_background(mask_dct[f'bg.{it}'], freq, rec.val)
     cfg.modify_sec(f'sky_bg.{it}', merge_base=True, **bg_dct)
-    rec_sub = rec.val - np.exp(bg_dct['i0']['offset_mean'])
+    rec_sub = rec.val - np.exp(bg_dct['offset'])
     rec_sub = rec_sub.clip(0, None)
 
     if mdl_dct['points']:
         for pi in filter(lambda x: 'p' in x, mask_dct):
-            pi_dct = model_points(mask_dct[pi], ps_map, zoom * rec.space, rec_sub)
+            pi_dct = model_points(mask_dct[pi], ps_map, grid, freq, rec_sub)
             if pi_dct:
                 cfg.add_sec(f'sky_{pi}', prefix=pi, **pi_dct)
                 cfg.modify_sec(f'sky.{it}', **{pi: f'=sky_{pi}'})
 
     if mdl_dct['objects']:
         for oi in filter(lambda x: 'o' in x, mask_dct):
-            oi_dct = model_objects(mask_dct[oi], zoom * rec.space, rec_sub, **mdl_dct['objects'])
+            oi_dct = model_objects(mask_dct[oi], grid, freq, rec_sub, **mdl_dct['objects'])
             if oi_dct:
                 cfg.add_sec(f'sky_{oi}', prefix=oi, **oi_dct)
                 cfg.modify_sec(f'sky.{it}', **{oi: f'=sky_{oi}'})
 
     if mdl_dct['tiles']:
         for ti in filter(lambda x: 't' in x, mask_dct):
-            ti_dct = model_tiles(mask_dct[ti], zoom * rec.space, rec_sub, **mdl_dct['tiles'])
+            ti_dct = model_tiles(mask_dct[ti], grid, freq, rec_sub, **mdl_dct['tiles'])
             if ti_dct:
                 cfg.add_sec(f'sky_{ti}', prefix=ti, **ti_dct)
                 cfg.modify_sec(f'sky.{it}', **{ti: f'=sky_{ti}'})
@@ -78,12 +80,12 @@ def main():
     # get the positions of the detected point sources and the boxes of the extended objects and plot them as markers
     px, py = np.argwhere(ps_map == 1).T
     ps_mrk = dict(x=px, y=py, s=25, c='white', marker='+')
-    box_map = draw_boxes(cfg.sections, zoom * rec.space, it)
+    box_map = draw_boxes(cfg.sections, grid, it)
     ox, oy = np.argwhere(box_map == 1).T
     oj_mrk = dict(x=ox, y=oy, s=1, c='white', marker=',')
     plot_arrays(
         array = rec.val, 
-        space = rec.space, 
+        grid = rec.grid, 
         label = 'detected components',
         name = f'{it}_mdl.png',
         odir = f'{odir}/plots',
@@ -93,11 +95,13 @@ def main():
 
     # plot and save the point source and object masks
     p_dct = plt_dct | {'norm': 'linear', 'vmin': 0, 'vmax': 1}
+    mask_val = [remove_freq_axis(v, freq) for v in mask_dct.values()]
     plot_arrays(
-        array = [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()],
+        array = [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val],
         label = [f'mask {k}' for k in mask_dct],
         name = f'{it}_msk.png',
         odir = f'{odir}/plots',
+        rows = 1,
         **p_dct,
     )
     np.savez(f'{odir}/files/{it}_msk', **mask_dct)

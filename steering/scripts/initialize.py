@@ -1,6 +1,7 @@
 import os
 import sys
-from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts
+import numpy as np
+from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts, radio_data
 
 
 
@@ -22,6 +23,20 @@ def main():
     cfg.modify_sec('lh.0', fun=fun)
     cfg.modify_sec('data.0', **pipe_dct.pop('data'))
 
+    # extract frequency channels if specified
+    if 'freq' in pipe_dct:
+        freq = pipe_dct.pop('freq')
+        if isinstance(freq, list) and len(freq) > 1:
+            cfg.modify_sec('sky_bg.0', freq=freq, params=dict(base='params_mf'))
+        elif isinstance(freq, str):
+            freq = radio_data(**cfg.sections['data.0']).freq
+            cfg.modify_sec('sky_bg.0', freq=freq.tolist(), params=dict(base='params_mf'))
+    else:
+        freq = [1.]
+
+    # do split in fast-resolve convolution if specified
+    split = pipe_dct.pop('split', 0)
+
     # add noise scaling configuration for the likelihood
     if 'noise' in pipe_dct:
         cfg.modify_sec('lh.0', noise=pipe_dct.pop('noise'))
@@ -35,13 +50,13 @@ def main():
         kernel_dir = 'runs/kernels'
         os.makedirs(kernel_dir, exist_ok=True)
         kname = cfg.sections['data.0']['fname'].split('/')[-1].split('.')[0]
-        ksize = pipe_dct['space_bg']['shape'][0]
-        kfov = pipe_dct['space_bg']['fov'][0]
+        ksize = pipe_dct['grid_bg']['space'][0]
+        kfov = pipe_dct['grid_bg']['fov'][0]
         cfg.modify_sec(
             sec_key = 'lh.0', 
-            psf_pixels = 3000,
-            response_kernel = f'{kernel_dir}/rk_{kname}_{kfov}_{ksize}.pkl', 
-            noise_kernel = f'{kernel_dir}/nk_{kname}_{kfov}_{ksize}.pkl',
+            split=split,
+            psf_kernel_fn = f'{kernel_dir}/pk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl', 
+            n_inv_kernel_fn = f'{kernel_dir}/nk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl',
         )
 
     # extract callback, extra, and transition keys from pipe_dct
@@ -51,7 +66,7 @@ def main():
     key = pipe_dct.pop('key') if 'key' in pipe_dct else 0
     rerun = pipe_dct.pop('rerun') if 'rerun' in pipe_dct else True
 
-    # load and overwrite sections of the base yaml-file with pipe_dct sections (like opt, trans, i0, space,  plot, ...)
+    # load and overwrite sections of the base yaml-file with pipe_dct sections (like opt, trans, i0, grid,  plot, ...)
     base_dct = yaml_load(base_yml)
     base_dct = merge_dicts([dict(base_opt=dict(odir=odir, key=key, rerun=rerun)), base_dct, pipe_dct], merge_base='True')
 

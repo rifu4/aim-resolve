@@ -1,15 +1,15 @@
 import jax.numpy as jnp
 from jax import random, vmap
 from jax.typing import ArrayLike
-from nifty8.re import Model, Vector
+from nifty.re import Model, Vector
 from typing import Callable
 
 from .jax_fun import gaussian_filter2d
 from ..model.integer import integer_model
-from ..model.map import map_points
+from .map import map_points
 from ..model.normal import normal_model
 from ..model.prior import uniform_model
-from ..model.space import SignalSpace
+from .space import SignalSpace
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 

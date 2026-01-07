@@ -26,7 +26,7 @@ def main():
 
     # instantiate the sky models of the current iteration
     sky_mdl = cfg.instantiate_sec(f'sky.{it}')
-    models = [sky_mdl, ] + [m for m in sky_mdl.models if len(sky_mdl.models) > 1]
+    sky_models = [sky_mdl, ] + [m for m in sky_mdl.models if len(sky_mdl.models) > 1]
 
     # print and plot the data
     if int(it) == 0:
@@ -34,12 +34,12 @@ def main():
         print(data, '\n')
         if isinstance(data, ImageData):
             d_val = data.noisy_val.clip(0,None)
-            plot_arrays(d_val, data.space, 'data', f'0_data.png', f'{odir}/plots', **plt_dct)
-            plot_arrays(data.val, data.space, 'truth', f'0_truth.png', f'{odir}/plots', **plt_dct)
+            plot_arrays(d_val, data.grid, 'data', f'0_data.png', f'{odir}/plots', **plt_dct)
+            plot_arrays(data.val, data.grid, 'truth', f'0_truth.png', f'{odir}/plots', **plt_dct)
         elif isinstance(data, Observation):
-            d_val = data.dirty_image(sky_mdl.space)
+            d_val = data.dirty_image(sky_mdl.grid)
             p_dct = plt_dct | dict(vmin=None, vmax=None)
-            plot_arrays(d_val, sky_mdl.space, 'data', f'0_data.png', f'{odir}/plots', **p_dct)
+            plot_arrays(d_val, sky_mdl.grid, 'data', f'0_data.png', f'{odir}/plots', **p_dct)
 
     # define a callback function to plot the results of the optimization after each iteration
     def callback(samples, state, *args):
@@ -47,12 +47,13 @@ def main():
         plot_mean_and_std(
             model = sky_mdl,
             samples = samples,
+            freq = True,
             name = f'{nit}_sky.png',
             odir = f'{odir}/callback',
             **plt_dct,
         )
         plot_mean_and_std(
-            model = [md for md in models],
+            model = [md for md in sky_models],
             samples = samples,
             mode = 'mean',
             name = f'{nit}_components.png',
@@ -73,7 +74,7 @@ def main():
 
     # plot the final results of the optimization
     plot_mean_and_std(
-        model = [md for md in models],
+        model = [md for md in sky_models],
         samples = samples,
         mode = 'mean',
         name = f'{it}_rec.png',
@@ -81,19 +82,22 @@ def main():
         **plt_dct,
     )
 
-    # save the reconstructed sky model and space to a pkl-file
-    rec = ImageData(samples.mean(sky_mdl), sky_mdl.space, f'{it}_rec')
+    # save the reconstructed sky model and grid to a pkl-file
+    rec_val = samples.mean(sky_mdl)
+    rec_val = rec_val[rec_val.shape[0]//2] if rec_val.ndim == 3 else rec_val
+    rec = ImageData(rec_val, sky_mdl.grid, f'{it}_rec')
     rec.save(name=f'{it}_rec', odir=f'{odir}/files')
 
     # extra plots: mean (and std) of the sky model components
     if os.path.isdir(odir + '/extra/'):
-        for md in models:
+        for md in sky_models:
             pf, it = md.prefix.split('.')[0], md.prefix.split('.')[1]
             for mi in ['mean', 'std']:
                 plot_mean_and_std(
                     model = md,
                     samples = samples,
                     mode = mi,
+                    freq = True,
                     name = f'{it}_{pf}_{mi}.png',
                     odir = f'{odir}/extra',
                     **plt_dct,
@@ -105,6 +109,30 @@ def main():
             odir = f'{odir}/extra',
             **plt_dct,
         )
+
+        if sky_mdl.freq.size > 1:
+            frq_mdl = sky_mdl.spectral_index
+            frq_models = [frq_mdl, ] + [m for m in frq_mdl.models if len(frq_mdl.models) > 1]
+            p_dct = plt_dct | dict(norm='linear', vmin=None, vmax=None)
+            for md in frq_models:
+                pf, it = md.prefix.split('.')[0], md.prefix.split('.')[1]
+                for mi in ['mean', 'std']:
+                    plot_mean_and_std(
+                        model = md,
+                        samples = samples,
+                        mode = mi,
+                        name = f'{it}_{pf}_alpha_{mi}.png',
+                        odir = f'{odir}/extra',
+                        **p_dct,
+                    )
+            plot_samples(
+                model = frq_mdl,
+                samples = samples,
+                name = f'{it}_alpha_samples.png',
+                odir = f'{odir}/extra',
+                **p_dct,
+            )
+        
         data = cfg.instantiate_sec('data.0')
         if isinstance(data, ImageData):
             plot_agreement(

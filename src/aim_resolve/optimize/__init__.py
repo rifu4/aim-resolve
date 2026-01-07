@@ -1,4 +1,3 @@
-from .fast_opt_kl import fast_optimize_kl
 from .opt_config import OptimizeKLConfig
 from .opt_kl import optimize_kl
 from .opt_vi import MyOptimizeVI

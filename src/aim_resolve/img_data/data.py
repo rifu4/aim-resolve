@@ -1,14 +1,14 @@
 import os
 import pickle
 import jax.numpy as jnp
-import nifty8.re as jft
+import nifty.re as jft
 import numpy as np
 from jax import random, lax
 from jax.typing import ArrayLike
 from jax_tqdm import loop_tqdm
 
 from .components import ComponentGenerator
-from ..model.space import SignalSpace
+from ..model.grid import SignalGrid
 from ..model.util import check_type
 
 
@@ -22,6 +22,7 @@ class ImageDataGenerator():
         check_type(samples, (np.ndarray, type(None)))
 
         self.model = model
+        self.grid = model.grid
         self.parameters = parameters
         self.samples = samples
 
@@ -104,9 +105,9 @@ class ImageDataGenerator():
         prefix : str, optional
             Prefix for the sample, by default 'data'
         '''
-        return ImageData(self.x[index, 0], self.model.space, prefix, self.y[index])
+        return ImageData(self.x[index, 0], self.grid, prefix, self.y[index])
     
-    def plot_samples(self, name, odir='', n_copies=10, space=False, label=False, **kwargs):
+    def plot_samples(self, name, odir='', n_copies=10, grid=False, label=False, **kwargs):
         '''
         Plot a number of samples.
 
@@ -118,8 +119,8 @@ class ImageDataGenerator():
             Output directory for the plot, by default ''
         n_copies : int, optional
             Number of samples to plot, by default 10
-        space : bool, optional
-            Whether to plot the space of the model, by default False
+        grid : bool, optional
+            Whether to plot the grid of the model, by default False
         label : bool, optional
             Whether to add labels ['points', 'objects', 'sky'] to the plot, by default False
         **kwargs : additional keyword arguments
@@ -142,7 +143,7 @@ class ImageDataGenerator():
         
         plot_arrays(
             array = vals,
-            space = self.model.space if space else None,
+            grid = self.grid if grid else None,
             label = ['sky', 'points', 'objects'] if label else None,
             rows = rows,
             cols = 3,
@@ -212,7 +213,7 @@ class ImageDataGenerator():
 
 
 class ImageData():
-    def __init__(self, val, space, prefix='data', maps=None):
+    def __init__(self, val, grid, prefix='data', maps=None):
         '''
         Store an image data object and its properties for nifty reconstructions.
 
@@ -220,20 +221,20 @@ class ImageData():
         ----------
         val : ArrayLike
             array containing the image data
-        space : SignalSpace
-            space of the image data
+        grid : SignalGrid
+            grid of the image data
         prefix : str
             Prefix for the image data
         maps : ArrayLike
             array containing the output maps for the image data
         '''
         check_type(val, ArrayLike)
-        check_type(space, SignalSpace)
+        check_type(grid, SignalGrid)
         check_type(prefix, str)
         check_type(maps, (ArrayLike, type(None)))
 
         self.val = np.array(val)
-        self.space = space
+        self.grid = grid
         self.prefix = prefix
         self.maps = np.array(maps) if isinstance(maps, ArrayLike) else np.zeros_like(self.val)
         self.noisy_val = None
@@ -243,7 +244,7 @@ class ImageData():
             f'prefix:\t{self.prefix}',
             f'image shape:\t{self.val.shape}',
             f'# pixel:\t{self.val.size}',
-            f'space fov:\t{tuple(self.space.fov)}',
+            f'grid fov:\t{tuple(self.grid.fov)}',
         ]
         return '\n'.join(['ImageData:'] + [f'  {ss}' for ss in s])
     
@@ -260,7 +261,7 @@ class ImageData():
         '''
         key = random.PRNGKey(key) if isinstance(key, int) else key
         n_std = max_std * np.max(self.val)
-        noise = n_std * random.normal(key, self.space.shape)
+        noise = n_std * random.normal(key, self.grid.shape)
         self.noisy_val = self.val + noise
 
     def save(self, name, odir='', dtype='float64'):
@@ -282,7 +283,7 @@ class ImageData():
             os.makedirs(odir, exist_ok=True)
 
         with open(os.path.join(odir, name), 'wb') as f:
-            pickle.dump((self.val.astype(dtype), self.space, self.prefix, self.maps.astype(dtype)), f)
+            pickle.dump((self.val.astype(dtype), self.grid, self.prefix, self.maps.astype(dtype)), f)
 
     @classmethod
     def load(cls, name, odir='', dtype='float64'):
@@ -301,6 +302,6 @@ class ImageData():
         if not name.endswith('.pkl'):
             name += '.pkl'
         with open(os.path.join(odir, name), 'rb') as file:
-            val, space, prefix, maps = pickle.load(file)
+            val, grid, prefix, maps = pickle.load(file)
 
-        return cls(val.astype(dtype), space, prefix, maps.astype(dtype))
+        return cls(val.astype(dtype), grid, prefix, maps.astype(dtype))

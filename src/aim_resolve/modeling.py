@@ -1,61 +1,24 @@
 import numpy as np
 
+from .mask import remove_freq_axis
+from .model.grid import SignalGrid, PointGrid
 from .model.map import map_signal
-from .model.space import SignalSpace
-from .model.util import check_type, to_shape
-
-
-
-def adjust_zoom(
-        zoom, 
-        space, 
-        bg_space,
-    ):
-    '''Adjust the zoom factor if the space resolution is a multiple of the background space resolution.
-    
-    Parameters
-    ----------
-    zoom : int
-        The zoom factor.
-    space : SignalSpace
-        The space of the full sky model.
-    bg_space : SignalSpace
-        The space of the background model.
-
-    Returns
-    -------
-    zoom : int
-        The adjusted zoom factor.
-    '''
-    check_type(space, SignalSpace)
-    check_type(bg_space, SignalSpace)
-    if not isinstance(zoom, int) or zoom < 1:
-        raise TypeError('`zoom` has to be of type `int` and larger than 0')
-    
-    for zi in range(1, zoom+1):
-        if space == zi * bg_space:
-            zoom = zoom // zi
-
-    return zoom
+from .model.points import PointModel
+from .model.signal import SignalModel
+from .model.tiles import TileModel
+from .model.util import to_shape
 
 
 
 def model_background(
         bg_mask,
+        freq,
         rec_val,
     ):
-    log_val = np.log(rec_val[bg_mask > 0])
-
-    bg_mean = round(float(log_val.mean()), 1)
-    bg_std = round(float(log_val.std()), 1)
-
-    bg_dct = {
-        'i0': {
-            'base': 'i0_bg',
-            'offset_mean': bg_mean,
-            'offset_std': [max(bg_std, 1.0), 1.0],
-        },
-    }
+    # create background model dictionary
+    bg_dct = dict(
+        offset =  get_offset('background', rec_val, bg_mask, freq),
+    )
     return bg_dct
 
 
@@ -63,7 +26,8 @@ def model_background(
 def model_points(
         ps_masks,
         ps_map,
-        space,
+        grid,
+        freq,
         rec_sub,
     ):
     # extract locations of the point sources from the output map
@@ -73,64 +37,59 @@ def model_points(
     if ps_coos.size == 0:
         return False
     
-    # convert the pixel values of the point sources to coordinates in the space
-    ps_coos -= 0.5 * (space.shp - 1)
-    ps_coos *= space.dis
-    ps_coos += space.cen
+    # convert the pixel values of the point sources to coordinates on the grid
+    ps_coos -= 0.5 * (grid.shp - 1)
+    ps_coos /= grid.fac
+    ps_coos += grid.cen
+    point_grid = PointGrid.build(coordinates=ps_coos, factor=grid.factor, n_copies=ps_coos.shape[0])
 
-    # get the i0 priors for the point sources from the reconstruction
-    log_sum = np.log(np.sum(rec_sub[None] * ps_masks, axis=(1,2), where=(ps_masks > 0)))
-    offset = [round(float(ri), 1) for ri in log_sum]
-
-    ps_dct = {
-        'space': space.to_dict(),
-        'coordinates': ps_coos.tolist(),
-        'i0': {
-            'base': 'i0_ps',
-        },
-        'offset': offset,
-        'n_copies': len(offset),
-    }
+    # create point model dictionary
+    ps_dct = dict(
+        point_grid = point_grid.to_dict(),
+        grid = grid.to_dict('center'),
+        freq = freq,
+        params = dict(
+            base = 'params_ps',
+        ),
+        offset = get_offset('point', rec_sub, ps_masks, freq),
+    )
     return ps_dct
 
 
 
 def model_objects(
         oj_mask,
-        space,
+        grid,
+        freq,
         rec_sub,
         gaussian = None,
-        zero_pad = None,
 ):
-    pix = np.argwhere(oj_mask > 0)
+    pix = np.argwhere(remove_freq_axis(oj_mask, freq) > 0)
     lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
-    lim = lim.clip(0, space.shp-1)
+    lim = lim.clip(0, grid.shp-1)
     shp = 1 + lim[1] - lim[0]
     shp[shp%2 != 0] += 1
-    cen = lim.mean(axis=0)
-    cen[cen%1 == 0] += 0.5
-    cen = space.cen + space.dis * (cen - 0.5 * (space.shp - 1))
-    oj_space = SignalSpace.build(shape=shp, distances=space.distances, center=cen)
+    cen = lim.mean(axis=0).astype('int64')
+    spc = shp / grid.fac
+    cen = (cen - 0.5 * (grid.shp - 1)) / grid.fac + grid.cen
+    
+    oj_grid = SignalGrid.build(space=spc, center=cen, factor=grid.factor)
 
-    log_mean = np.log(np.mean(rec_sub * oj_mask, where=(oj_mask > 0)))
-    offset = round(float(log_mean), 1)
+    # create object model dictionary
+    oj_dct = dict(
+        grid = oj_grid.to_dict(),
+        freq = freq,
+        params = dict(
+            base = 'params_mf' if len(freq) > 1 else 'params_sf',
+        ),
+        offset = get_offset('object', rec_sub, oj_mask, freq),
+    )
 
-    oj_dct = {
-        'space': oj_space.to_dict(),
-        'i0': {
-            'base': 'i0_os',
-        },
-        'offset': offset,
-    }
     if gaussian:
-        g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = oj_space.fov
-        oj_dct['gaussian'] = {
-            'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
-            'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
-        }
-    if zero_pad:
-        oj_dct['zero_pad'] = zero_pad
+        oj_dct['gaussian'] = dict(
+            cov_x = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+            cov_y = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+        )
 
     return oj_dct
 
@@ -138,7 +97,8 @@ def model_objects(
 
 def model_tiles(
         ts_masks,
-        space,
+        grid,
+        freq,
         rec_sub,
         tile_size = 32,
         gaussian = None,
@@ -147,60 +107,80 @@ def model_tiles(
 
     ts_cen = []
     for tm in ts_masks:
-        pix = np.argwhere(tm > 0)
+        pix = np.argwhere(remove_freq_axis(tm, freq) > 0)
         lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
-        lim = lim.clip(0, space.shp-1)
-        cen = lim.mean(axis=0)
-        cen[cen%1 == 0] += 0.5
-        cen = space.cen + space.dis * (cen - 0.5 * (space.shp - 1))
+        cen = lim.mean(axis=0).astype('int64')
+        cen = cen.clip(tile_size * grid.fac // 2, grid.shp - (tile_size * grid.fac // 2) - 1)
+        cen = (cen - 0.5 * (grid.shp - 1)) / grid.fac + grid.cen
         ts_cen.append(cen.tolist())
 
-    tile_spaces = SignalSpace.build(shape=tile_size, distances=space.distances, center=ts_cen, n_copies=len(ts_cen))
+    tile_grid = SignalGrid.build(space=tile_size, center=ts_cen, factor=grid.factor, n_copies=len(ts_cen))
 
-    # ts_vals = rec_sub[None] * ts_masks
-    # ts_sums = np.sum(ts_vals, axis=(1, 2), where=(ts_vals != 0))
-    # ncounts = np.count_nonzero(ts_vals, axis=(1, 2))
-    # offsets = np.log(np.divide(ts_sums, ncounts, out=np.zeros_like(ts_sums, dtype=float), where=(ncounts != 0)))
-    # offsets = [round(float(os), 1) for os in offsets]
+    # create tile model dictionary
+    ts_dct = dict(
+        tile_grid = tile_grid.to_dict(),
+        grid = grid.to_dict('center'),
+        freq = freq,
+        params = dict(
+            base = 'params_mf' if len(freq) > 1 else 'params_sf',
+        ),
+        offset = get_offset('tile', rec_sub, ts_masks, freq),
+    )
 
-    log_mean = np.log(np.mean(rec_sub[None] * ts_masks, axis=(1,2), where=(ts_masks > 0)))
-    offset = [round(float(ri), 1) for ri in log_mean]
-
-    ts_dct = {
-        'space': space.to_dict(),
-        'tile_spaces': tile_spaces.to_dict(),
-        'i0': {
-            'base': 'i0_ts',
-        },
-        'offset': offset,
-        'n_copies': len(ts_cen),
-    }
     if gaussian:
-        g_mean, g_std = gaussian['mean_fac'], gaussian['std_fac']
-        fov_x, fov_y = tile_spaces.fov
-        ts_dct['gaussian'] = {
-            'cov_x': [float(g_mean * fov_x), float(g_std * fov_x)],
-            'cov_y': [float(g_mean * fov_y), float(g_std * fov_y)],
-        }
+        ts_dct['gaussian'] = dict(
+            cov_x = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+            cov_y = [float(gaussian['mean_fac']), float(gaussian['std_fac'])],
+        )
 
     return ts_dct
 
 
 
-def draw_boxes(cfg_sections, space, it):
-    box_map = np.zeros(space.shape)
+def get_offset(
+        model,
+        rec_sub,
+        mask,
+        freq,
+):
+    '''Sets the offsets of the sky model based on the background reconstruction and the mask.'''
+    rec_sub = remove_freq_axis(rec_sub, freq)
+    mask = remove_freq_axis(mask, freq).astype(bool)
+
+    if isinstance(model, PointModel) or (isinstance(model, str) and 'point' in model):
+        log_sum = np.log(np.sum(np.broadcast_to(rec_sub, mask.shape), axis=(1, 2), where=mask))
+        offset = [round(float(ri), 1) for ri in log_sum]
+
+    elif isinstance(model, SignalModel) or (isinstance(model, str) and any(m in model for m in ('signal', 'object', 'background'))):
+        log_mean = np.log(np.mean(rec_sub, where=mask))
+        offset = round(float(log_mean), 1)
+
+    elif isinstance(model, TileModel) or (isinstance(model, str) and 'tile' in model):
+        log_mean = np.log(np.mean(np.broadcast_to(rec_sub, mask.shape), axis=(1, 2), where=mask))
+        offset = [round(float(ri), 1) for ri in log_mean]
+
+    if isinstance(model, str):
+        print(f'{model} offset:', offset)
+    else:
+        print(f'{model.prefix} offset:', offset)
+
+    return offset
+
+
+
+def draw_boxes(cfg_sections, grid, it):
+    box_map = np.zeros(grid.shape)
 
     for k,v in cfg_sections.items():
         if 'sky_t' in k and f'.{it}' in k:
-            ni = v['n_copies']
-            si = SignalSpace.build(**v['tile_spaces'], n_copies=ni)
-            xi = np.ones((ni,)+si.shape)
-            xi[:, 1:-1, 1:-1] = 0
-            box_map += map_signal(xi, si, space)
+            grd_i = SignalGrid.build(**v['tile_grid'])
+            val_i = np.ones((grd_i.n_copies,) + grd_i.shape)
+            val_i[:, 1:-1, 1:-1] = 0
+            box_map += np.squeeze(map_signal(grd_i, grid)(val_i))
         elif 'sky_o' in k and f'.{it}' in k:
-            si = SignalSpace.build(**v['space'])
-            xi = np.ones(si.shape)
-            xi[1:-1, 1:-1] = 0
-            box_map += map_signal(xi, si, space)
+            grd_i = SignalGrid.build(**v['grid'])
+            val_i = np.ones(grd_i.shape)
+            val_i[1:-1, 1:-1] = 0
+            box_map += np.array(map_signal(grd_i, grid)(val_i))
     
     return box_map.clip(0,1)

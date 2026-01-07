@@ -1,13 +1,14 @@
+import jax.numpy as jnp
 from collections.abc import Iterable
 from jax import random
 from jax.typing import ArrayLike
-from nifty8.re import Initializer, Model, Samples, VModel, Vector, mean, mean_and_std, logger
+from nifty.re import Initializer, Model, Samples, VModel, Vector, mean, mean_and_std, logger
 from typing import Union
 
 
 
 class MySamples(Samples):
-    '''Extension of nifty8.re.Samples to handle components and utility lh_functions for mean and std'''
+    '''Extension of nifty.re.Samples to handle components and utility lh_functions for mean and std'''
 
     def mean(self, model = lambda x: x):
         '''
@@ -34,7 +35,8 @@ class MySamples(Samples):
             Function to apply to the samples. Default is identity function.
         '''
         if len(self) < 2:
-            return self.mean(model), 0
+            mean = self.mean(model)
+            return mean, jnp.zeros_like(mean)
         else:
             return mean_and_std(tuple(model(s) for s in self)) 
         
@@ -68,7 +70,7 @@ def get_samples(key, samples, position_or_samples, lh_dict, transition=None, it=
     '''
     models = [v for v in lh_dict.values() if isinstance(v, Model)]
     if domain_keys(models) == set():
-        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty8.re.Model`')
+        raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty.re.Model`')
 
     match (domain_keys(samples), domain_keys(position_or_samples), domain_keys(models)):
     

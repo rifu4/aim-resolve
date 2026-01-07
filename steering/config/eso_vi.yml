@@ -14,15 +14,15 @@ rerun: true
 
 --- 
 
-# specify the data to be reconstructed and the background space (shape and field of view)
+# specify the data to be reconstructed and the background grid (space and field of view)
 data:
   fname: /u/rfuchs/development/data/eso_986-1137mhz.npz
   # fname: /scratch/users/rfuchs/data/eso_1356-1439mhz.npz
   # fname: /Users/rf/Development/data/eso_986-1137mhz.npz
   fun: fast_radio
 
-space_bg:
-  shape: [1024, 1024]
+grid_bg:
+  space: [1024, 1024]
   fov: [2deg, 2deg]
 
 noise:
@@ -170,5 +170,5 @@ base_plot:
   vmax: null
   cbar: true
   ticks: 0
-  plot_space: false
+  plot_grid: false
   plot_label: false

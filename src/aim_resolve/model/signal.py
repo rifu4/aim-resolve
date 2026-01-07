@@ -1,12 +1,15 @@
+import dataclasses
 import jax.numpy as jnp
+import numpy as np
 from jax.typing import ArrayLike
-from nifty8.re import Model, VModel, Vector
-from typing import Callable
+from nifty.re import Model, VModel, Vector
+from typing import Any, Callable
 
+from .grid import SignalGrid, PointGrid
 from .map import map_signal
 from .prior import prior_model
-from .space import SignalSpace, PointSpace
-from .util import check_type, to_shape
+from .spectral import MultiFrequencyModel, spectral_model
+from .util import check_type, to_shape, extend_shape
 from ..optimize.samples import domain_tree, model_init
 
 
@@ -14,99 +17,99 @@ from ..optimize.samples import domain_tree, model_init
 class SignalModel(Model):
     '''Generate a signal model. Use `build` function to create the model.'''
 
-    factor = None
+    mask: Any = dataclasses.field(default=None, metadata=dict(static=False))
 
-    def __init__(self, space, i0, offset=0, prefix='sm', func=jnp.exp, zero_pad=None, gaussian=None, pspec=None):
-        check_type(space, (SignalSpace, PointSpace))
-        check_type(i0, (Model, VModel))
-        check_type(offset, ArrayLike)
+    def __init__(self, grid, freq, model, prefix='sm', offset=0, nonlinearity=jnp.exp, gaussian=None):
+        check_type(grid, (SignalGrid, PointGrid))
+        check_type(freq, np.ndarray)
+        check_type(model, (Model, VModel))
         check_type(prefix, str)
-        check_type(func, (Callable, type(None)))
-        check_type(zero_pad, (Callable, type(None)))
+        check_type(offset, ArrayLike)
+        check_type(nonlinearity, (Callable, type(None)))
         check_type(gaussian, (Model, type(None)))
-        check_type(pspec, (Model, VModel, type(None)))
 
-        self.space = space
-        self.i0 = i0
-        self.offset = offset
+        self.grid = grid
+        self.freq = freq
+        self.model = model
         self.prefix = prefix
-        self.func = func
-        self.zero_pad = zero_pad
+        self.offset = offset
+        self.nonlinearity = nonlinearity
         self.gaussian = gaussian
-        self.pspec = pspec
+        self.map_function = lambda x: x
         super().__init__(
-            domain = Vector(domain_tree((self.i0, self.space.coos, self.gaussian), error=False)), 
-            init = model_init((self.i0, self.space.coos, self.gaussian), error=False),
+            domain = Vector(domain_tree((self.model, self.gaussian), error=False)), 
+            init = model_init((self.model, self.gaussian), error=False),
         )
 
-    def __call__(self, x, *, out_space=None):
-        res = self.i0(x)
-        res += self.offset
-        if self.zero_pad:
-            res = self.zero_pad(res)
-        if self.func:
-            res = self.func(res)
-        if self.gaussian:
-            res *= self.gaussian(x)
-        if isinstance(self.factor, ArrayLike):
-            res *= self.factor
-        if out_space:
-            return map_signal(res, self.space, out_space)
+    def __call__(self, x, *, map=False):
+        res = self.model(x)
+        if self.nonlinearity:
+            res *= self.nonlinearity(self.offset)
         else:
-            return res
+            res += self.offset
+        if self.gaussian:
+            gsm = self.gaussian(x)
+            res *= gsm[None] if res.ndim == gsm.ndim + 1 else gsm
+        if isinstance(self.mask, ArrayLike):
+            res = jnp.where(self.mask, res, 0.0)
+        if map:
+            res = self.map_function(res)
+        return res
 
     @classmethod
-    def build(cls, *, space, i0, offset=0, prefix='sm', func='exp', zero_pad=1.0, gaussian=None):
+    def build(cls, *, grid, freq=[1.], params, prefix='sm', offset=0, nonlinearity='exp', gaussian=None):
         '''
         Build a SignalModel from the given parameters.
 
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
-        i0 : dict
-            Dictionary containing the prior model parameters of the signal (see prior_model)
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
+        freq : list or np.ndarray or Observation
+            Frequencies of the signal model. If an Observation is given, the frequencies are extracted from it, by default '[1.]'
+        params : dict
+            Dictionary containing the spectral model parameters of the signal (see spectral_model)
+        prefix : str, optional
+            Prefix for the model, by default 'sm'
         offset : float, optional
             Offset to add to the signal, by default 0
-        prefix : str, optional
-            Prefix for the model, by default 'sig'
-        func : str, optional
+        nonlinearity : str, optional
             Function to apply to the signal, by default 'exp'
-        zero_pad : float, optional
-            Zero padding factor, by default 1.0
-            -> pad the signal with zeros, 1.0 means no padding
         gaussian : dict, optional
             Dictionary containing the gaussian model parameters (see gaussian_model), by default None
             -> multiply the signal with a gaussian
         '''
-        if 'coordinates' in space:
-            space = PointSpace.build(**space)
+        from ..resolve.observation import Observation
+
+        if 'coordinates' in grid:
+            grid = PointGrid.build(**grid)
         else:
-            space = SignalSpace.build(**space)
-        
+            grid = SignalGrid.build(**grid)
+
+        if isinstance(freq, Observation):
+            freq = freq.freq
+        freq = to_shape(freq, (len(freq),), 'float64')
+
+        if nonlinearity:
+            nonlinearity = getattr(jnp, nonlinearity, None)
+
+        model = spectral_model(f'{prefix} ', grid, freq, nonlinearity, **params)
+
         offset = to_shape(offset, (), 'float64')
 
-        check_type(prefix, str)
+        if gaussian != None and isinstance(grid, SignalGrid):
+            gaussian, _ = prior_model(f'{prefix} gm ', grid, **gaussian)
 
-        check_type(zero_pad, (int, float))
-        pad_space, pad_func = space, None
-        if zero_pad != 1.0 and isinstance(space, SignalSpace):
-            pad_func = zero_pad_func(space, zero_pad)
-            pad_space = zero_pad * space
-        
-        i0, pspec = prior_model(f'{prefix} i0 ', pad_space, **i0)
-
-        if func:
-            func = getattr(jnp, func, None)
-
-        if gaussian != None and isinstance(space, SignalSpace):
-            gaussian, _ = prior_model(f'{prefix} gm ', space, **gaussian)
-
-        return cls(space, i0, offset, prefix, func, pad_func, gaussian, pspec)
+        return cls(grid, freq, model, prefix, offset, nonlinearity, gaussian)
     
+    def set_out_grid(self, out_grid):
+        check_type(out_grid, SignalGrid)
+        self.map_function = map_signal(self.grid, out_grid)
+        return
+
     @property
     def shape(self):
-        return self.space.shape
+        return extend_shape(1, self.freq, self.grid.shape)
     
     def set_offset(self, offset):
         '''
@@ -121,17 +124,50 @@ class SignalModel(Model):
         return
     
     def copy(self):
-        return SignalModel(self.space, self.i0, self.offset, self.prefix, self.func, self.zero_pad, self.gaussian, self.pspec)
+        return SignalModel(self.grid, self.freq, self.model, self.prefix, self.offset, self.nonlinearity, self.gaussian)
 
+    @property
+    def ref_freq_model(self):
+        '''Return the reference frequency model.'''
+        offset = self.offset[:,0] if self.offset.ndim == 4 else self.offset
+        return self._spectral_property('i0', 'reference_frequency_distribution', offset, self.nonlinearity, self.gaussian)
 
+    @property
+    def spectral_index(self):
+        '''Return the spectral index model.'''
+        return self._spectral_property('alpha', 'spectral_index_distribution', 0, None, None)
 
-def zero_pad_func(space, zero_pad=1):
-    '''Zero pad the signal with the given factor.'''
-    if zero_pad == 1:
-        return None
-    elif not 1 < zero_pad <= 2:
-        raise ValueError('zero_pad must be between 1 and 2')
-    
-    pad_space = zero_pad * space
-    pad_slice = tuple(slice((os-ss)//2, ss+(os-ss)//2) for os,ss in zip(pad_space.shape, space.shape))
-    return lambda x: x[pad_slice]
+    @property
+    def spectral_deviations(self):
+        '''Return the spectral deviations model.'''
+        return self._spectral_property('deviations', 'spectral_deviations_distribution', 0, None, None)
+
+    @property
+    def spectral_model(self):
+        '''Return the spectral model.'''
+        return self._spectral_property('', 'spectral_distribution', 0, None, None)
+
+    def _spectral_property(self, mfm_attr, ubik_attr, offset=0, nonlinearity=None, gaussian=None):
+        '''Helper function to create spectral properties.'''
+        if self.freq.size > 1:
+            model = self.model
+            n_copies = 1
+            if isinstance(model, VModel):
+                n_copies = model.target.shape[0]
+                model = model.model
+            if isinstance(model, MultiFrequencyModel):
+                if mfm_attr in ('alpha', 'deviations'):
+                    prop = getattr(model, mfm_attr)
+                elif mfm_attr == 'i0':
+                    prop = MultiFrequencyModel(model.i0, None, None, None, self.nonlinearity)
+                else:
+                    prop = MultiFrequencyModel(None, model.log_freq, model.alpha, model.deviations, None)
+            else:
+                prop = Model(lambda x: getattr(model, ubik_attr)(x), domain=model.domain, init=model.init)
+            if n_copies > 1:
+                prop = VModel(prop, n_copies)
+            freq = np.ones((1,)) if mfm_attr in ('i0', 'alpha') else self.freq
+            sig = SignalModel(self.grid, freq, prop, self.prefix, offset, nonlinearity, gaussian)
+            return sig
+        else:
+            raise ValueError(f'spectral properties are only defined for multi-frequency models.')

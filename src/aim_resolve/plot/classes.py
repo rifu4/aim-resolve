@@ -10,13 +10,13 @@ from .util import plot_figure, set_ticks
 def plot_classes(
         points_map = None,
         object_maps = None,
-        space = None,
+        grid = None,
         label = None,
         name = None,
         odir = None,
         cmap = 'inferno',
         ticks = 5,
-        plot_space = True,
+        plot_grid = True,
         plot_label = True,
         figsize = (5, 5),
         dpi = 100,
@@ -31,8 +31,8 @@ def plot_classes(
         The points map to plot. If not provided, a map of zersos will be created.
     object_maps : np.ndarray, optional
         The object maps to plot. If not provided, a map of zeros will be created.
-    space : str, optional
-        The space of the maps. Default is None.
+    grid : str, optional
+        The grid of the maps. Default is None.
     label : str, optional
         The label of the plot. Default is None.
     name : str, optional
@@ -43,8 +43,8 @@ def plot_classes(
         The colormap to use. Default is 'inferno'.
     ticks : int, optional
         The number of ticks to use. Default is 5. If set to 0, no ticks will be shown.
-    plot_space : bool, optional
-        Whether to plot the space of the array. Default is True.
+    plot_grid : bool, optional
+        Whether to plot the grid of the array. Default is True.
     plot_label : bool, optional
         Whether to plot the label of the array. Default is True.
     figsize : tuple, optional
@@ -95,6 +95,6 @@ def plot_classes(
     if plot_label and label:
         axes[-1].set_title(label)
 
-    set_ticks(axes[-1], space, ticks, plot_space)
+    set_ticks(axes[-1], grid, ticks, plot_grid)
 
     plot_figure(figure, odir, name)

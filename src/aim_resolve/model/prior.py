@@ -1,9 +1,8 @@
-from nifty8.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
+from nifty.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
 
 from .gaussian import gaussian_model
 from .integer import integer_model
 from .normal import normal_model
-from .space import SignalSpace, PointSpace
 from .util import check_type
 
 
@@ -19,7 +18,7 @@ IM_KEYS = {'i_min', 'i_max', 'step'}
 
 def prior_model(
         prefix,
-        space,
+        grid,
         n_copies = 1,
         **i0_params,
 ):
@@ -30,8 +29,8 @@ def prior_model(
     ----------
     prefix : str
         The prefix for the model.
-    space : SignalSpace or PointSpace
-        The space for the model.
+    grid : SignalGrid or PointGrid
+        The grid for the model.
     n_copies : int
         The number of copies for the model. Default is 1.
     i0_params : dict
@@ -44,55 +43,58 @@ def prior_model(
     pspec : Callable
         The power spectrum of the correlated field model. Otherwise None.
     '''
+    from .grid import SignalGrid, PointGrid
+    from ..img_data.space import SignalSpace, PointSpace
+
     check_type(prefix, str)
-    check_type(space, (SignalSpace, PointSpace))
+    check_type(grid, (SignalGrid, PointGrid, SignalSpace, PointSpace))
     check_type(n_copies, int)
 
     pspec = None
     match set(i0_params.keys()):
         case k if k.issubset(CFM_KEYS):
-            check_type(space, SignalSpace)
+            check_type(grid, (SignalGrid, SignalSpace))
             model, pspec = correlated_field_model(
                 prefix=prefix,
-                shape=space.shape,
-                distances=space.distances,
+                shape=grid.shape,
+                distances=grid.distances,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(NM_KEYS):
             model = normal_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(IGM_KEYS):
             model = inverse_gamma_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(GSM_KEYS):
-            check_type(space, SignalSpace)
+            check_type(grid, (SignalGrid, SignalSpace))
             model = gaussian_model(
                 prefix=prefix,
-                shape=space.shape,
-                distances=space.distances,
+                shape=grid.shape,
+                distances=grid.distances,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(UM_KEYS):
             model = uniform_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
         case k if k.issubset(IM_KEYS):
             model = integer_model(
                 prefix=prefix,
-                shape=space.shape,
+                shape=grid.shape,
                 n_copies=n_copies,
                 **i0_params
             )
@@ -107,7 +109,7 @@ def correlated_field_model(*,
         prefix,
         shape,
         distances,
-        offset_mean,
+        offset_mean = 0,
         offset_std,
         fluctuations,
         loglogavgslope,
@@ -117,7 +119,7 @@ def correlated_field_model(*,
         n_copies = 1,
 ):
     '''
-    Initialize the correlated field model of nifty8.re (correlation model).
+    Initialize the correlated field model of nifty.re (correlation model).
     
     Parameters
     ----------
@@ -130,15 +132,15 @@ def correlated_field_model(*,
     offset_mean : float
         The offset mean parameter
     offset_std : tuple
-        The offset standard deviation parameter (nifty8.re.LognormalPrior)
+        The offset standard deviation parameter (nifty.re.LognormalPrior)
     fluctuations : tuple
-        The fluctuations parameter (nifty8.re.LognormalPrior)
+        The fluctuations parameter (nifty.re.LognormalPrior)
     loglogavgslope : float
-        The log-log average slope parameter (nifty8.re.NormalPrior)
+        The log-log average slope parameter (nifty.re.NormalPrior)
     flexibility : float, optional
-        The flexibility parameter (nifty8.re.LognormalPrior). Default is None.
+        The flexibility parameter (nifty.re.LognormalPrior). Default is None.
     asperity : float, optional
-        The asperity parameter (nifty8.re.LognormalPrior). Default is None.
+        The asperity parameter (nifty.re.LognormalPrior). Default is None.
     non_parametric_kind : str, optional
         Either use a power or an amplitude spectrum. Default is 'power'.
     n_copies : int, optional

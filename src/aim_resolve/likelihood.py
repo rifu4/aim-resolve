@@ -2,11 +2,11 @@ import jax.numpy as jnp
 import numpy as np
 from functools import reduce
 from nifty8 import makeOp
-from nifty8.re import Model
 from operator import add
 
+from .fast_resolve.response import build_exact_responses
+from .fast_resolve.convolve import PSFConvolve, NInvConvolve
 from .model.noise import NoiseModel
-from .resolve.fast import build_exact_responses, build_approximation_kernels
 from .resolve.model import ComponentResponse
 from .resolve.observation import Observation
 
@@ -34,11 +34,13 @@ def image_likelihood(*,
 
     '''
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
-    noise_model = NoiseModel.build(shape=data.space.shape, **noise)
+    noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
+
+    sky.set_out_grid(data.grid)
 
     lh_dct = dict(
         data = data.noisy_val,
-        model = Model(lambda x: sky(x, out_space=data.space), domain=sky.domain, init=sky.init),
+        model = sky,
         noise_cov_inv = None,
         noise_std_inv = (max_std * np.max(data.val))**-1,
         noise_model = noise_model,
@@ -87,11 +89,12 @@ def radio_likelihood(*,
 def fast_likelihood(*,
         sky,
         data,
-        psf_pixels = 3000,
-        response_kernel = None,
-        noise_kernel = None,
+        psf_kernel_fn = '',
+        n_inv_kernel_fn = '',
         noise = dict(parameters=dict()),
+        split = 0,
         fun = 'fast_radio',
+        **kwargs,
 ):
     '''
     Generate a fast likelihood function for the radio data (fast-resolve).
@@ -113,33 +116,46 @@ def fast_likelihood(*,
     fun : str, optional
         Used to differentiate between the different likelihood functions.
     ''' 
-    if isinstance(data, Observation):
-        data = data.to_resolve_obs()
-    obs = data.to_double_precision()
+    observations = [data, ]
+    for k,v in filter(lambda item: 'data' in item[0], kwargs.items()):
+        observations.append(v)
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.space, psf_pixels)
+    RNRs, RNR_ls, data = [], [], []
+    for i,obs in enumerate(observations):
+        if isinstance(obs, Observation):
+            obs = obs.to_resolve_obs()
+        obs = obs.to_double_precision()
 
-    noise_model = NoiseModel.build(shape=R.domain.shape, **noise)
+        R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
+        RNRs.append(RNR)
+        RNR_ls.append(RNR_l)
 
-    RNR_approx, N_inv_approx = build_approximation_kernels(
-        RNR = RNR,
-        RNR_l = RNR_l,
-        response_kernel_fn = response_kernel,
-        noise_kernel_fn = noise_kernel,
-        noise_model = noise_model,
+        N_inv = makeOp(obs.weight)
+        data.append(R.adjoint(N_inv(obs.vis)).val)
+
+    psf_conv = PSFConvolve.build(
+        sky = sky,
+        RNR_l = RNR_ls[0] if len(RNR_ls) == 1 else RNR_ls,
+        psf_kernel_fn = psf_kernel_fn,
+        split = split,
     )
 
-    N_inv = makeOp(obs.weight)
-    data = R.adjoint(N_inv(obs.vis))
-    data = jnp.array(data.val)
+    sky_response = NInvConvolve.build(
+        psf_conv = psf_conv,
+        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        n_inv_kernel_fn = n_inv_kernel_fn,
+        noise = noise,
+    )
+
+    data = np.concatenate(data, axis=0)
+    print('dirty image shape:', data.shape)
 
     lh_dct = dict(
-        data = data,
-        model = sky,
-        R = RNR,
-        R_approx = RNR_approx,
-        N_inv_sqrt = N_inv_approx,
-        noise_model = noise_model,
+        data = jnp.array(data),
+        sky = sky,
+        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        sky_response = sky_response,
+        noise_model = sky_response.noise_model,
     )
     return lh_dct
 

@@ -1,11 +1,11 @@
 import jax.numpy as jnp
-from nifty8.re import Model, Vector, VModel
+from nifty.re import Model, Vector, VModel
 from typing import Callable
 
 from ..model.integer import integer_model
-from ..model.map import map_tiles
+from .map import map_tiles
 from ..model.prior import prior_model, uniform_model
-from ..model.space import SignalSpace
+from .space import SignalSpace
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 
