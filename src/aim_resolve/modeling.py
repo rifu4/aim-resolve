@@ -173,14 +173,14 @@ def draw_boxes(cfg_sections, grid, it):
 
     for k,v in cfg_sections.items():
         if 'sky_t' in k and f'.{it}' in k:
-            si = SignalGrid.build(**v['tile_grid'])
-            xi = np.ones((si.n_copies,)+si.shape)
-            xi[:, 1:-1, 1:-1] = 0
-            box_map += np.array(map_signal(si, grid)(xi))
+            grd_i = SignalGrid.build(**v['tile_grid'])
+            val_i = np.ones((grd_i.n_copies,) + grd_i.shape)
+            val_i[:, 1:-1, 1:-1] = 0
+            box_map += np.squeeze(map_signal(grd_i, grid)(val_i))
         elif 'sky_o' in k and f'.{it}' in k:
-            si = SignalGrid.build(**v['grid'])
-            xi = np.ones(si.shape)
-            xi[1:-1, 1:-1] = 0
-            box_map += np.array(map_signal(si, grid)(xi))
+            grd_i = SignalGrid.build(**v['grid'])
+            val_i = np.ones(grd_i.shape)
+            val_i[1:-1, 1:-1] = 0
+            box_map += np.array(map_signal(grd_i, grid)(val_i))
     
     return box_map.clip(0,1)
