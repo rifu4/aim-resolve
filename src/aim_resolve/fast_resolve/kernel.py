@@ -5,6 +5,14 @@ import numpy as np
 
 def build_psf_kernel(RNR_l):
     '''Build the psf kernel for a padded RNR operator.'''
+    if isinstance(RNR_l, list):
+        kernels = []
+        for rnr_l in RNR_l:
+            if len(rnr_l.domain.shape) != 3:
+                raise ValueError("rnr_l domain must have 3 dimensions.")
+            kernels.append(build_psf_kernel(rnr_l))
+        return np.concatenate(kernels, axis=0)
+    
     dom_l = RNR_l.domain
     sdom_l = ift.DomainTuple.make(dom_l[-1:])
     shp_l = sdom_l.shape
@@ -21,6 +29,14 @@ def build_psf_kernel(RNR_l):
 
 def build_n_inv_kernel(RNR, relativ_min_val=1e-3):
     '''Build the inverse noise kernel for the given RNR operator.'''
+    if isinstance(RNR, list):
+        n_inv_kernels = []
+        for rnr in RNR:
+            if len(rnr.domain.shape) != 3:
+                raise ValueError("rnr domain must have 3 dimensions.")
+            n_inv_kernels.append(build_n_inv_kernel(rnr))
+        return np.concatenate(n_inv_kernels, axis=0)
+
     dom = RNR.domain
     sdom = ift.DomainTuple.make(dom[-1:])
     shp = sdom.shape

@@ -23,6 +23,8 @@ def build_exact_responses(
     import resolve as rve
 
     sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)
+    if freq.size > 1:
+        freq = freq[(freq >= observation.freq.min()) & (freq <= observation.freq.max())]
     fdom = rve.IRGSpace(freq)
     sky_dom = rve.default_sky_domain(sdom=sdom, fdom=fdom)
     R = rve.InterferometryResponse(observation, sky_dom, True, 1e-9, verbosity=0, nthreads=8)
@@ -46,3 +48,18 @@ def build_exact_responses(
     RNR_l = R_l.adjoint @ N_inv @ R_l
 
     return R, R_l, RNR, RNR_l
+
+
+
+def apply_exact_response(RNR, val):
+    '''Apply the exact `RNR` response for fast-resolve.'''
+    results, idx = [], 0
+    if isinstance(RNR, list):
+        for rnr in RNR:
+            if len(rnr.domain.shape) != 3:
+                raise ValueError("rnr domain must have 3 dimensions.")
+            results.append(apply_exact_response(rnr, val[idx : idx+rnr.domain.shape[0]]))
+            idx += rnr.domain.shape[0]
+        return np.concatenate(results, axis=0)
+    
+    return RNR(ift.makeField(RNR.domain, np.array(val))).val

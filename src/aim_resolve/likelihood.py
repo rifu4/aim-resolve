@@ -2,7 +2,6 @@ import jax.numpy as jnp
 import numpy as np
 from functools import reduce
 from nifty8 import makeOp
-from nifty.re import Model
 from operator import add
 
 from .fast_resolve.response import build_exact_responses
@@ -117,34 +116,44 @@ def fast_likelihood(*,
     fun : str, optional
         Used to differentiate between the different likelihood functions.
     ''' 
-    if isinstance(data, Observation):
-        data = data.to_resolve_obs()
-    obs = data.to_double_precision()
+    observations = [data, ]
+    for k,v in filter(lambda item: 'data' in item[0], kwargs.items()):
+        observations.append(v)
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
+    RNRs, RNR_ls, data = [], [], []
+    for i,obs in enumerate(observations):
+        if isinstance(obs, Observation):
+            obs = obs.to_resolve_obs()
+        obs = obs.to_double_precision()
+
+        R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
+        RNRs.append(RNR)
+        RNR_ls.append(RNR_l)
+
+        N_inv = makeOp(obs.weight)
+        data.append(R.adjoint(N_inv(obs.vis)).val)
 
     psf_conv = PSFConvolve.build(
         sky = sky,
-        RNR_l = RNR_l,
+        RNR_l = RNR_ls[0] if len(RNR_ls) == 1 else RNR_ls,
         psf_kernel_fn = psf_kernel_fn,
         split = split,
     )
 
     sky_response = NInvConvolve.build(
         psf_conv = psf_conv,
-        RNR = RNR,
+        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
         n_inv_kernel_fn = n_inv_kernel_fn,
         noise = noise,
     )
 
-    N_inv = makeOp(obs.weight)
-    data = R.adjoint(N_inv(obs.vis))
-    data = jnp.array(data.val)
+    data = np.concatenate(data, axis=0)
+    print('dirty image shape:', data.shape)
 
     lh_dct = dict(
-        data = data,
+        data = jnp.array(data),
         sky = sky,
-        RNR = RNR,
+        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
         sky_response = sky_response,
         noise_model = sky_response.noise_model,
     )

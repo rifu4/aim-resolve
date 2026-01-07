@@ -5,8 +5,6 @@ from os import makedirs
 from typing import Callable, Optional, Union
 
 import jax
-import nifty8 as ift
-import numpy as np
 from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
@@ -14,6 +12,7 @@ from nifty.re import Gaussian, Model, OptimizeVIState, Samples, logger
 from nifty.re.optimize import _newton_cg
 from nifty.re.conjugate_gradient import cg as _cg
 
+from .response import apply_exact_response
 from ..optimize.opt_kl import get_at_nit, _reduce, SMPL_MODE_GENERIC_TYP
 from ..optimize.opt_vi import MyOptimizeVI
 from ..optimize.samples import MySamples, get_samples
@@ -213,8 +212,7 @@ def fast_optimize_kl(
 
         if opt_vi_st.nit > 0:
             sub_val = samples.mean(lh_i['sky'])
-            post_mean = ift.makeField(lh_i['RNR'].domain, np.array(sub_val))
-            residual_data = lh_i['data'] - lh_i['RNR'](post_mean).val
+            residual_data = lh_i['data'] - apply_exact_response(lh_i['RNR'], sub_val)
 
         lh_i['old_reconstruction'] = sub_val
         lh_i['residual_data'] = residual_data
