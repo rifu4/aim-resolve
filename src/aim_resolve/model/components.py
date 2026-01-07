@@ -93,6 +93,9 @@ class ComponentModel(Model):
         for m in self.models:
             res += m.map_function(np.ones(m.shape))
         return res > 0
+    
+    def copy(self):
+        return ComponentModel(self.grid, self.background, self.prefix, *self.components)
 
     @property
     def background(self):
