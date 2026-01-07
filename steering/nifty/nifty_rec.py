@@ -45,11 +45,13 @@ def main(base, config, mode, cuda_device):
         for sky in sky_models:
             if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
                 sky_val = samples.mean(sky)
-                sky_min = sky_val.max()/1e4
+                sky_min = sky_val.max()/5e3
                 aim.plot_arrays(sky_val, name=f'{nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
                 if sky.freq.size > 1:
-                     sky_ref = sky_val[sky.freq.size // 2]
+                     sky_ref = samples.mean(sky.ref_freq_model)
                      aim.plot_arrays(sky_ref, name=f'{nit}_{sky.prefix}_ref', odir=odir, norm='log', rows=1, vmin=sky_min)
+                     if isinstance(sky, aim.ComponentModel) and len(sky.models) > 1:
+                         sky = sky.points_and_objects
                      alpha = samples.mean(sky.spectral_index)
                      contours = {'array': sky_ref, 'colors': 'white', 'levels': [sky_val.max() / d for d in [1e3, 1e2, 10]], 'linewidths': 0.25}
                      aim.plot_arrays(np.where(sky_ref > sky_min, alpha, np.nan), name=f'{nit}_{sky.prefix}_alpha', odir=odir, contour=contours)
