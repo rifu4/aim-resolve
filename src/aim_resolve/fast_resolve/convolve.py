@@ -92,6 +92,7 @@ class PSFSplitConvolve(Model):
     def __call__(self, x, old_rec=0):
         res = self.sky(x) - old_rec
         res = split_fft_convolve(res, self.fft_kernel, self.padder1, self.padder2, self.slicer1, self.slicer2)
+        res = jnp.squeeze(res)
         return res
 
 
