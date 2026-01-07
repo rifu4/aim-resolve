@@ -377,13 +377,13 @@ def transition_zoom(*,
 
     # initialize an empty position tree
     ptree = {}
-    keys = list(random.split(key, len(sky_new.models)))
+    keys = list(random.split(key, len(sky_new.models)+1))
 
     # copy over matching model components
     for (sky_oi, sky_ni) in zip(sky_old.models, sky_new.models):
         if not sky_ni.grid in sky_oi.grid and sky_oi.grid in sky_ni.grid:
             raise ValueError('Old and new sky model components have to match.')
-        rec_oi = samples.mean(sky_oi)
+        rec_oi = map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
         pos_ci = optimize_and_plot(
             key = keys.pop(),
             sky = sky_ni,
@@ -394,6 +394,18 @@ def transition_zoom(*,
         )
         ptree |= pos_ci.tree
 
+    rec_sky = map_signal(sky_old.grid, sky_new.grid)(samples.mean(sky_old))
+    pos_sky = optimize_and_plot(
+        key = keys.pop(),
+        sky = sky_new,
+        data = rec_sky,
+        noise = noise.copy(),
+        pos = Vector(ptree),
+        opt_dct = None,
+        plot_dct = plot_dct | dict(name=f'{it}_{sky_new.prefix}.png'),
+    )
+    ptree = pos_sky.tree
+
     # load learned noise scaling of the previous iteration if available
     nm_old = lh_old['noise_model']
     nm_new = lh_new['noise_model']
@@ -401,13 +413,13 @@ def transition_zoom(*,
         ptree[nm_new.prefix] = map_signal(sky_old.grid, sky_new.grid)(domain_tree(samples)[nm_old.prefix])
 
     # print ptree
-    # print('New model parameters:')
-    # for k,v in ptree.items():
-    #     print(f'  {k}:', v.shape)
+    print('New model parameters:')
+    for k,v in ptree.items():
+        print(f'  {k}:', v.shape)
 
     samples_new = MySamples(pos=Vector(ptree), samples=None, keys=None)
 
-    return samples_new
+    return samples_new, None
 
 
 
