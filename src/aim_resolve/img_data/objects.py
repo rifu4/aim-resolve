@@ -46,8 +46,11 @@ class ObjectGenerator(Model):
         zoom = self.grid.shape[0] / mk_val.shape[0]
         if self.zoom:
             raise NotImplementedError("Zoom not implemented yet.")
+        
+        in_shape = out_shape = tuple(int(v*zoom) for v in mk_val.shape) if zoom < 1 else mk_val.shape
+        in_start = out_start = jnp.array([0, 0])
 
-        mk_val = map_array(mk_val, 1, 1, mk_val.shape, self.grid.shape, jnp.array([0,0]), jnp.array([0,0]), zoom)
+        mk_val = map_array(mk_val, 1, 1, in_shape, out_shape, in_start, out_start, zoom)
 
         i0_val = self.i0(x)
         if self.func:
