@@ -1,5 +1,5 @@
-from .data import image_data, radio_data
-from .likelihood import image_likelihood, radio_likelihood, fast_likelihood, likelihood_sum
+from .data import data_func
+from .likelihood import likelihood_func
 from .model.components import ComponentModel
 from .model.points import PointModel
 from .model.signal import SignalModel
@@ -29,26 +29,10 @@ def get_builders(sections : dict):
         sec = str(sec)
 
         if sec.startswith('data') or sec.startswith('obs'):
-            match val['fun']:
-                case 'exp':
-                    builders[sec] = image_data
-                case f if 'radio' in f:
-                    builders[sec] = radio_data
-                case _:
-                    raise ValueError('`fun` has to be either `exp`, `radio`, or `fast_radio`')
+            builders[sec] = data_func
 
-        elif sec.startswith('lh'):
-            match val['fun']:
-                case 'exp':
-                    builders[sec] = image_likelihood
-                case f if 'fast' in f and 'radio' in f:
-                    builders[sec] = fast_likelihood
-                case 'radio':
-                    builders[sec] = radio_likelihood
-                case 'sum':
-                    builders[sec] = likelihood_sum
-                case _:
-                    raise ValueError('`fun` has to be either `exp`, `radio`, `fast_radio`, or `sum`')
+        elif sec.startswith('lh') or sec.startswith('likelihood'):
+            builders[sec] = likelihood_func
 
         elif sec.startswith('sky') or sec.startswith('sig') or sec.startswith('model'):
             match val:
@@ -63,7 +47,7 @@ def get_builders(sections : dict):
                 case _:
                     raise ValueError(f'Cannot determine the type of the sky model `{sec}`')
 
-        elif sec.startswith('trans'):
+        elif sec.startswith('trans') or sec.startswith('transition'):
             builders[sec] = transition_func
 
     return builders

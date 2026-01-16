@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 from jax import random
+from functools import partial
 from nifty.re import Model, Vector, random_like
 
 from .mask import masks_from_model, masks_to_boxes, remove_freq_axis
@@ -35,30 +36,21 @@ def transition_func(
         Additional keyword arguments passed to the transition functions (see transition functions).
     '''
     if mode == 'anew':
-        def tr_f(key, *_):
-            return transition_anew(key=key, **kwargs)
-      
+        return partial(transition_anew, **kwargs)
     elif mode == 'freq':
-        def tr_f(key, samples, *_):
-            return transition_freq(key=key, samples=samples, **kwargs)
-
+        return partial(transition_freq, **kwargs)
     elif mode == 'addt':
-        def tr_f(key, samples, it):
-            return transition_util(func=transition_addt, key=key, samples=samples, it=it, **kwargs)
-        
+        return partial(transition_util, func=transition_addt, **kwargs)
     elif mode == 'zoom':
-        def tr_f(key, samples, it):
-            return transition_util(func=transition_zoom, key=key, samples=samples, it=it, **kwargs)
-        
+        return partial(transition_util, func=transition_zoom, **kwargs)
     else:
         raise TypeError(f'Unknown transition mode. Available modes are `anew`, `freq`, `addt` and `zoom`, but got mode `{mode}`.')
 
-    return tr_f
 
 
-
-def transition_anew(*,
+def transition_anew(
         key,
+        *args,
         lh_new,
         **kwargs,
 ):
@@ -88,9 +80,10 @@ def transition_anew(*,
 
 
 
-def transition_freq(*,
+def transition_freq(
         key,
         samples,
+        *args,
         lh_old,
         lh_new,
         **kwargs,
@@ -146,12 +139,12 @@ def transition_freq(*,
 
 
 
-def transition_util(*, 
-        func,
+def transition_util(
         key,
         samples,
         it,
-        lh_old,
+        *,
+        func,
         lh_new,
         odir = None,
         **kwargs,
@@ -169,8 +162,6 @@ def transition_util(*,
             Samples from the previous iteration.
         it : int
             Current iteration number of the optimization.
-        lh_old : nifty.re.Likelihood
-            Likelihood model for the previous optimiztion iteration.
         lh_new : nifty.re.Likelihood
             Likelihood model for the new optimiztion iteration.
         odir : str
@@ -187,7 +178,7 @@ def transition_util(*,
             if domain_keys(samples) == domain_keys(models):
                 return samples
         
-        samples, *_ = func(key=key, samples=samples, it=it, lh_old=lh_old, lh_new=lh_new, odir=odir, **kwargs)
+        samples, *_ = func(key, samples, it, lh_new=lh_new, odir=odir, **kwargs)
         
         if pos_fn:
             pickle.dump(samples, open(pos_fn, "wb"))
@@ -196,10 +187,11 @@ def transition_util(*,
 
 
 
-def transition_addt(*,
+def transition_addt(
         key,
         samples,
         it,
+        *,
         lh_old,
         lh_new,
         opt_dct,
@@ -238,8 +230,8 @@ def transition_addt(*,
     plot_dct : dict
         Dictionary containing the plotting parameters.
     '''
-    sky_old = lh_old['sky']
-    sky_new = lh_new['sky']
+    sky_old = lh_old['sky_model']
+    sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
     check_type(sky_old, (ComponentModel, SignalModel, PointModel, TileModel))
     check_type(sky_new, ComponentModel)
@@ -332,10 +324,11 @@ def transition_addt(*,
 
 
 
-def transition_zoom(*,
+def transition_zoom(
         key,
         samples,
         it,
+        *,
         lh_old,
         lh_new,
         opt_dct,
@@ -368,8 +361,8 @@ def transition_zoom(*,
     plot_dct : dict
         Dictionary containing the plotting parameters.
     '''
-    sky_old = lh_old['sky']
-    sky_new = lh_new['sky']
+    sky_old = lh_old['sky_model']
+    sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
     check_type(sky_old, ComponentModel)
     check_type(sky_new, ComponentModel)
@@ -444,7 +437,7 @@ def optimize_and_plot(
 
         lh_dct = dict(
             data = data,
-            model = sky,
+            sky_response = sky,
             noise_cov_inv = None,
             noise_std_inv = noise_std**-1,
             noise_model = noise_model,
