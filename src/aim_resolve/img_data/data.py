@@ -244,7 +244,7 @@ class ImageData():
             f'prefix:\t{self.prefix}',
             f'image shape:\t{self.val.shape}',
             f'# pixel:\t{self.val.size}',
-            f'grid fov:\t{tuple(self.grid.fov)}',
+            f'grid fov:\t{tuple(self.grid.fov.tolist())}',
         ]
         return '\n'.join(['ImageData:'] + [f'  {ss}' for ss in s])
     
