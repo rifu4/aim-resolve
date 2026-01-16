@@ -56,11 +56,12 @@ class TileGenerator(Model):
 
         n_copies = nc_mask.shape[0]
         in_shape = x_val.shape[-2:]
-        out_coos = self.centers(x)
-        in_coos = jnp.zeros_like(out_coos, dtype='int32')
+        out_shape = self.grid.shape
+        out_start = self.centers(x)
+        in_start = jnp.zeros_like(out_start, dtype='int32')
 
-        x_val = map_array(x_val, n_copies, 1, in_shape, self.grid.shape, in_coos, out_coos, 1)
-        y_val = map_array(y_val, n_copies, 1, in_shape, self.grid.shape, in_coos, out_coos, 1)
+        x_val = map_array(x_val, n_copies, 1, in_shape, out_shape, in_start, out_start, 1)
+        y_val = map_array(y_val, n_copies, 1, in_shape, out_shape, in_start, out_start, 1)
         
         return jnp.stack((x_val, jnp.zeros(self.grid.shape), y_val), axis=0)
 

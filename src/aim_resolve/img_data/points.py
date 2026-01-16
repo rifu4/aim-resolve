@@ -44,11 +44,13 @@ class PointGenerator(Model):
             i0_val = self.func(i0_val)
 
         n_copies = nc_mask.shape[0]
-        out_coos = self.coordinates(x)
-        in_coos = jnp.zeros_like(out_coos, dtype='int32')
+        in_shape = (1, 1)
+        out_shape = self.grid.shape
+        out_start = self.coordinates(x)
+        in_start = jnp.zeros_like(out_start, dtype='int32')
 
-        x_val = map_array(i0_val * nc_mask, n_copies, n_copies, (1,1), self.grid.shape, in_coos, out_coos, 1)
-        y_val = map_array(nc_mask, n_copies, n_copies, (1,1), self.grid.shape, in_coos, out_coos, 1)
+        x_val = map_array(i0_val * nc_mask, n_copies, n_copies, in_shape, out_shape, in_start, out_start, 1)
+        y_val = map_array(nc_mask, n_copies, n_copies, in_shape, out_shape, in_start, out_start, 1)
 
         bl_val = random.permutation(key, self.blur, axis=0)[:i0_val.shape[0]]
         vmap_filter = vmap(gaussian_filter2d, in_axes=(0, 0, None, None))
