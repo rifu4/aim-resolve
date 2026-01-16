@@ -27,7 +27,7 @@ def get_at_nit(c, nit):
     return c
 
 
-def my_lh(*, model, data, noise_cov_inv=None, noise_std_inv=None, noise_model=None):
+def my_lh(*, data, sky_response, noise_cov_inv=None, noise_std_inv=None, noise_model=None, **kwargs):
     '''Likelihood function that is passed to the OptimizeVI class. Builds a likelihood at each iteration.'''
 
     if noise_cov_inv:
@@ -37,13 +37,13 @@ def my_lh(*, model, data, noise_cov_inv=None, noise_std_inv=None, noise_model=No
 
     logger.setLevel(logging.ERROR)
     if noise_model and noise_model.scaling:
-        res = lambda x: noise_model(x) * noise_std_inv * (data - model(x))
+        res = lambda x: noise_model(x) * noise_std_inv * (data - sky_response(x))
         lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     elif noise_model and noise_model.varcov:
-        res = lambda x: (noise_std_inv * (data - model(x)), noise_model(x))
+        res = lambda x: (noise_std_inv * (data - sky_response(x)), noise_model(x))
         lh = VariableCovarianceGaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     else:
-        res = lambda x: noise_std_inv * (data - model(x))
+        res = lambda x: noise_std_inv * (data - sky_response(x))
         lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     logger.setLevel(logging.DEBUG)
     
@@ -97,8 +97,9 @@ def optimize_kl(
     ----------
     likelihood: dict or callable
         Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
-        - model: Model
         - data: array-like
+        (- sky_model: Model)
+        - sky_response: Model
         - noise_cov_inv: callable or array-like
         - noise_std_inv: callable or array-like
         - noise_model: Model or None
