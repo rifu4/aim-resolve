@@ -22,7 +22,7 @@ def likelihood_func(
     Parameters:
     -----------
     mode : str
-        Likelihood mode. Available modes are 'image', `fast`, and `radio`.
+        Likelihood mode. Available modes are 'image', `fast`, `radio`, `sum`.
     kwargs : dict
         Additional keyword arguments passed to the likelihood functions (see below).
     '''

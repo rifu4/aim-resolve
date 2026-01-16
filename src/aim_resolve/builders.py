@@ -18,11 +18,11 @@ def get_builders(sections : dict):
         Dictionary containing the sections of the model.
         -> automatically selects the correct function to use depending on the section key.
 
-    Use correct keys to indicate the type of model:
-    - data or obs: data model (exp, radio)
-    - lh: likelihood function (exp, radio, fast_radio, sum)
-    - sky or sig or model: sky model (component, point, tile, signal)
-    - trans: transition function
+    For the sky sections the used keys indicate the type of the sky model.
+    For the other section it is necessary to specify the `mode`:
+    - data: `image` or `radio`
+    - lh: `image`, `fast`, `radio` or `sum`
+    - trans: `anew`, `freq`, `addt` or `zoom`
     '''
     builders = {}
     for sec,val in sections.items():
