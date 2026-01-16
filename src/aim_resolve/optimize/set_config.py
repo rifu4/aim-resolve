@@ -80,8 +80,9 @@ class SetupKLConfig:
 
         n_dct = {}
         for key in upd_keys:
-            k = sorted([k for k in dct if key+'.' in k])[-1]
-            n_dct[key+_it] = dct[k]
+            sor_keys = sorted([k for k in dct if key+'.' in k])
+            if len(sor_keys) > 0:
+                n_dct[key+_it] = dct[sor_keys[-1]]
         
         n_dct = update_it(n_dct, it, fix_keys)
         self.it += 1
