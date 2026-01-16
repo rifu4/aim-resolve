@@ -20,7 +20,7 @@ MF_KEYS = {'i0', 'alpha', 'deviations', 'nonlinearity', 'ref_freq_index'}
 
 def spectral_model(
         prefix,
-        space,
+        grid,
         freq = np.ones((1,)),
         nonlinearity = None,
         n_copies = 1,
@@ -33,8 +33,8 @@ def spectral_model(
     ----------
     prefix : str
         The prefix for the model.
-    space : SignalSpace or PointSpace
-        The space for the model.
+    grid : SignalGrid or PointGrid
+        The grid for the model.
     freq : np.ndarray
         The freq of the model.
     nonlinearity : str, optional
@@ -50,18 +50,18 @@ def spectral_model(
         The initialized model.
     '''
     check_type(prefix, str)
-    check_type(space, (SignalGrid, PointGrid))
+    check_type(grid, (SignalGrid, PointGrid))
     check_type(freq, np.ndarray)
     check_type(nonlinearity, (Callable, type(None)))
     check_type(n_copies, int)
 
     match set(params.keys()):
         case k if k.issubset(UBIK_KEYS):
-            check_type(space, SignalGrid)
+            check_type(grid, SignalGrid)
             check_type(nonlinearity, Callable)
             model = spectral_ubik_model(
                 prefix=prefix,
-                space=space,
+                grid=grid,
                 freq=freq,
                 nonlinearity=nonlinearity,
                 n_copies=n_copies,
@@ -70,7 +70,7 @@ def spectral_model(
         case k if k.issubset(MF_KEYS):
             model = spectral_prior_model(
                 prefix=prefix,
-                space=space,
+                grid=grid,
                 freq=freq,
                 nonlinearity=nonlinearity,
                 n_copies=n_copies,
@@ -86,7 +86,7 @@ def spectral_model(
 
 def spectral_ubik_model(*,
         prefix,
-        space,
+        grid,
         freq,
         zero_mode,
         spatial_amplitude,
@@ -97,7 +97,7 @@ def spectral_ubik_model(*,
         ref_freq_index = None,
         n_copies = 1,
     ):
-    '''Function to create a diffuse signal model on a specific space using the ubik spectral sky model.'''
+    '''Function to create a diffuse signal model on a specific grid using the ubik spectral sky model.'''
     if freq.size == 1:
         raise ValueError('Need at least two frequencies for spectral ubik model.')
     
@@ -106,8 +106,8 @@ def spectral_ubik_model(*,
 
     model = build_simple_spectral_sky(
         prefix,
-        space.shape,
-        space.distances,
+        grid.shape,
+        grid.distances,
         log_freq,
         ref_freq_index,
         zero_mode,
@@ -127,7 +127,7 @@ def spectral_ubik_model(*,
 
 def spectral_prior_model(*,
         prefix,
-        space,
+        grid,
         freq = np.ones((1,)),
         i0,
         alpha = None,
@@ -136,8 +136,8 @@ def spectral_prior_model(*,
         ref_freq_index = None,
         n_copies = 1,
 ):
-    '''Function to create a single- or multi-frequency diffuse or point signal model on a specific space.'''
-    i0, _ = prior_model(f'{prefix}i0 ', space, **i0)
+    '''Function to create a single- or multi-frequency diffuse or point signal model on a specific grid.'''
+    i0, _ = prior_model(f'{prefix}i0 ', grid, **i0)
 
     if freq.size == 1:
         model = MultiFrequencyModel(i0, nonlinearity=nonlinearity)
@@ -150,11 +150,11 @@ def spectral_prior_model(*,
         if not alpha:
             raise ValueError('Need alpha parameters to build multi-frequency model.')
 
-        alpha, _ = prior_model(f'{prefix}alpha ', space, **alpha)
+        alpha, _ = prior_model(f'{prefix}alpha ', grid, **alpha)
 
         if deviations:
             deviations = build_frequency_deviations_model_with_degeneracies(
-                space.shape,
+                grid.shape,
                 log_freq,
                 ref_freq_index,
                 deviations,
