@@ -73,7 +73,6 @@ def map_array(in_array, in_copies, out_copies, in_shape, out_shape, in_start, ou
             in_array /= int(1/zoom)**2
         elif zoom < 1:
             in_array = downsample(in_array, int(1/zoom))
-            in_shape = in_array.shape[-2:]
 
         match (in_array.ndim, in_copies, out_copies):
             # (x, y) -> (x', y')
