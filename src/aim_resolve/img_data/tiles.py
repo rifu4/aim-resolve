@@ -2,10 +2,10 @@ import jax.numpy as jnp
 from nifty.re import Model, Vector, VModel
 from typing import Callable
 
+from ..model.grid import SignalGrid
 from ..model.integer import integer_model
-from .map import map_tiles
-from ..model.prior import prior_model, uniform_model
-from .space import SignalSpace
+from ..model.map import map_array
+from ..model.prior import prior_model
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 
@@ -14,15 +14,15 @@ from ..optimize.samples import domain_tree, model_init
 class TileGenerator(Model):
     '''Generate a tile model. Use `build` function to create the model.'''
 
-    def __init__(self, space, i0, centers, n_copies, gaussian=None, func=jnp.exp):
-        check_type(space, SignalSpace)
+    def __init__(self, grid, i0, centers, n_copies, gaussian=None, func=jnp.exp):
+        check_type(grid, SignalGrid)
         check_type(i0, (Model, VModel))
         check_type(centers, Model)
         check_type(n_copies, Model)
         check_type(gaussian, (Model, VModel, type(None)))
         check_type(func, (Callable, type(None)))
 
-        self.space = space
+        self.grid = grid
         self.i0 = i0
         self.centers = centers
         self.n_copies = n_copies
@@ -54,14 +54,18 @@ class TileGenerator(Model):
 
         y_val = jnp.where(y_val > 0.1, 1, 0)
 
-        rot = jnp.zeros(i0_val.shape[0])
-        x_val = map_tiles(x_val, self.space.dis, self.centers(x), rot, self.space, i0_val.shape[0])
-        y_val = map_tiles(y_val, self.space.dis, self.centers(x), rot, self.space, i0_val.shape[0])
+        n_copies = nc_mask.shape[0]
+        in_shape = x_val.shape[-2:]
+        out_coos = self.centers(x)
+        in_coos = jnp.zeros_like(out_coos, dtype='int32')
+
+        x_val = map_array(x_val, n_copies, 1, in_shape, self.grid.shape, in_coos, out_coos, 1)
+        y_val = map_array(y_val, n_copies, 1, in_shape, self.grid.shape, in_coos, out_coos, 1)
         
-        return jnp.stack((x_val, jnp.zeros(self.space.shape), y_val), axis=0)
+        return jnp.stack((x_val, jnp.zeros(self.grid.shape), y_val), axis=0)
 
     @classmethod
-    def build(cls, *, n_min=0, n_max=0, space, tile_size, i0, gaussian=None, func='exp'):
+    def build(cls, *, n_min=0, n_max=0, grid, tile_size, i0, gaussian=None, func='exp'):
         '''
         Build a tile generator model.
 
@@ -71,8 +75,8 @@ class TileGenerator(Model):
             Minimum number of tiles to generate
         n_max : int
             Maximum number of tiles to generate
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
         tile_size : tuple
             Size of the tile components in pixels
         i0 : dict
@@ -86,20 +90,20 @@ class TileGenerator(Model):
         check_type(n_min, int)
         check_type(n_max, int)
  
-        space = SignalSpace.build(**space)
+        grid = SignalGrid.build(**grid)
 
-        tile_space = SignalSpace.build(
-            shape = tile_size,
-            distances = space.distances,
+        tile_grid = SignalGrid.build(
+            space = tile_size,
+            distances = grid.distances,
             n_copies = max(n_max, 2)
         )
-        i0, _ = prior_model('tg i0 ', tile_space, max(n_max, 2), **i0)
+        i0, _ = prior_model('tg i0 ', tile_grid, max(n_max, 2), **i0)
 
-        centers = uniform_model(
+        centers = integer_model(
             prefix = 'tg centers',
             shape = (max(n_max, 2), 2),
-            u_min = space.limits[0,0] - tile_space.limits[0,0,0],
-            u_max = space.limits[1,1] - tile_space.limits[1,1,1],
+            i_min = 0,
+            i_max = grid.shape[0] - tile_size[0],
         )
         n_copies = integer_model(
             prefix = 'tg n copies',
@@ -108,9 +112,9 @@ class TileGenerator(Model):
             i_max = n_max + 1,
         )
         if gaussian:
-            gaussian, _ = prior_model('tg gm ', tile_space, max(n_max, 2), **gaussian)
+            gaussian, _ = prior_model('tg gm ', tile_grid, max(n_max, 2), **gaussian)
 
         if func:
             func = getattr(jnp, func, None)
 
-        return cls(space, i0, centers, n_copies, gaussian, func)
+        return cls(grid, i0, centers, n_copies, gaussian, func)
