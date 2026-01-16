@@ -4,6 +4,7 @@ import click
 @click.command()
 @click.option('--config', required=True, help='Path to the YAML config file')
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
+@click.option('--plot_range', default=1e4, help='Brigthness range for plotting the sky models')
 
 def main(config, cuda_device):
     if str(cuda_device) == '':
@@ -48,7 +49,7 @@ def main(config, cuda_device):
         for sky in sky_models:
             if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
                 sky_val = samples.mean(sky)
-                sky_min = sky_val.max()/5e3
+                sky_min = sky_val.max()/plot_range
                 aim.plot_arrays(sky_val, name=f'{nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
                 if sky.freq.size > 1:
                      sky_ref = samples.mean(sky.ref_freq_model)
