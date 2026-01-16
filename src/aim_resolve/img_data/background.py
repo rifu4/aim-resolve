@@ -3,7 +3,7 @@ from nifty.re import Model, Vector
 from typing import Callable
 
 from ..model.prior import prior_model
-from .space import SignalSpace
+from ..model.grid import SignalGrid
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 
@@ -12,13 +12,13 @@ from ..optimize.samples import domain_tree, model_init
 class BackgroundGenerator(Model):
     '''Generate a background model. Use `build` function to create the model.'''
 
-    def __init__(self, space, i0, gaussian=None, func=jnp.exp):
-        check_type(space, SignalSpace)
+    def __init__(self, grid, i0, gaussian=None, func=jnp.exp):
+        check_type(grid, SignalGrid)
         check_type(i0, Model)
         check_type(gaussian, (Model, type(None)))
         check_type(func, (Callable, type(None)))
 
-        self.space = space
+        self.grid = grid
         self.i0 = i0
         self.gaussian = gaussian
         self.func = func
@@ -40,14 +40,14 @@ class BackgroundGenerator(Model):
         return jnp.stack((x_val, y_val, y_val), axis=0)
     
     @classmethod
-    def build(cls, *, space, i0, gaussian=None, func='exp'):
+    def build(cls, *, grid, i0, gaussian=None, func='exp'):
         '''
         Build a background generator model.
         
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
         i0 : dict
             Dictionary containing the prior model parameters of the signal (see prior_model)
         gaussian : dict, optional
@@ -56,14 +56,14 @@ class BackgroundGenerator(Model):
         func : str, optional
             Function to apply to the signal, by default 'exp'
         '''
-        space = SignalSpace.build(**space)
+        grid = SignalGrid.build(**grid)
 
-        i0, _ = prior_model('bg i0 ', space, **i0)
+        i0, _ = prior_model('bg i0 ', grid, **i0)
 
         if gaussian:
-            gaussian, _ = prior_model('bg gm ', space, **gaussian)
+            gaussian, _ = prior_model('bg gm ', grid, **gaussian)
 
         if func:
             func = getattr(jnp, func, None)
 
-        return cls(space, i0, gaussian, func)
+        return cls(grid, i0, gaussian, func)
