@@ -2,26 +2,23 @@ import os
 import click
 
 @click.command()
-@click.option('--base', default='config/base.yml', help='Path to the base YAML config file')
+@click.option('--base', default=os.path.join(os.path.dirname(__file__), 'config/base.yml'), help='Path to the base YAML config file')
 @click.option('--config', required=True, help='Path to the YAML config file')
-@click.option('--mode', required=True, help='Mode for NIFTy optimization, "exp", "radio" or "fast-radio"')
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
+@click.option('--plot_range', default=1e4, help='Brigthness range for plotting the sky models')
 
-def main(base, config, mode, cuda_device):
+def main(base, config, cuda_device, plot_range):
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:
         os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_device)
         os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
-    import jax
     import aim_resolve as aim
     import numpy as np
 
-    jax.config.update("jax_enable_x64", True)
-
     # Instantiate the optimize-config class
-    cfg = aim.OptimizeKLConfig.from_file((base, config), aim.get_builders, mode)
+    cfg = aim.OptimizeKLConfig.from_file((base, config), aim.get_builders)
     odir = cfg.sections['opt']['odir'] + '/plots'
 
     # Initialize all signal models for each iteration
@@ -45,7 +42,7 @@ def main(base, config, mode, cuda_device):
         for sky in sky_models:
             if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
                 sky_val = samples.mean(sky)
-                sky_min = sky_val.max()/5e3
+                sky_min = sky_val.max()/plot_range
                 aim.plot_arrays(sky_val, name=f'{nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
                 if sky.freq.size > 1:
                      sky_ref = samples.mean(sky.ref_freq_model)
