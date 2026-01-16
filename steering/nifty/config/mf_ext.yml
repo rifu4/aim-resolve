@@ -1,0 +1,49 @@
+---
+
+odir: /Users/rf/Development/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
+base: base.yml
+file: 4_pre.yml
+
+---
+
+mode: freq
+freq: [1024336914.0625, 1112110351.5625] #, 1373758789.0625, 1420989257.8125]
+ref_freq_index: 0
+
+---
+
+opt.5:
+  base: base_opt.5
+
+base_opt.5:
+  n_total_iterations: 10
+  n_major_iterations: 5
+  n_minor_iterations: 1
+  n_samples: 0
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 25
+      energy_reduction_factor: 0.001
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
+
+data.0:
+  fname: /Users/rf/Development/data/eso_986-1137mhz.npz
