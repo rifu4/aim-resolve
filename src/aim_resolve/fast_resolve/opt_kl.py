@@ -66,11 +66,11 @@ def fast_optimize_kl(
     likelihood: dict or callable
         Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
         - data: array-like
-        - sky: Model
-        - RNR: callable
-        - sky_response: callable
+        - sky_model: Model
+        - sky_response: Model
         - old_reconstruction: array-like
         - residual_data: array-like
+        - RNR: callable
     key : int or array-like
         Random key. If an integer is passed, it is used to seed a random key.
     n_major_iterations : int
@@ -211,7 +211,7 @@ def fast_optimize_kl(
         key, samples = get_samples(key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit)
 
         if opt_vi_st.nit > 0:
-            sub_val = samples.mean(lh_i['sky'])
+            sub_val = samples.mean(lh_i['sky_model'])
             residual_data = lh_i['data'] - apply_exact_response(lh_i['RNR'], sub_val)
 
         lh_i['old_reconstruction'] = sub_val
