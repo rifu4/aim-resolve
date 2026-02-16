@@ -23,16 +23,23 @@ These individual steps are implemented as rules in the [snakefile](steering/snak
 ## Installation
 
 Clone the repository and install aim-resolve via
-```console
+```
 git clone https://github.com/rifu4/aim-resolve.git
 cd aim-resolve
 pip install .
 ```
 
 To apply the method to radio interferometric data, [resolve](http://ift.pages.mpcdf.de/resolve/) needs to be installed via
-```console
+```
 git clone --recursive https://gitlab.mpcdf.mpg.de/ift/resolve
 cd resolve
+pip install .
+```
+
+To use multi-frequency models, [UBIK](https://github.com/NIFTy-PPL/J-UBIK) needs to be installed via
+```
+git clone https://github.com/NIFTy-PPL/J-UBIK
+cd j-ubik
 pip install .
 ```
 
