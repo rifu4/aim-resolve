@@ -6,7 +6,7 @@ import click
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
 @click.option('--plot_range', default=1e4, help='Brigthness range for plotting the sky models')
 
-def main(config, cuda_device):
+def main(config, cuda_device, plot_range):
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:
