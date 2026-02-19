@@ -102,8 +102,8 @@ def transition_freq(
     lh_new : nifty.re.Likelihood
         Likelihood model for the new optimiztion iteration.
     '''
-    sky_old = lh_old['sky']
-    sky_new = lh_new['sky']
+    sky_old = lh_old['sky_model']
+    sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
     check_type(sky_old, ComponentModel)
     check_type(sky_new, ComponentModel)
