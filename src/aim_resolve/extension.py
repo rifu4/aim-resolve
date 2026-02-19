@@ -97,6 +97,8 @@ def freq_extension(*,
     for key,val in kwargs.items():
         cfg.modify_sec(key, **val)
 
+    cfg = fun2mode(cfg)
+
     ext_file = f'{odir}/files/{file.split(".")[0]}_{len(freq)}f.yml'
     cfg.to_file(ext_file)
 
@@ -160,7 +162,22 @@ def zoom_extension(*,
     for key,val in kwargs.items():
         cfg.modify_sec(key, **val)
 
+    cfg = fun2mode(cfg)
+
     ext_file = f'{odir}/files/{file.split(".")[0]}_{zoom}z.yml'
     cfg.to_file(ext_file)
 
     return base, ext_file
+
+
+
+def fun2mode(cfg):
+    for sec in cfg.sections:
+        if 'fun' in cfg.sections[sec]:
+            fun = cfg.sections[sec].pop('fun')
+            if 'lh' in sec:
+                fun = 'fast' if 'fast' in fun else 'radio' if 'radio' in fun else 'image'
+            if 'data' in sec:
+                fun = 'radio' if 'radio' in fun else 'image'
+            cfg.sections[sec]['mode'] = fun
+    return cfg
