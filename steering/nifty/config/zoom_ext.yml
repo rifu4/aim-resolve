@@ -1,6 +1,6 @@
 ---
 
-odir: /Users/rf/Development/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
+odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
 file: 4_pre.yml
 
@@ -8,8 +8,3 @@ file: 4_pre.yml
 
 mode: zoom
 zoom: 2
-
----
-
-data.0:
-  fname: /Users/rf/Development/data/eso_986-1137mhz.npz
