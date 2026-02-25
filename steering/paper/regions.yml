@@ -1,0 +1,37 @@
+
+
+outer left lobe:
+  color: 'blue'
+  center: [[165, 200]]
+  extend: [[200, 200]]
+  value: [[1e-5, 0.5]]
+
+inner left lobe:
+  color: 'lightblue'
+  center: [[165, 200]]
+  extend: [[200, 200]]
+  value: [[0.5, 1e3]]
+
+outer right lobe:
+  color: 'red'
+  center: [[365, 200]]
+  extend: [[200, 200]]
+  value: [[1e-5, 0.1]]
+
+inner right lobe:
+  color: 'orange'
+  center: [[365, 200]]
+  extend: [[200, 200]]
+  value: [[0.1, 1e3]]
+
+links:
+  color: 'green'
+  center: [[250, 175]]
+  extend: [[120]]
+  value: [[1e-5, 0.1]]
+
+hotspots:
+  color: 'magenta'
+  center: [[265, 230]]
+  extend: [[45]]
+  value: [[1, 1e3]]

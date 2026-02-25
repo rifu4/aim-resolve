@@ -7,7 +7,7 @@ os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 import jax
 import pickle
 import numpy as np
-from aim_resolve import OptimizeKLConfig, SetupKLConfig, SignalGrid, get_builders, plot_arrays, map_signal
+import aim_resolve as aim
 
 jax.config.update("jax_enable_x64", True)
 
@@ -38,7 +38,7 @@ CONV_FACTOR = 1000 * AS2RAD**2
 opt_yml = f'{dir}/opt/{mf_rec}/opt.yml'
 print('load:', opt_yml)
 
-optim_cfg = OptimizeKLConfig.from_file(opt_yml, get_builders, 'major')
+optim_cfg = aim.OptimizeKLConfig.from_file(opt_yml, aim.get_builders)
 
 sky_mf = optim_cfg.instantiate_sec(f'sky.{mf_it}')
 print('sky components:', [c.prefix for c in sky_mf.models])
@@ -52,9 +52,9 @@ with open(f'{dir}/opt/{mf_rec}/last.pkl', "rb") as f:
     samples_mf, *_ = pickle.load(f)
 print('samples:', len(samples_mf))
 
-setup_cfg = SetupKLConfig.from_file(opt_yml)
+setup_cfg = aim.SetupKLConfig.from_file(opt_yml)
 sky_ps = sky_mf.points[0]
-ps_map = map_signal(sky_ps.points.grid, sky_ps.grid)(np.ones(sky_ps.shape)).sum(axis=0)
+ps_map = aim.map_signal(sky_ps.points.grid, sky_ps.grid)(np.ones(sky_ps.shape)).sum(axis=0)
 markers_mf = box_markers(setup_cfg, ps_map, sky_mf.grid, mf_it)
 print('markers:', [f'{k}: {len(v["x"])}' for k, v in markers_mf.items()])
 
@@ -89,28 +89,28 @@ amin, amax = -3, None
 contours = {'array': sky_ref_mf, 'colors': 'white', 'levels': [1e-2, 1e-1], 'linewidths': 0.25}
 
 print('plotting ...')
-plot_arrays(
+aim.plot_arrays(
     array = sky_ref_mf, 
     marker = markers_mf,
     callback = lambda fig, ax: fig.text(0.085, 0.90, ref_freq, fontsize=15, c='white'),
     **plot_dict,
 )
-plot_arrays(
+aim.plot_arrays(
     array = sky_ref_mf, 
     callback = lambda fig, ax: fig.text(0.085, 0.90, ref_freq, fontsize=15, c='white'),
     **plot_dict,
 )
-plot_arrays(
+aim.plot_arrays(
     array = bg_ref_mf, 
     callback = lambda fig, ax: fig.text(0.085, 0.90, ref_freq, fontsize=15, c='black'),
     **plot_dict,
 )
-plot_arrays(
+aim.plot_arrays(
     array = pot_ref_mf, 
     callback = lambda fig, ax: fig.text(0.085, 0.90, ref_freq, fontsize=15, c='black'),
     **plot_dict,
 )
-plot_arrays(
+aim.plot_arrays(
     array = pot_alpha, 
     # callback = lambda fig, ax: fig.text(0.085, 0.90, 'Spectral Index', fontsize=15, c='black'),
     contour = contours,
@@ -120,7 +120,7 @@ plot_arrays(
 #%%
 sky_val_mf = samples_mf.mean(sky_mf) * CONV_FACTOR
 grd = sky_mf.grid
-sky_val = map_signal(grd, grd.update(space=grd.spc//2))(sky_val_mf)
+sky_val = aim.map_signal(grd, grd.update(space=grd.spc//2))(sky_val_mf)
 
 # mmin = 2*[2e-3] + 2*[4e-3]
 # mmax = [5.5, 5.5, 11, 11]
@@ -133,7 +133,7 @@ sky_val = map_signal(grd, grd.update(space=grd.spc//2))(sky_val_mf)
 #     fig.text(0.51, 0.485, '1427 MHz', fontsize=15, c='white')
 
 print('plotting ...')
-plot_arrays(
+aim.plot_arrays(
     sky_val, 
     rows=2,
     grid_kwargs=dict(hspace=-0, wspace=-0, width_ratios=[1,1,1], height_ratios=[1,1]),
@@ -144,11 +144,11 @@ plot_arrays(
 #%%
 sky_val_mf = samples_mf.mean(sky_mf) * CONV_FACTOR
 grd = sky_mf.grid
-sky_val = map_signal(grd, grd.update(space=grd.spc//2))(sky_val_mf)
+sky_val = aim.map_signal(grd, grd.update(space=grd.spc//2))(sky_val_mf)
 
 print('plotting ...')
 for i,f in enumerate(freq):
-    plot_arrays(
+    aim.plot_arrays(
         sky_val[i], 
         callback = lambda fig, ax: fig.text(0.085, 0.90, f, fontsize=15, c='white'),
         **plot_dict,
@@ -166,11 +166,11 @@ print('plotting ...')
 for c,a in zip(comp_ref_mf, comp_alpha):
     a = np.where(c > min_ca, a, np.nan)
     contours = {'array': c, 'colors': 'white', 'levels': [1e-2, 1e-1], 'linewidths': 0.5}
-    plot_arrays(
+    aim.plot_arrays(
         array = c, 
         **plot_dict | dict(vmin=min_cs),
     )
-    plot_arrays(
+    aim.plot_arrays(
         array = a,
         contour=contours,
         **plot_dict | dict(vmin=-3, vmax=0, norm='linear'),
