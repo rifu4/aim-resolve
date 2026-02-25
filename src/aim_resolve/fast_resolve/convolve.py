@@ -6,7 +6,7 @@ import pickle
 from jax import vmap
 from jax.numpy.fft import fftn, ifftn
 from jax.lax import dynamic_slice
-from nifty.re import Model, Vector
+from nifty.re import Model, Vector, smap
 from typing import Any
 
 from .kernel import build_psf_kernel, build_n_inv_kernel
@@ -19,7 +19,7 @@ from ..optimize.samples import domain_tree, model_init
 class PSFConvolve(Model):
     '''Convolution with the PSF kernel using FFTs. Use `build` function to create the model.'''
 
-    fft_kernel: Any = dataclasses.field(metadata=dict(static=False))
+    fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
 
     def __init__(self, sky, psf_kernel):
         self.sky = sky
@@ -31,6 +31,7 @@ class PSFConvolve(Model):
         super().__init__(domain=sky.domain, init=sky.init)
 
     def __call__(self, x, old_rec=0):
+        #TODO: set old_rec to static and add to init (similar to fft-kernel) to avoid recompilation when it changes
         res = self.sky(x) - old_rec
         res = self.padder(res)
         res = fft_convolve(res, self.fft_kernel)
@@ -38,7 +39,7 @@ class PSFConvolve(Model):
         return res
 
     @classmethod
-    def build(cls, *, sky, RNR_l, psf_kernel_fn='', split=0):
+    def build(cls, *, sky, RNR_l, psf_kernel_fn='', split={}):
         '''
         Build the convolution with the psf kernel.
 
@@ -50,8 +51,8 @@ class PSFConvolve(Model):
             The RNR operator acting on the padded model space.
         psf_kernel_fn : str
             The filename to load or save the psf kernel. Default is None.
-        split : int
-            The high-resolution kernel size for a kernel-split. Default is 0 (no split).
+        split : dict
+            The parameters for kernel-splitting. Needs `size` and `factor`. Default is `{}` (no split).
         '''
         if os.path.isfile(psf_kernel_fn):
             psf_kernel = pickle.load(open(psf_kernel_fn, 'rb'))
@@ -64,8 +65,8 @@ class PSFConvolve(Model):
         if psf_kernel.shape != rk_shape:
             raise ValueError(f'psf kernel has wrong shape, expected {rk_shape}, got {psf_kernel.shape}.')
         
-        if split > 0:
-            return PSFSplitConvolve(sky, psf_kernel, split)
+        if split:
+            return PSFSplitConvolve(sky, psf_kernel, **split)
         else:
             return cls(sky, psf_kernel)
     
@@ -74,32 +75,38 @@ class PSFConvolve(Model):
 class PSFSplitConvolve(Model):
     '''Convolution with the PSF kernel using FFTs and kernel-splitting. Use `build` function of `PSFConvolve` to create the model.'''
 
-    fft_kernels: Any = dataclasses.field(metadata=dict(static=False))
+    kernel_high: Any = dataclasses.field(metadata=dict(static=True))
+    kernel_low: Any = dataclasses.field(metadata=dict(static=True))
 
-    def __init__(self, sky, psf_kernel, split):
+    def __init__(self, sky, psf_kernel, *, size, factor):
         self.sky = sky
         self.grid = sky.grid
-        self.fft_kernel = build_split_kernel(psf_kernel, self.grid.shape, split, self.grid.dvol)
-        print('split psf kernel shape:', self.fft_kernel.shape)
-        shape1 = (sky.freq.size, ) + self.grid.shape
-        shape2 = (sky.freq.size, ) + tuple(s//2 for s in self.grid.shape)
-        self.padder1 = build_padder(shape1, self.fft_kernel.shape)
-        self.padder2 = build_padder(shape2, self.fft_kernel.shape)
-        self.slicer1 = build_slicer((split//2,) * 2, shape1)
-        self.slicer2 = build_slicer(tuple(k//4 for k in psf_kernel.shape), shape2)
+        self.size = size
+        self.factor = factor
+        self.kernel_high, self.kernel_low = build_split_kernel(psf_kernel, self.grid.shape, self.size, self.factor, self.grid.dvol)
+        print('split psf kernel shapes:', self.kernel_high.shape, self.kernel_low.shape)
+
+        shape_high = (sky.freq.size, ) + self.grid.shape
+        self.padder_high = build_padder(shape_high, self.kernel_high.shape)
+        self.slicer_high = build_slicer((self.size//2,) * 2, shape_high)
+
+        shape_low = (sky.freq.size, ) + tuple(s//self.factor for s in self.grid.shape)
+        self.padder_low = build_padder(shape_low, self.kernel_low.shape)
+        self.slicer_low = build_slicer(tuple(k * (self.factor-1)//(2*self.factor) for k in psf_kernel.shape), shape_low)
+
         super().__init__(domain=sky.domain, init=sky.init)
 
     def __call__(self, x, old_rec=0):
         res = self.sky(x) - old_rec
-        res = split_fft_convolve(res, self.fft_kernel, self.padder1, self.padder2, self.slicer1, self.slicer2)
-        res = jnp.squeeze(res)
+        res = split_fft_convolve(res, self.kernel_high, self.kernel_low, self.padder_high, self.padder_low, self.slicer_high, self.slicer_low, self.factor)
         return res
+
 
 
 class NInvConvolve(Model):
     '''Convolution with the inverse noise kernel using FFTs. Use `build` function to create the model.'''
 
-    fft_kernel: Any = dataclasses.field(metadata=dict(static=False))
+    fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
 
     def __init__(self, psf_conv, n_inv_kernel, noise_model):
         self.psf_conv = psf_conv
@@ -168,24 +175,22 @@ def fft_convolve_2d(x, kernel):
 
 
 def fft_convolve(x, kernel):
-    if x.ndim == 2:
-        return fft_convolve_2d(x, kernel)
-    elif x.ndim == 3:
-        return vmap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
-    else:
-        raise ValueError("Input must be 2D (x,y) or 3D (f,x,y)")
+    return smap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
     
 
-def split_fft_convolve(x, kernel, padder1, padder2, slicer1, slicer2):
-    x = x[None] if x.ndim == 2 else x
-    x1 = padder1(x)
-    x2 = padder2(downsample(x, 2))
-    xx = jnp.concatenate([x1, x2], axis=0)
-    rr = fft_convolve(xx, kernel)
-    rr = rr.reshape(2, -1, *rr.shape[1:])
-    r1 = slicer1(rr[0])
-    r2 = upsample(slicer2(rr[1]), 2)
-    return r1 + r2
+def split_fft_convolve(x, kernel_high, kernel_low, padder_high, padder_low, slicer_high, slicer_low, factor):
+    if x.ndim == 2:
+        x = x[None, :, :]
+
+    x_high = padder_high(x)
+    x_high = fft_convolve(x_high, kernel_high)
+    x_high = slicer_high(x_high)
+
+    x_low = padder_low(downsample(x, factor))
+    x_low = fft_convolve(x_low, kernel_low)
+    x_low = upsample(slicer_low(x_low), factor)
+
+    return jnp.squeeze(x_high + x_low)
 
 
 
@@ -205,30 +210,22 @@ def build_slicer(start_indices, out_shape):
 
 
 
-def build_split_kernel(kernel, shape, size, dvol=1.):
+def build_split_kernel(kernel, shape, size, factor, dvol=1.):
     kernel = kernel[None] if kernel.ndim == 2 else kernel
-    fshape = tuple(s+size for s in shape)
     n_freq = kernel.shape[0]
-    split_kernel = np.zeros((2, n_freq) + fshape, dtype='complex128')
+    slices = (slice(0, n_freq), )
+    slices += tuple(slice(k//2 - size//2, k//2 + size//2) for k in kernel.shape[-2:])
 
-    for n in range(1, 3):
-        if n == 1:
-            slc_in = (slice(0, 0), slice(0, 0))
-            slc_out = tuple(slice(k//2 - size//2, k//2 + size//2) for k in kernel.shape[-2:])
-        else:
-            slc_in = slc_out
-            slc_out = tuple(slice(0, k) for k in kernel.shape[-2:])
-        
-        for f in range(n_freq):
-            ker = np.array(kernel[f][slc_out])
-            ker[slc_in] = 0
+    # high-res kernel
+    fshape_high = (n_freq, ) + tuple(s+size for s in shape)
+    kernel_high = np.array(kernel[slices])
+    kernel_high = build_fft_kernel(kernel_high, fshape_high, dvol)
 
-            if n == 2:
-                ker = downsample(ker, 2)
+    # low-res kernel
+    fshape_low = (n_freq, ) + tuple(k//factor for k in kernel.shape[-2:])
+    kernel_low = np.array(kernel.copy())
+    kernel_low[slices] = 0
+    kernel_low = downsample(kernel_low, factor)
+    kernel_low = build_fft_kernel(kernel_low, fshape_low, dvol * (factor**2))
 
-            fft_ker = build_fft_kernel(ker, fshape, dvol * (n**2))
-            split_kernel[n-1][f] = fft_ker
-
-    split_kernel = split_kernel.reshape(-1, *fshape)
-
-    return split_kernel
+    return kernel_high, kernel_low
