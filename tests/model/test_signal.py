@@ -1,13 +1,9 @@
 """Tests for aim_resolve.model.signal — SignalModel."""
 
 import jax
-import jax.numpy as jnp
 import numpy as np
-import pytest
-from nifty.re import Model
 
 from aim_resolve.model.signal import SignalModel
-from aim_resolve.model.grid import SignalGrid
 
 
 class TestSignalModelBuild:

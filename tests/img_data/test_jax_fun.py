@@ -2,7 +2,6 @@
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from aim_resolve.img_data.jax_fun import (
     flip_data,
@@ -11,10 +10,10 @@ from aim_resolve.img_data.jax_fun import (
     rotate_data,
 )
 
-
 # ---------------------------------------------------------------------------
 # gaussian_kernel2d
 # ---------------------------------------------------------------------------
+
 
 class TestGaussianKernel2D:
     def test_shape(self):
@@ -39,6 +38,7 @@ class TestGaussianKernel2D:
 # gaussian_filter2d
 # ---------------------------------------------------------------------------
 
+
 class TestGaussianFilter2D:
     def test_zero_sigma_identity(self):
         x = jnp.arange(25, dtype=float).reshape(5, 5)
@@ -60,6 +60,7 @@ class TestGaussianFilter2D:
 # ---------------------------------------------------------------------------
 # rotate_data
 # ---------------------------------------------------------------------------
+
 
 class TestRotateData:
     def test_k0_identity(self):
@@ -99,6 +100,7 @@ class TestRotateData:
 # ---------------------------------------------------------------------------
 # flip_data
 # ---------------------------------------------------------------------------
+
 
 class TestFlipData:
     def test_axis0_identity(self):

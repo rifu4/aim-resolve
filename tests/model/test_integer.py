@@ -2,10 +2,8 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
-import pytest
 
-from aim_resolve.model.integer import IntegerPrior, random_int, integer_model
+from aim_resolve.model.integer import IntegerPrior, integer_model, random_int
 
 
 class TestRandomInt:
@@ -45,5 +43,6 @@ class TestIntegerModel:
 
     def test_multi_copy(self):
         from nifty.re import VModel
+
         model = integer_model(prefix="im", shape=(4,), i_min=0, i_max=5, n_copies=3)
         assert isinstance(model, VModel)

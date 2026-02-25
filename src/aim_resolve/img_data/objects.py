@@ -1,22 +1,21 @@
 """Extended-object generator model for synthetic sky images."""
 
 import os
+from collections.abc import Callable
+
 import jax.numpy as jnp
 import numpy as np
 from jax import random
 from jax.typing import ArrayLike
 from nifty.re import Model, Vector
-from typing import Callable
 
-from .jax_fun import rotate_data, flip_data
 from ..model.grid import SignalGrid
 from ..model.map import map_array
 from ..model.normal import normal_model
 from ..model.prior import uniform_model
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
-
-
+from .jax_fun import flip_data, rotate_data
 
 
 class ObjectGenerator(Model):
@@ -64,8 +63,10 @@ class ObjectGenerator(Model):
         zoom = self.grid.shape[0] / mk_val.shape[0]
         if self.zoom:
             raise NotImplementedError("Zoom not implemented yet.")
-        
-        in_shape = out_shape = tuple(int(v*zoom) for v in mk_val.shape) if zoom < 1 else mk_val.shape
+
+        in_shape = out_shape = (
+            tuple(int(v * zoom) for v in mk_val.shape) if zoom < 1 else mk_val.shape
+        )
         in_start = out_start = jnp.array([0, 0])
 
         mk_val = map_array(mk_val, 1, 1, in_shape, out_shape, in_start, out_start, zoom)
@@ -80,7 +81,7 @@ class ObjectGenerator(Model):
         return jnp.stack((x_val, jnp.zeros(x_val.shape), y_val), axis=0)
 
     @classmethod
-    def build(cls, *, grid, i0, masks, zoom=None, func='exp'):
+    def build(cls, *, grid, i0, masks, zoom=None, func="exp"):
         """Build an object generator from configuration dictionaries.
 
         Parameters
@@ -104,16 +105,16 @@ class ObjectGenerator(Model):
         grid = SignalGrid.build(**grid)
 
         i0 = normal_model(
-            prefix = 'og i0',
-            shape = (1,),
+            prefix="og i0",
+            shape=(1,),
             **i0,
         )
         masks = get_masks(**masks)
 
         if zoom:
             zoom = uniform_model(
-                prefix = 'og zoom',
-                shape = (1,),
+                prefix="og zoom",
+                shape=(1,),
                 **zoom,
             )
         if func:
@@ -122,10 +123,10 @@ class ObjectGenerator(Model):
         return cls(grid, i0, masks, zoom, func)
 
 
-
-def get_masks(*,
-        m_min = 0,
-        m_max = 100, 
+def get_masks(
+    *,
+    m_min=0,
+    m_max=100,
 ):
     """Load 2-D binary masks from the bundled ``masks.npz`` file.
 
@@ -143,10 +144,10 @@ def get_masks(*,
         Array of shape ``(m_max - m_min + 1, 256, 256)``.
     """
     dpath = os.path.dirname(__file__)
-    fname = os.path.join(dpath, 'masks.npz')
-    masks = np.load(fname)['val']
+    fname = os.path.join(dpath, "masks.npz")
+    masks = np.load(fname)["val"]
 
     if m_max > 90:
-        masks = np.concatenate((masks, np.zeros((m_max-90, 256, 256))), axis=0)
+        masks = np.concatenate((masks, np.zeros((m_max - 90, 256, 256))), axis=0)
 
     return masks[m_min : m_max + 1]

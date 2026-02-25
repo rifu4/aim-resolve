@@ -4,12 +4,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from aim_resolve.resolve.observation import Observation, TABLE, INVTABLE
-
+from aim_resolve.resolve.observation import INVTABLE, TABLE, Observation
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_obs(nrow=10, npol=1, nfreq=2, pol_labels=None, name="test"):
     """Build a minimal Observation for testing.
@@ -29,13 +29,16 @@ def _make_obs(nrow=10, npol=1, nfreq=2, pol_labels=None, name="test"):
     ant2 = np.arange(nrow, dtype=int).reshape(-1, 1)
     time = np.linspace(0, 1, nrow).reshape(-1, 1)
     dfs = []
-    for a, k in zip([uvw, ant1, ant2, time],
-                     [['u', 'v', 'w'], ['ant1'], ['ant2'], ['time']]):
+    for a, k in zip(
+        [uvw, ant1, ant2, time], [["u", "v", "w"], ["ant1"], ["ant2"], ["time"]]
+    ):
         dfs.append(pd.DataFrame(a, columns=[k]))
     antpos = pd.concat(dfs, axis=1)
 
     idx = pd.MultiIndex.from_product([pol, freq], names=["pol", "freq"])
-    vis_arr = rng.standard_normal((nrow, len(idx))) + 1j * rng.standard_normal((nrow, len(idx)))
+    vis_arr = rng.standard_normal((nrow, len(idx))) + 1j * rng.standard_normal(
+        (nrow, len(idx))
+    )
     vis = pd.DataFrame(vis_arr.astype(np.complex128), columns=idx)
     wgt = pd.DataFrame(np.ones_like(vis_arr, dtype=np.float64), columns=idx)
     return Observation(pol, freq, antpos, vis, wgt, name=name)

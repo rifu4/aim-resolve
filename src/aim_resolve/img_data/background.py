@@ -1,14 +1,14 @@
 """Background generator model for synthetic sky images."""
 
+from collections.abc import Callable
+
 import jax.numpy as jnp
 from nifty.re import Model, Vector
-from typing import Callable
 
-from ..model.prior import prior_model
 from ..model.grid import SignalGrid
+from ..model.prior import prior_model
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
-
 
 
 class BackgroundGenerator(Model):
@@ -54,9 +54,9 @@ class BackgroundGenerator(Model):
             x_val *= self.gaussian(x)
 
         return jnp.stack((x_val, y_val, y_val), axis=0)
-    
+
     @classmethod
-    def build(cls, *, grid, i0, gaussian=None, func='exp'):
+    def build(cls, *, grid, i0, gaussian=None, func="exp"):
         """Build a background generator from configuration dictionaries.
 
         Parameters
@@ -78,10 +78,10 @@ class BackgroundGenerator(Model):
         """
         grid = SignalGrid.build(**grid)
 
-        i0, _ = prior_model('bg i0 ', grid, **i0)
+        i0, _ = prior_model("bg i0 ", grid, **i0)
 
         if gaussian:
-            gaussian, _ = prior_model('bg gm ', grid, **gaussian)
+            gaussian, _ = prior_model("bg gm ", grid, **gaussian)
 
         if func:
             func = getattr(jnp, func, None)

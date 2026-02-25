@@ -3,23 +3,23 @@
 import pytest
 
 from aim_resolve.optimize.util import (
-    merge_dicts,
+    add_dicts,
+    check_dict,
+    eval_list,
+    eval_string,
+    extend_reps,
+    fun2mode,
+    get_it,
     has_key,
     has_val,
+    is_or_contains_type,
+    merge_dicts,
     pop_key,
     pop_val,
-    add_dicts,
-    is_or_contains_type,
-    get_it,
-    extend_reps,
-    eval_string,
-    eval_list,
-    check_dict,
-    fun2mode,
 )
 
-
 # ---------- merge_dicts ----------
+
 
 class TestMergeDicts:
     def test_simple(self):
@@ -40,6 +40,7 @@ class TestMergeDicts:
 
 
 # ---------- has_key / has_val ----------
+
 
 class TestHasKey:
     def test_top_level(self):
@@ -65,6 +66,7 @@ class TestHasVal:
 
 # ---------- pop_key / pop_val ----------
 
+
 class TestPopKey:
     def test_removes_key(self):
         result = pop_key({"a": 1, "b": 2}, "a")
@@ -87,6 +89,7 @@ class TestPopVal:
 
 # ---------- add_dicts ----------
 
+
 class TestAddDicts:
     def test_add_scalars(self):
         result = add_dicts({"a": 1}, {"a": 2})
@@ -103,6 +106,7 @@ class TestAddDicts:
 
 # ---------- is_or_contains_type ----------
 
+
 class TestIsOrContainsType:
     def test_direct(self):
         assert is_or_contains_type([1, 2], list) is True
@@ -115,6 +119,7 @@ class TestIsOrContainsType:
 
 
 # ---------- get_it ----------
+
 
 class TestGetIt:
     def test_list(self):
@@ -129,6 +134,7 @@ class TestGetIt:
 
 
 # ---------- extend_reps ----------
+
 
 class TestExtendReps:
     def test_extend(self):
@@ -153,6 +159,7 @@ class TestExtendReps:
 
 
 # ---------- eval_string ----------
+
 
 class TestEvalString:
     def test_simple_list(self):
@@ -180,6 +187,7 @@ class TestEvalList:
 
 # ---------- check_dict ----------
 
+
 class TestCheckDict:
     def test_valid(self):
         result = check_dict({"a": 1, "b": 2}, {"a"}, {"b"})
@@ -199,6 +207,7 @@ class TestCheckDict:
 
 
 # ---------- fun2mode ----------
+
 
 class TestFun2Mode:
     def test_lh_fast(self):

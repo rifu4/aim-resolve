@@ -4,10 +4,9 @@ from .img_data.data import ImageData, ImageDataGenerator
 from .resolve.observation import Observation
 
 
-
 def data_func(
-        mode,
-        **kwargs,
+    mode,
+    **kwargs,
 ):
     """Load observation data using the mode-specific loader.
 
@@ -28,21 +27,23 @@ def data_func(
     TypeError
         If *mode* is not recognised.
     """
-    if 'image' in mode:
+    if "image" in mode:
         return image_data(**kwargs)
-    elif 'radio' in mode:
+    elif "radio" in mode:
         return radio_data(**kwargs)
     else:
-        raise TypeError(f'Unknown data mode. Available modes are `image` and `radio`, but got mode `{mode}`.')
+        raise TypeError(
+            f"Unknown data mode. Available modes are `image` and `radio`, but got mode `{mode}`."
+        )
 
 
-
-def image_data(*,
-        fname,
-        odir = '',
-        idx = None,
-        key = 42,
-        max_std = 0.001,
+def image_data(
+    *,
+    fname,
+    odir="",
+    idx=None,
+    key=42,
+    max_std=0.001,
 ):
     """Load image data from a file and add synthetic noise.
 
@@ -68,22 +69,22 @@ def image_data(*,
         The loaded image data with noise added.
     """
     try:
-        img_data = ImageDataGenerator.load(fname, odir, dtype='float64')
+        img_data = ImageDataGenerator.load(fname, odir, dtype="float64")
         data = img_data.get_sample(idx)
     except:
-        data = ImageData.load(fname, odir, dtype='float64')
+        data = ImageData.load(fname, odir, dtype="float64")
 
     data.add_noise(key, max_std)
 
     return data
 
 
-
-def radio_data(*, 
-        fname,
-        freq = None,
-        nrow = None,
-        prec = 'double',
+def radio_data(
+    *,
+    fname,
+    freq=None,
+    nrow=None,
+    prec="double",
 ):
     """Load a radio observation from a measurement set.
 
@@ -120,20 +121,20 @@ def radio_data(*,
 
     if freq:
         if not isinstance(freq, list):
-            raise TypeError('`freq` has to be of Type `list`')
+            raise TypeError("`freq` has to be of Type `list`")
         obs = obs.get_freqs(freq)
 
     if nrow:
         if not isinstance(nrow, (int, float)):
-            raise TypeError('`nvis` has to be of Type `int` or `float`')
+            raise TypeError("`nvis` has to be of Type `int` or `float`")
         obs = obs.subsample_rows(nrow)
 
     match prec:
-        case 'single':
+        case "single":
             obs = obs.to_single_precision()
-        case 'double':
+        case "double":
             obs = obs.to_double_precision()
         case _:
-            raise ValueError('`precision` has to be either `single` or `double`')
-    
+            raise ValueError("`precision` has to be either `single` or `double`")
+
     return obs

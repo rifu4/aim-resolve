@@ -2,21 +2,16 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 from nifty.re import Model, VModel
 
+from aim_resolve.model.grid import SignalGrid
 from aim_resolve.model.prior import (
-    prior_model,
     correlated_field_model,
     inverse_gamma_model,
+    prior_model,
     uniform_model,
-    CFM_KEYS,
-    NM_KEYS,
-    IGM_KEYS,
-    UM_KEYS,
 )
-from aim_resolve.model.grid import SignalGrid
 
 
 @pytest.fixture
@@ -25,6 +20,7 @@ def grid():
 
 
 # ---------- prior_model dispatcher ----------
+
 
 class TestPriorModelDispatch:
     def test_dispatch_normal(self, grid):
@@ -44,7 +40,8 @@ class TestPriorModelDispatch:
 
     def test_dispatch_cfm(self, grid):
         model, pspec = prior_model(
-            "test ", grid,
+            "test ",
+            grid,
             offset_std=(1.0, 0.1),
             fluctuations=(1.0, 0.1),
             loglogavgslope=(-2.0, 0.5),
@@ -59,12 +56,13 @@ class TestPriorModelDispatch:
 
 # ---------- correlated_field_model ----------
 
+
 class TestCorrelatedFieldModel:
     def test_basic(self):
         model, power = correlated_field_model(
             prefix="cfm ",
             shape=(16, 16),
-            distances=(1/16, 1/16),
+            distances=(1 / 16, 1 / 16),
             offset_std=(1.0, 0.1),
             fluctuations=(1.0, 0.1),
             loglogavgslope=(-2.0, 0.5),
@@ -80,7 +78,7 @@ class TestCorrelatedFieldModel:
         model, power = correlated_field_model(
             prefix="cfm ",
             shape=(8, 8),
-            distances=(1/8, 1/8),
+            distances=(1 / 8, 1 / 8),
             offset_std=(1.0, 0.1),
             fluctuations=(1.0, 0.1),
             loglogavgslope=(-2.0, 0.5),
@@ -90,6 +88,7 @@ class TestCorrelatedFieldModel:
 
 
 # ---------- inverse_gamma_model ----------
+
 
 class TestInverseGammaModel:
     def test_alpha_scale(self):
@@ -111,6 +110,7 @@ class TestInverseGammaModel:
 
 # ---------- uniform_model ----------
 
+
 class TestUniformModel:
     def test_basic(self):
         model = uniform_model(prefix="um", shape=(4, 4), u_min=0.0, u_max=1.0)
@@ -123,5 +123,7 @@ class TestUniformModel:
         assert jnp.all(result <= 1.0)
 
     def test_multi_copy(self):
-        model = uniform_model(prefix="um", shape=(4,), u_min=-1.0, u_max=1.0, n_copies=3)
+        model = uniform_model(
+            prefix="um", shape=(4,), u_min=-1.0, u_max=1.0, n_copies=3
+        )
         assert isinstance(model, VModel)

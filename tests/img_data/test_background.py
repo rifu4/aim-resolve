@@ -1,8 +1,6 @@
 """Tests for aim_resolve.img_data.background — BackgroundGenerator.build."""
 
-import pytest
 import jax
-import jax.numpy as jnp
 
 from aim_resolve.img_data.background import BackgroundGenerator
 

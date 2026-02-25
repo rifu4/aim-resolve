@@ -1,12 +1,8 @@
 """Tests for aim_resolve.model.tiles — TileModel."""
 
 import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
 
 from aim_resolve.model.tiles import TileModel
-from aim_resolve.model.grid import SignalGrid
 
 
 class TestTileModelBuild:

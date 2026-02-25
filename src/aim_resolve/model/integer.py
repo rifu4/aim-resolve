@@ -6,7 +6,6 @@ from jax.tree_util import Partial, tree_map
 from nifty.re import VModel, WrappedCall
 
 
-
 class IntegerPrior(WrappedCall):
     """Uniformly distributed prior with only integer values.
 
@@ -30,7 +29,7 @@ class IntegerPrior(WrappedCall):
         super().__init__(call, white_init=True, **kwargs)
 
 
-def random_int(a_min=0., a_max=1., step=1):
+def random_int(a_min=0.0, a_max=1.0, step=1):
     """Transform a standard normal distribution to a uniform integer distribution.
 
     Parameters
@@ -56,14 +55,14 @@ def random_int(a_min=0., a_max=1., step=1):
     return standard_to_uniform
 
 
-
-def integer_model(*,
-        prefix,
-        shape,
-        i_min,
-        i_max,
-        step=1,
-        n_copies=1,
+def integer_model(
+    *,
+    prefix,
+    shape,
+    i_min,
+    i_max,
+    step=1,
+    n_copies=1,
 ):
     """Initialize a uniformly distributed prior with only integer values.
 

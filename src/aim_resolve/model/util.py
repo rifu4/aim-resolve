@@ -1,8 +1,8 @@
 """Utility functions for the model subpackage."""
 
-import numpy as np
 from collections.abc import Iterable
 
+import numpy as np
 
 
 def check_type(value, *types, uppers=()):
@@ -22,14 +22,13 @@ def check_type(value, *types, uppers=()):
         informative error messages.
     """
     if not isinstance(value, types[0]):
-        err = f'`{value}`'
+        err = f"`{value}`"
         for up in uppers[::-1]:
-            err += f' in `{up}`'
-        raise TypeError(f'{err} has to be of type `{types[0]}`')
+            err += f" in `{up}`"
+        raise TypeError(f"{err} has to be of type `{types[0]}`")
     if isinstance(value, Iterable) and len(types) > 1:
         for v in value:
-            check_type(v, *types[1:], uppers=uppers+(value,))
-
+            check_type(v, *types[1:], uppers=uppers + (value,))
 
 
 def flatten_list(lst):
@@ -50,12 +49,13 @@ def flatten_list(lst):
         if isinstance(val, Iterable) and not isinstance(val, str):
             new_lst += flatten_list(val)
         else:
-            new_lst += [val, ]
+            new_lst += [
+                val,
+            ]
     return new_lst
 
 
-
-def to_shape(array, shape, dtype='float64'):
+def to_shape(array, shape, dtype="float64"):
     """Convert the input to an array with the given shape.
 
     Parameters
@@ -74,10 +74,16 @@ def to_shape(array, shape, dtype='float64'):
     """
     from ..resolve.constants import str2rad
 
-    lst = array if isinstance(array, Iterable) and not isinstance(array, str) else [array, ]
+    lst = (
+        array
+        if isinstance(array, Iterable) and not isinstance(array, str)
+        else [
+            array,
+        ]
+    )
     lst = flatten_list(lst)
     lst = [str2rad(li) if isinstance(li, str) else li for li in lst]
-    array = np.array(lst) 
+    array = np.array(lst)
 
     if array.size == np.prod(shape):
         res = np.reshape(array, shape)
@@ -85,7 +91,6 @@ def to_shape(array, shape, dtype='float64'):
         res = np.broadcast_to(array, shape)
 
     return res.astype(dtype)
-    
 
 
 def is_val(array):
@@ -105,7 +110,6 @@ def is_val(array):
         return True
     else:
         return False
-
 
 
 def extend_shape(n_copies, freq, shape, *, offset=False):

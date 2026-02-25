@@ -10,8 +10,7 @@ from ..img_data.data import ImageDataGenerator
 from ..model.util import check_type
 
 
-
-class Dataset():
+class Dataset:
     """Create datasets from the given image data.
 
     Use the `build` classmethod to construct a Dataset from raw image data.
@@ -24,7 +23,7 @@ class Dataset():
         The validation dataset(s).
     """
 
-    def __init__(self, train, valid = None):
+    def __init__(self, train, valid=None):
         check_type(train, TensorDataset)
         check_type(valid, (dict, type(None), TensorDataset))
 
@@ -87,7 +86,7 @@ class Dataset():
         Dataset
             A new Dataset instance with processed train and validation data.
         """
-        n_train = train.pop('size', False)
+        n_train = train.pop("size", False)
         image_data_train = ImageDataGenerator.load(**train)
         if n_train:
             image_data_train = image_data_train.get_subset(n_train)
@@ -101,15 +100,15 @@ class Dataset():
         data_train = TensorDataset(data_train)
 
         data_valid = {}
-        for k,v in valid.items():
-            n_v = v.pop('size', False)
+        for k, v in valid.items():
+            n_v = v.pop("size", False)
             image_data_v = ImageDataGenerator.load(**v)
             if n_v:
                 image_data_v = image_data_v.get_subset(n_v)
 
             data_v = (image_data_v.x, image_data_v.y)
             data_v = transform_data(data_v, **transform)
-            
+
             if coordinates:
                 data_v = add_coordinates(data_v, image_data_v.model.space.coos)
 
@@ -117,7 +116,6 @@ class Dataset():
             data_valid[k] = data_v
 
         return cls(data_train, data_valid)
-
 
 
 class TensorDataset(Dataset):
@@ -133,29 +131,28 @@ class TensorDataset(Dataset):
         x, y = data
         self.x = x
         self.y = y
-        print(f'TensorDataset: {self.x.shape}, {self.y.shape}')
+        print(f"TensorDataset: {self.x.shape}, {self.y.shape}")
 
     def __getitem__(self, index):
         x = self.x[index]
         y = self.y[index]
 
-        return {'x': x, 'y':y}
+        return {"x": x, "y": y}
 
     def __len__(self):
         return self.x.shape[0]
 
 
-
 def transform_data(
-        data,
-        min_value = 0,
-        log = True,
-        normalize = True,
-        standardize = False,
-        rotate = True,
-        flip = True,
-        batch_size = 1000,
-        facet_size = None,
+    data,
+    min_value=0,
+    log=True,
+    normalize=True,
+    standardize=False,
+    rotate=True,
+    flip=True,
+    batch_size=1000,
+    facet_size=None,
 ):
     """Apply various transformations to the data.
 
@@ -193,8 +190,8 @@ def transform_data(
         If both *normalize* and *standardize* are True.
     """
     if normalize and standardize:
-        raise ValueError('normalize and standardize cannot both be True')
-    
+        raise ValueError("normalize and standardize cannot both be True")
+
     images, labels = data
     n_copies = images.shape[0]
     n_batches = (n_copies + batch_size - 1) // batch_size
@@ -212,9 +209,9 @@ def transform_data(
         if log:
             img_i = np.log(img_i)
         if normalize:
-            img_i = jax.vmap(lambda x: (x-x.min())/(x.max()-x.min()))(img_i)
+            img_i = jax.vmap(lambda x: (x - x.min()) / (x.max() - x.min()))(img_i)
         if standardize:
-            img_i = jax.vmap(lambda x: (x-x.mean())/x.std())(img_i)
+            img_i = jax.vmap(lambda x: (x - x.mean()) / x.std())(img_i)
         if rotate:
             ks = np.random.randint(0, 3, size=img_i.shape[0])
             img_i = jax.vmap(lambda x, k: rotate_array(x, k, axes=(1, 2)))(img_i, ks)
@@ -235,11 +232,10 @@ def transform_data(
     return (images, labels)
 
 
-
 def rotate_array(
-        array: ArrayLike,
-        n_rot: int = 1,
-        axes: tuple[int, int] = (0, 1),
+    array: ArrayLike,
+    n_rot: int = 1,
+    axes: tuple[int, int] = (0, 1),
 ):
     """Rotate an array by 90-degree increments.
 
@@ -260,17 +256,18 @@ def rotate_array(
     n_rot = n_rot % 4
     return jax.lax.switch(
         n_rot,
-        [lambda: array,
-         lambda: jnp.rot90(array, 1, axes=axes),
-         lambda: jnp.rot90(array, 2, axes=axes),
-         lambda: jnp.rot90(array, 3, axes=axes),]
+        [
+            lambda: array,
+            lambda: jnp.rot90(array, 1, axes=axes),
+            lambda: jnp.rot90(array, 2, axes=axes),
+            lambda: jnp.rot90(array, 3, axes=axes),
+        ],
     )
 
 
-
 def flip_array(
-        array: ArrayLike,
-        axis: int = 0,
+    array: ArrayLike,
+    axis: int = 0,
 ):
     """Flip an array along a given axis.
 
@@ -289,11 +286,12 @@ def flip_array(
     axis = axis % 3
     return jax.lax.switch(
         axis,
-        [lambda: array,
-         lambda: jnp.flip(array, axis=1),
-         lambda: jnp.flip(array, axis=2)],
+        [
+            lambda: array,
+            lambda: jnp.flip(array, axis=1),
+            lambda: jnp.flip(array, axis=2),
+        ],
     )
-
 
 
 def build_facet_array(array, factor):
@@ -317,13 +315,14 @@ def build_facet_array(array, factor):
         If the input array is not 4-dimensional.
     """
     if array.ndim != 4:
-        raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
+        raise ValueError(
+            f"Input array must be 4-dimensional, but has shape {array.shape}"
+        )
     n, l, h, w = array.shape
-    f_array = array.reshape(n, l, factor, h//factor, factor, w//factor)
+    f_array = array.reshape(n, l, factor, h // factor, factor, w // factor)
     f_array = f_array.transpose(0, 2, 4, 1, 3, 5)
-    f_array = f_array.reshape(n*factor**2, l, h//factor, w//factor)
+    f_array = f_array.reshape(n * factor**2, l, h // factor, w // factor)
     return f_array
-
 
 
 def merge_facet_array(array, factor):
@@ -347,18 +346,19 @@ def merge_facet_array(array, factor):
         If the input array is not 4-dimensional.
     """
     if array.ndim != 4:
-        raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
+        raise ValueError(
+            f"Input array must be 4-dimensional, but has shape {array.shape}"
+        )
     n, l, h, w = array.shape
-    m_array = array.reshape(n//(factor**2), factor, factor, l, h, w)
+    m_array = array.reshape(n // (factor**2), factor, factor, l, h, w)
     m_array = m_array.transpose(0, 3, 1, 4, 2, 5)
-    m_array = m_array.reshape(n//(factor**2), l, h*factor, w*factor)
+    m_array = m_array.reshape(n // (factor**2), l, h * factor, w * factor)
     return m_array
 
 
-
 def add_coordinates(
-        data,
-        coordinates,
+    data,
+    coordinates,
 ):
     """Concatenate coordinate channels to the image data.
 
@@ -384,10 +384,9 @@ def add_coordinates(
     return (images, labels)
 
 
-
 def split_data(
-        data,
-        split = 0.8,
+    data,
+    split=0.8,
 ):
     """Randomly split data into training and validation subsets.
 

@@ -1,15 +1,19 @@
 """Neural network model definitions for source detection."""
 
 import os
-import torch
+
 import lightning as pl
 import segmentation_models_pytorch as smp
-from segmentation_models_pytorch.losses import DiceLoss, JaccardLoss, SoftBCEWithLogitsLoss
+import torch
+from segmentation_models_pytorch.losses import (
+    DiceLoss,
+    JaccardLoss,
+    SoftBCEWithLogitsLoss,
+)
 from torch.optim import lr_scheduler
 
-from .dataset import Dataset
 from ..model.util import check_type
-
+from .dataset import Dataset
 
 
 class SegmentationModel(pl.LightningModule):
@@ -32,8 +36,10 @@ class SegmentationModel(pl.LightningModule):
         super().__init__()
         self.model = model
         self.loss_fn = loss_fn
-        self.optim_fn = torch.optim.Adam(self.parameters(), **config['optimizer'])
-        self.sched_fn = lr_scheduler.CosineAnnealingLR(self.optim_fn, **config['scheduler'])
+        self.optim_fn = torch.optim.Adam(self.parameters(), **config["optimizer"])
+        self.sched_fn = lr_scheduler.CosineAnnealingLR(
+            self.optim_fn, **config["scheduler"]
+        )
         self.config = config
 
         # initialize step metrics
@@ -74,20 +80,21 @@ class SegmentationModel(pl.LightningModule):
         check_type(optimizer, dict)
         check_type(scheduler, dict)
 
-        if arch == 'uno':
+        if arch == "uno":
             from neuralop.models.uno import UNO
+
             model = UNO(**model_args)
         else:
             model = smp.create_model(arch, **model_args)
 
-        if loss == 'bce':
+        if loss == "bce":
             loss_fn = SoftBCEWithLogitsLoss()
-        elif loss == 'dice':
-            loss_fn = DiceLoss(mode='multilabel')
-        elif loss == 'jaccard':
-            loss_fn = JaccardLoss(mode='multilabel')
+        elif loss == "dice":
+            loss_fn = DiceLoss(mode="multilabel")
+        elif loss == "jaccard":
+            loss_fn = JaccardLoss(mode="multilabel")
         else:
-            raise ValueError(f'Unknown loss function: `{loss}`')
+            raise ValueError(f"Unknown loss function: `{loss}`")
 
         config = dict(
             arch=arch,
@@ -99,7 +106,7 @@ class SegmentationModel(pl.LightningModule):
 
         return cls(model, loss_fn, config)
 
-    def save(self, name, odir=''):
+    def save(self, name, odir=""):
         """Save the model state and config to a ``.pth`` file.
 
         Parameters
@@ -110,15 +117,18 @@ class SegmentationModel(pl.LightningModule):
             Output directory for the file, by default ''.
         """
         os.makedirs(odir, exist_ok=True)
-        if not name.endswith('.pth'):
-            name_pth = name + '.pth'
+        if not name.endswith(".pth"):
+            name_pth = name + ".pth"
 
-        torch.save(self.config | {'state_dict': self.state_dict()}, os.path.join(odir, name_pth))
+        torch.save(
+            self.config | {"state_dict": self.state_dict()},
+            os.path.join(odir, name_pth),
+        )
 
         return
 
     @classmethod
-    def load(cls, name, odir=''):
+    def load(cls, name, odir=""):
         """Load a model from a ``.pth`` file.
 
         Parameters
@@ -133,18 +143,20 @@ class SegmentationModel(pl.LightningModule):
         SegmentationModel
             The loaded model in evaluation mode.
         """
-        if not name.endswith('.pth'):
-            name_pth = name + '.pth'
+        if not name.endswith(".pth"):
+            name_pth = name + ".pth"
 
         config = torch.load(os.path.join(odir, name_pth))
-        state_dict = config.pop('state_dict', None)
+        state_dict = config.pop("state_dict", None)
         model = cls.build(**config)
         model.load_state_dict(state_dict)
         model.eval()
 
         return model
-    
-    def plot_predictions(self, dataset, name, odir='', n_copies=5, label=False, **kwargs):
+
+    def plot_predictions(
+        self, dataset, name, odir="", n_copies=5, label=False, **kwargs
+    ):
         """Plot a number of prediction samples.
 
         Parameters
@@ -166,35 +178,44 @@ class SegmentationModel(pl.LightningModule):
 
         check_type(dataset, Dataset)
 
-        data_loaders = {f'{name}_train': dataset.train_loader(batch_size=n_copies)}
-        data_loaders |= {f'{name}_valid{k}': v for k,v in dataset.valid_loader(batch_size=n_copies).items()}
+        data_loaders = {f"{name}_train": dataset.train_loader(batch_size=n_copies)}
+        data_loaders |= {
+            f"{name}_valid{k}": v
+            for k, v in dataset.valid_loader(batch_size=n_copies).items()
+        }
 
-        for nm,dl in data_loaders.items():
+        for nm, dl in data_loaders.items():
             sample = next(iter(dl))
-            x = sample['x'].detach().numpy()
-            y = sample['y'].detach().numpy()
-            pred = self.forward_sigmoid(sample['x'])
+            x = sample["x"].detach().numpy()
+            y = sample["y"].detach().numpy()
+            pred = self.forward_sigmoid(sample["x"])
             pred = pred.detach().numpy()
 
             arrays = []
             for i in range(n_copies):
-                arrays += [x[i,0], y[i,0], pred[i,0], y[i,1], pred[i,1]]
-            labels = ['image', 'true points', 'predicted points', 'true objects', 'predicted boxes'] * n_copies
+                arrays += [x[i, 0], y[i, 0], pred[i, 0], y[i, 1], pred[i, 1]]
+            labels = [
+                "image",
+                "true points",
+                "predicted points",
+                "true objects",
+                "predicted boxes",
+            ] * n_copies
 
-            [kwargs.pop(key, None) for key in ('rows', 'cols')]
+            [kwargs.pop(key, None) for key in ("rows", "cols")]
 
             plot_arrays(
-                array = arrays,
-                label = labels if label else None,
-                rows = n_copies,
-                cols = 5,
-                name = nm,
-                odir = odir,
+                array=arrays,
+                label=labels if label else None,
+                rows=n_copies,
+                cols=5,
+                name=nm,
+                odir=odir,
                 **kwargs,
             )
 
         return
-    
+
     def forward(self, image):
         """Run the forward pass of the underlying model.
 
@@ -226,7 +247,7 @@ class SegmentationModel(pl.LightningModule):
         pred = self.forward(image)
         pred = torch.sigmoid(pred.squeeze())
         return pred > 0.5
-    
+
     def shared_step(self, batch, stage):
         """Perform a single training/validation/test step.
 
@@ -242,8 +263,8 @@ class SegmentationModel(pl.LightningModule):
         dict
             Dictionary containing loss and per-class statistics.
         """
-        image = batch['x']
-        mask = batch['y']
+        image = batch["x"]
+        mask = batch["y"]
 
         assert image.ndim == 4
         h, w = image.shape[2:]
@@ -258,14 +279,16 @@ class SegmentationModel(pl.LightningModule):
         prob_mask = logits_mask.sigmoid()
         pred_mask = (prob_mask > 0.5).float()
 
-        tp, fp, fn, tn = smp.metrics.get_stats(pred_mask.long(), mask.long(), mode='multilabel')
+        tp, fp, fn, tn = smp.metrics.get_stats(
+            pred_mask.long(), mask.long(), mode="multilabel"
+        )
 
         return {
-            'loss': loss,
-            'tp': tp,
-            'fp': fp,
-            'fn': fn,
-            'tn': tn,
+            "loss": loss,
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "tn": tn,
         }
 
     def shared_epoch_end(self, outputs, stage):
@@ -279,42 +302,40 @@ class SegmentationModel(pl.LightningModule):
             Current stage name.
         """
         # aggregate step metics
-        tp = torch.cat([x['tp'] for x in outputs])
-        fp = torch.cat([x['fp'] for x in outputs])
-        fn = torch.cat([x['fn'] for x in outputs])
-        tn = torch.cat([x['tn'] for x in outputs])
+        tp = torch.cat([x["tp"] for x in outputs])
+        fp = torch.cat([x["fp"] for x in outputs])
+        fn = torch.cat([x["fn"] for x in outputs])
+        tn = torch.cat([x["tn"] for x in outputs])
 
         # get average loss
-        losses = torch.stack([x['loss'] for x in outputs])
+        losses = torch.stack([x["loss"] for x in outputs])
         avg_loss = losses.mean()
 
         # calculate per image per class IoU score
-        iou = smp.metrics.iou_score(
-            tp, fp, fn, tn, reduction=None
-        )
+        iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction=None)
 
         # get per class mIoU across all images
         cls_iou = iou.mean(dim=0)
 
         metrics = {
-            f'{stage} loss': avg_loss,
-            f'{stage} mIoU': cls_iou.mean(),
-            f'{stage}_cls0_mIoU': cls_iou[0],
-            f'{stage}_cls1_mIoU': cls_iou[1],
+            f"{stage} loss": avg_loss,
+            f"{stage} mIoU": cls_iou.mean(),
+            f"{stage}_cls0_mIoU": cls_iou[0],
+            f"{stage}_cls1_mIoU": cls_iou[1],
         }
 
         self.log_dict(metrics, prog_bar=True)
 
     def training_step(self, batch, batch_idx):
         """Execute a single training step."""
-        train_loss_info = self.shared_step(batch, 'train')
+        train_loss_info = self.shared_step(batch, "train")
         # append the metics of each step to the
         self.training_step_outputs.append(train_loss_info)
         return train_loss_info
 
     def on_train_epoch_end(self):
         """Aggregate and log training metrics at epoch end."""
-        self.shared_epoch_end(self.training_step_outputs, 'train')
+        self.shared_epoch_end(self.training_step_outputs, "train")
         # empty set output list
         self.training_step_outputs.clear()
         return
@@ -322,7 +343,7 @@ class SegmentationModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         """Execute a single validation step."""
         # Create key for each dataloader, e.g., 'valid0', 'valid1', etc.
-        key = f'valid{dataloader_idx}'
+        key = f"valid{dataloader_idx}"
         valid_loss_info = self.shared_step(batch, key)
 
         # Initialize list for this dataloader if not already
@@ -341,16 +362,15 @@ class SegmentationModel(pl.LightningModule):
         # Clear for next epoch
         self.validation_step_outputs.clear()
 
-
     def test_step(self, batch, batch_idx):
         """Execute a single test step."""
-        test_loss_info = self.shared_step(batch, 'test')
+        test_loss_info = self.shared_step(batch, "test")
         self.test_step_outputs.append(test_loss_info)
         return test_loss_info
 
     def on_test_epoch_end(self):
         """Aggregate and log test metrics at epoch end."""
-        self.shared_epoch_end(self.test_step_outputs, 'test')
+        self.shared_epoch_end(self.test_step_outputs, "test")
         # empty set output list
         self.test_step_outputs.clear()
         return
@@ -358,11 +378,11 @@ class SegmentationModel(pl.LightningModule):
     def configure_optimizers(self):
         """Configure the optimizer and learning rate scheduler."""
         return {
-            'optimizer': self.optim_fn,
-            'lr_scheduler': {
-                'scheduler': self.sched_fn,
-                'interval': 'step',
-                'frequency': 1,
+            "optimizer": self.optim_fn,
+            "lr_scheduler": {
+                "scheduler": self.sched_fn,
+                "interval": "step",
+                "frequency": 1,
             },
         }
         return

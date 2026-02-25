@@ -1,19 +1,20 @@
 """Signal model for AIM-Resolve astronomical reconstruction."""
 
 import dataclasses
+from collections.abc import Callable
+from typing import Any
+
 import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
-from nifty.re import Model, VModel, Vector
-from typing import Any, Callable
+from nifty.re import Model, Vector, VModel
 
-from .grid import SignalGrid, PointGrid
+from ..optimize.samples import domain_tree, model_init
+from .grid import PointGrid, SignalGrid
 from .map import map_signal
 from .prior import prior_model
 from .spectral import MultiFrequencyModel, spectral_model
-from .util import check_type, to_shape, extend_shape
-from ..optimize.samples import domain_tree, model_init
-
+from .util import check_type, extend_shape, to_shape
 
 
 class SignalModel(Model):
@@ -26,7 +27,16 @@ class SignalModel(Model):
 
     mask: Any = dataclasses.field(default=None, metadata=dict(static=False))
 
-    def __init__(self, grid, freq, model, prefix='sm', offset=0, nonlinearity=jnp.exp, gaussian=None):
+    def __init__(
+        self,
+        grid,
+        freq,
+        model,
+        prefix="sm",
+        offset=0,
+        nonlinearity=jnp.exp,
+        gaussian=None,
+    ):
         check_type(grid, (SignalGrid, PointGrid))
         check_type(freq, np.ndarray)
         check_type(model, (Model, VModel))
@@ -44,8 +54,8 @@ class SignalModel(Model):
         self.gaussian = gaussian
         self.map_function = lambda x: x
         super().__init__(
-            domain = Vector(domain_tree((self.model, self.gaussian), error=False)), 
-            init = model_init((self.model, self.gaussian), error=False),
+            domain=Vector(domain_tree((self.model, self.gaussian), error=False)),
+            init=model_init((self.model, self.gaussian), error=False),
         )
 
     def __call__(self, x, *, map=False):
@@ -78,7 +88,17 @@ class SignalModel(Model):
         return res
 
     @classmethod
-    def build(cls, *, grid, freq=[1.], params, prefix='sm', offset=0, nonlinearity='exp', gaussian=None):
+    def build(
+        cls,
+        *,
+        grid,
+        freq=[1.0],
+        params,
+        prefix="sm",
+        offset=0,
+        nonlinearity="exp",
+        gaussian=None,
+    ):
         """
         Build a SignalModel from the given parameters.
 
@@ -105,27 +125,27 @@ class SignalModel(Model):
         """
         from ..resolve.observation import Observation
 
-        if 'coordinates' in grid:
+        if "coordinates" in grid:
             grid = PointGrid.build(**grid)
         else:
             grid = SignalGrid.build(**grid)
 
         if isinstance(freq, Observation):
             freq = freq.freq
-        freq = to_shape(freq, (len(freq),), 'float64')
+        freq = to_shape(freq, (len(freq),), "float64")
 
         if nonlinearity:
             nonlinearity = getattr(jnp, nonlinearity, None)
 
-        model = spectral_model(f'{prefix} ', grid, freq, nonlinearity, **params)
+        model = spectral_model(f"{prefix} ", grid, freq, nonlinearity, **params)
 
-        offset = to_shape(offset, (), 'float64')
+        offset = to_shape(offset, (), "float64")
 
-        if gaussian != None and isinstance(grid, SignalGrid):
-            gaussian, _ = prior_model(f'{prefix} gm ', grid, **gaussian)
+        if gaussian is not None and isinstance(grid, SignalGrid):
+            gaussian, _ = prior_model(f"{prefix} gm ", grid, **gaussian)
 
         return cls(grid, freq, model, prefix, offset, nonlinearity, gaussian)
-    
+
     def set_out_grid(self, out_grid):
         """Set the output grid and configure the map function.
 
@@ -142,7 +162,7 @@ class SignalModel(Model):
     def shape(self):
         """Shape of the signal model output array."""
         return extend_shape(1, self.freq, self.grid.shape)
-    
+
     def set_offset(self, offset):
         """
         Set the offset for the signal model.
@@ -152,35 +172,55 @@ class SignalModel(Model):
         offset : float
             Offset to add to the signal model.
         """
-        self.offset = to_shape(offset, (), 'float64')
+        self.offset = to_shape(offset, (), "float64")
         return
-    
+
     def copy(self):
         """Return a shallow copy of this SignalModel."""
-        return SignalModel(self.grid, self.freq, self.model, self.prefix, self.offset, self.nonlinearity, self.gaussian)
+        return SignalModel(
+            self.grid,
+            self.freq,
+            self.model,
+            self.prefix,
+            self.offset,
+            self.nonlinearity,
+            self.gaussian,
+        )
 
     @property
     def ref_freq_model(self):
         """Return the reference frequency model."""
-        offset = self.offset[:,0] if self.offset.ndim == 4 else self.offset
-        return self._spectral_property('i0', 'reference_frequency_distribution', offset, self.nonlinearity, self.gaussian)
+        offset = self.offset[:, 0] if self.offset.ndim == 4 else self.offset
+        return self._spectral_property(
+            "i0",
+            "reference_frequency_distribution",
+            offset,
+            self.nonlinearity,
+            self.gaussian,
+        )
 
     @property
     def spectral_index(self):
         """Return the spectral index model."""
-        return self._spectral_property('alpha', 'spectral_index_distribution', 0, None, None)
+        return self._spectral_property(
+            "alpha", "spectral_index_distribution", 0, None, None
+        )
 
     @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
-        return self._spectral_property('deviations', 'spectral_deviations_distribution', 0, None, None)
+        return self._spectral_property(
+            "deviations", "spectral_deviations_distribution", 0, None, None
+        )
 
     @property
     def spectral_model(self):
         """Return the spectral model."""
-        return self._spectral_property('', 'spectral_distribution', 0, None, None)
+        return self._spectral_property("", "spectral_distribution", 0, None, None)
 
-    def _spectral_property(self, mfm_attr, ubik_attr, offset=0, nonlinearity=None, gaussian=None):
+    def _spectral_property(
+        self, mfm_attr, ubik_attr, offset=0, nonlinearity=None, gaussian=None
+    ):
         """Create a SignalModel for a specific spectral property.
 
         Parameters
@@ -209,18 +249,30 @@ class SignalModel(Model):
                 n_copies = model.target.shape[0]
                 model = model.model
             if isinstance(model, MultiFrequencyModel):
-                if mfm_attr in ('alpha', 'deviations'):
+                if mfm_attr in ("alpha", "deviations"):
                     prop = getattr(model, mfm_attr)
-                elif mfm_attr == 'i0':
-                    prop = MultiFrequencyModel(model.i0, None, None, None, self.nonlinearity)
+                elif mfm_attr == "i0":
+                    prop = MultiFrequencyModel(
+                        model.i0, None, None, None, self.nonlinearity
+                    )
                 else:
-                    prop = MultiFrequencyModel(None, model.log_freq, model.alpha, model.deviations, None)
+                    prop = MultiFrequencyModel(
+                        None, model.log_freq, model.alpha, model.deviations, None
+                    )
             else:
-                prop = Model(lambda x: getattr(model, ubik_attr)(x), domain=model.domain, init=model.init)
+                prop = Model(
+                    lambda x: getattr(model, ubik_attr)(x),
+                    domain=model.domain,
+                    init=model.init,
+                )
             if n_copies > 1:
                 prop = VModel(prop, n_copies)
-            freq = np.ones((1,)) if mfm_attr in ('i0', 'alpha') else self.freq
-            sig = SignalModel(self.grid, freq, prop, self.prefix, offset, nonlinearity, gaussian)
+            freq = np.ones((1,)) if mfm_attr in ("i0", "alpha") else self.freq
+            sig = SignalModel(
+                self.grid, freq, prop, self.prefix, offset, nonlinearity, gaussian
+            )
             return sig
         else:
-            raise ValueError(f'spectral properties are only defined for multi-frequency models.')
+            raise ValueError(
+                "spectral properties are only defined for multi-frequency models."
+            )

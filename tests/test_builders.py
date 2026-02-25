@@ -1,17 +1,16 @@
 """Tests for aim_resolve.builders."""
 
 import pytest
-from unittest.mock import patch
 
 from aim_resolve.builders import get_builders
 from aim_resolve.data import data_func
 from aim_resolve.likelihood import likelihood_func
 from aim_resolve.transition import transition_func
 
-
 # ---------------------------------------------------------------------------
 # Dispatch for data / likelihood / transition sections
 # ---------------------------------------------------------------------------
+
 
 class TestGetBuildersDispatch:
     """Test that get_builders selects the correct builder for each prefix."""
@@ -51,6 +50,7 @@ class TestGetBuildersDispatch:
 # Dispatch for sky-model sections
 # ---------------------------------------------------------------------------
 
+
 class TestGetBuildersSkyDispatch:
     """Test sky-model type resolution based on section values."""
 
@@ -58,24 +58,28 @@ class TestGetBuildersSkyDispatch:
         sections = {"sky.0": {"background": True, "grid": {}}}
         builders = get_builders(sections)
         from aim_resolve.model.components import ComponentModel
+
         assert builders["sky.0"].__func__ is ComponentModel.build.__func__
 
     def test_sky_point_grid(self):
         sections = {"sky.0": {"point_grid": {}, "grid": {}}}
         builders = get_builders(sections)
         from aim_resolve.model.points import PointModel
+
         assert builders["sky.0"].__func__ is PointModel.build.__func__
 
     def test_sky_tile_grid(self):
         sections = {"sky.0": {"tile_grid": {}, "grid": {}}}
         builders = get_builders(sections)
         from aim_resolve.model.tiles import TileModel
+
         assert builders["sky.0"].__func__ is TileModel.build.__func__
 
     def test_sky_params(self):
         sections = {"sky.0": {"params": {}}}
         builders = get_builders(sections)
         from aim_resolve.model.signal import SignalModel
+
         assert builders["sky.0"].__func__ is SignalModel.build.__func__
 
     def test_sky_unknown_raises(self):
@@ -87,6 +91,7 @@ class TestGetBuildersSkyDispatch:
 # ---------------------------------------------------------------------------
 # Mixed sections
 # ---------------------------------------------------------------------------
+
 
 class TestGetBuildersMixed:
     """Test with a combination of different section types."""

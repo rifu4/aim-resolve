@@ -2,7 +2,6 @@
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from aim_resolve.model.map import downsample, upsample
 

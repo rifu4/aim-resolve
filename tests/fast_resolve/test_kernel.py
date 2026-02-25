@@ -1,10 +1,11 @@
 """Tests for aim_resolve.fast_resolve.kernel — PSF and noise kernel builders."""
 
-import numpy as np
-import pytest
 from unittest.mock import MagicMock
 
-from aim_resolve.fast_resolve.kernel import build_psf_kernel, build_n_inv_kernel
+import numpy as np
+import pytest
+
+from aim_resolve.fast_resolve.kernel import build_n_inv_kernel, build_psf_kernel
 
 
 class TestBuildPsfKernel:

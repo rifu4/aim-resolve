@@ -2,20 +2,20 @@
 
 import os
 import pickle
+
 import jax.numpy as jnp
 import nifty.re as jft
 import numpy as np
-from jax import random, lax
+from jax import lax, random
 from jax.typing import ArrayLike
 from jax_tqdm import loop_tqdm
 
-from .components import ComponentGenerator
 from ..model.grid import SignalGrid
 from ..model.util import check_type
+from .components import ComponentGenerator
 
 
-
-class ImageDataGenerator():
+class ImageDataGenerator:
     """Generator for synthetic image data batches.
 
     Use the ``build`` class method to create an instance.
@@ -43,7 +43,7 @@ class ImageDataGenerator():
     @property
     def x(self):
         return self.samples[:, 0, jnp.newaxis, :, :]
-    
+
     @property
     def y(self):
         return self.samples[:, 1:, :, :]
@@ -95,7 +95,7 @@ class ImageDataGenerator():
 
             samples_i = jnp.empty((n_i,) + self.model.target.shape)
 
-            print(f'Step {batch_i + 1}/{n_batches}: ', end='', flush=True)
+            print(f"Step {batch_i + 1}/{n_batches}: ", end="", flush=True)
 
             @loop_tqdm(n_i)
             def step(i, tpl):
@@ -111,7 +111,7 @@ class ImageDataGenerator():
 
         self.samples = samples
 
-    def get_sample(self, index=0, prefix='data'):
+    def get_sample(self, index=0, prefix="data"):
         """Return a single sample as an ``ImageData`` object.
 
         Parameters
@@ -128,8 +128,10 @@ class ImageDataGenerator():
             The selected sample.
         """
         return ImageData(self.x[index, 0], self.grid, prefix, self.y[index])
-    
-    def plot_samples(self, name, odir='', n_copies=10, grid=False, label=False, **kwargs):
+
+    def plot_samples(
+        self, name, odir="", n_copies=10, grid=False, label=False, **kwargs
+    ):
         """Plot a selection of drawn samples.
 
         Parameters
@@ -155,26 +157,26 @@ class ImageDataGenerator():
         from ..plot.arrays import plot_arrays
 
         if not isinstance(self.samples, np.ndarray):
-            raise ValueError('no samples to plot - please draw samples first')
+            raise ValueError("no samples to plot - please draw samples first")
 
         rows = min(n_copies, self.samples.shape[0])
         vals = self.samples[:rows]
 
         if odir:
-            if not odir.endswith(('plots', 'plots/')):
-                odir = os.path.join(odir, 'plots')
+            if not odir.endswith(("plots", "plots/")):
+                odir = os.path.join(odir, "plots")
             os.makedirs(odir, exist_ok=True)
 
-        [kwargs.pop(key, None) for key in ('rows', 'cols')]
-        
+        [kwargs.pop(key, None) for key in ("rows", "cols")]
+
         plot_arrays(
-            array = vals,
-            grid = self.grid if grid else None,
-            label = ['sky', 'points', 'objects'] if label else None,
-            rows = rows,
-            cols = 3,
-            name = name,
-            odir = odir,
+            array=vals,
+            grid=self.grid if grid else None,
+            label=["sky", "points", "objects"] if label else None,
+            rows=rows,
+            cols=3,
+            name=name,
+            odir=odir,
             **kwargs,
         )
 
@@ -197,14 +199,14 @@ class ImageDataGenerator():
             If no samples have been drawn yet.
         """
         if not isinstance(self.samples, np.ndarray):
-            raise ValueError('no samples to get - please draw samples first')
-        
+            raise ValueError("no samples to get - please draw samples first")
+
         size = min(size, self.samples.shape[0])
         samples = self.samples[:size]
 
         return ImageDataGenerator(self.model, self.parameters, samples)
 
-    def save(self, name, odir='', dtype='float64'):
+    def save(self, name, odir="", dtype="float64"):
         """Save the generator (parameters and samples) to a pickle file.
 
         Parameters
@@ -216,15 +218,15 @@ class ImageDataGenerator():
         dtype : str, optional
             Numeric type for the saved samples. Default is ``'float64'``.
         """
-        if not name.endswith('.pkl'):
-            name += '.pkl'
+        if not name.endswith(".pkl"):
+            name += ".pkl"
         os.makedirs(odir, exist_ok=True)
 
-        with open(os.path.join(odir, name), 'wb') as f:
+        with open(os.path.join(odir, name), "wb") as f:
             pickle.dump((self.parameters, self.samples.astype(dtype)), f)
 
     @classmethod
-    def load(cls, name, odir='', dtype='float64'):
+    def load(cls, name, odir="", dtype="float64"):
         """Load a generator from a pickle file.
 
         Parameters
@@ -241,16 +243,15 @@ class ImageDataGenerator():
         ImageDataGenerator
             The restored generator.
         """
-        if not name.endswith('.pkl'):
-            name += '.pkl'
-        with open(os.path.join(odir, name), 'rb') as file:
+        if not name.endswith(".pkl"):
+            name += ".pkl"
+        with open(os.path.join(odir, name), "rb") as file:
             parameters, samples = pickle.load(file)
-        
+
         return cls.build(parameters=parameters, samples=samples.astype(dtype))
 
 
-
-class ImageData():
+class ImageData:
     """Container for a single image observation used in reconstruction.
 
     Parameters
@@ -265,7 +266,7 @@ class ImageData():
         Segmentation / output maps for the image. Default is None.
     """
 
-    def __init__(self, val, grid, prefix='data', maps=None):
+    def __init__(self, val, grid, prefix="data", maps=None):
         check_type(val, ArrayLike)
         check_type(grid, SignalGrid)
         check_type(prefix, str)
@@ -274,18 +275,20 @@ class ImageData():
         self.val = np.array(val)
         self.grid = grid
         self.prefix = prefix
-        self.maps = np.array(maps) if isinstance(maps, ArrayLike) else np.zeros_like(self.val)
+        self.maps = (
+            np.array(maps) if isinstance(maps, ArrayLike) else np.zeros_like(self.val)
+        )
         self.noisy_val = None
 
     def __repr__(self) -> str:
         s = [
-            f'prefix:\t{self.prefix}',
-            f'image shape:\t{self.val.shape}',
-            f'# pixel:\t{self.val.size}',
-            f'grid fov:\t{tuple(self.grid.fov.tolist())}',
+            f"prefix:\t{self.prefix}",
+            f"image shape:\t{self.val.shape}",
+            f"# pixel:\t{self.val.size}",
+            f"grid fov:\t{tuple(self.grid.fov.tolist())}",
         ]
-        return '\n'.join(['ImageData:'] + [f'  {ss}' for ss in s])
-    
+        return "\n".join(["ImageData:"] + [f"  {ss}" for ss in s])
+
     def add_noise(self, key, max_std=0.001):
         """Add Gaussian noise to the image and store as ``noisy_val``.
 
@@ -302,7 +305,7 @@ class ImageData():
         noise = n_std * random.normal(key, self.grid.shape)
         self.noisy_val = self.val + noise
 
-    def save(self, name, odir='', dtype='float64'):
+    def save(self, name, odir="", dtype="float64"):
         """Save the image data to a pickle file.
 
         Parameters
@@ -314,16 +317,24 @@ class ImageData():
         dtype : str, optional
             Numeric type for the saved arrays. Default is ``'float64'``.
         """
-        if not name.endswith('.pkl'):
-            name += '.pkl'
+        if not name.endswith(".pkl"):
+            name += ".pkl"
         if odir:
             os.makedirs(odir, exist_ok=True)
 
-        with open(os.path.join(odir, name), 'wb') as f:
-            pickle.dump((self.val.astype(dtype), self.grid, self.prefix, self.maps.astype(dtype)), f)
+        with open(os.path.join(odir, name), "wb") as f:
+            pickle.dump(
+                (
+                    self.val.astype(dtype),
+                    self.grid,
+                    self.prefix,
+                    self.maps.astype(dtype),
+                ),
+                f,
+            )
 
     @classmethod
-    def load(cls, name, odir='', dtype='float64'):
+    def load(cls, name, odir="", dtype="float64"):
         """Load image data from a pickle file.
 
         Parameters
@@ -340,9 +351,9 @@ class ImageData():
         ImageData
             The restored image data.
         """
-        if not name.endswith('.pkl'):
-            name += '.pkl'
-        with open(os.path.join(odir, name), 'rb') as file:
+        if not name.endswith(".pkl"):
+            name += ".pkl"
+        with open(os.path.join(odir, name), "rb") as file:
             val, grid, prefix, maps = pickle.load(file)
 
         return cls(val.astype(dtype), grid, prefix, maps.astype(dtype))

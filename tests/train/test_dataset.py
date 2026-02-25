@@ -5,22 +5,20 @@ ImageDataGenerator which require complex setups.  We test the standalone
 helper functions that operate on plain JAX / numpy arrays.
 """
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from aim_resolve.train.dataset import (
-    rotate_array,
-    flip_array,
-    build_facet_array,
-    merge_facet_array,
+    TensorDataset,
     add_coordinates,
+    build_facet_array,
+    flip_array,
+    merge_facet_array,
+    rotate_array,
     split_data,
     transform_data,
-    TensorDataset,
 )
-
 
 # ---------------------------------------------------------------------------
 # rotate_array
@@ -129,8 +127,10 @@ class TestAddCoordinates:
     def test_channels_increase(self):
         images = np.random.default_rng(0).random((3, 1, 8, 8))
         labels = np.random.default_rng(0).random((3, 1, 8, 8))
-        coos = [np.random.default_rng(0).random((8, 8)),
-                np.random.default_rng(1).random((8, 8))]
+        coos = [
+            np.random.default_rng(0).random((8, 8)),
+            np.random.default_rng(1).random((8, 8)),
+        ]
         result_images, result_labels = add_coordinates((images, labels), coos)
         # 1 original channel + 2 coordinate channels
         assert result_images.shape == (3, 3, 8, 8)

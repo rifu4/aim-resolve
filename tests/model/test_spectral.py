@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from nifty.re import Model
 
-from aim_resolve.model.spectral import MultiFrequencyModel, spectral_prior_model
 from aim_resolve.model.grid import SignalGrid
 from aim_resolve.model.normal import normal_model
+from aim_resolve.model.spectral import MultiFrequencyModel, spectral_prior_model
 
 
 @pytest.fixture

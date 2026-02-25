@@ -6,21 +6,23 @@ from collections.abc import Iterable
 from copy import deepcopy
 
 
-
 def clean_dict(dct):
     """Clean up a dictionary by removing all 1. order keys that are not referenced in any value of the dictionary."""
 
     def _need_key(key, dct):
         """Check if a key is referenced in any value of the dictionary."""
-        if 'opt' in key and not 'base' in key:
+        if "opt" in key and "base" not in key:
             return True
-        for k,v in dct.items():               
+        for k, v in dct.items():
             if isinstance(v, dict):
                 if _need_key(key, v):
                     return True
-            elif isinstance(v, str) and key in v:
-                return True
-            elif isinstance(v, list) and any(key in vi for vi in v if isinstance(vi,str)):
+            elif (
+                isinstance(v, str)
+                and key in v
+                or isinstance(v, list)
+                and any(key in vi for vi in v if isinstance(vi, str))
+            ):
                 return True
         return False
 
@@ -32,67 +34,63 @@ def clean_dict(dct):
     return n_dct
 
 
-
 def merge_dicts(dcts, merge_base=False):
     """Merge multiple dictionaries and subdictionaries into one dictionary."""
     n_dct = {}
     for d in dcts:
-        for k,v in d.items():
+        for k, v in d.items():
             if k in n_dct and all(isinstance(x, dict) for x in [n_dct[k], v]):
                 n_dct[k] = merge_dicts([n_dct[k], v], merge_base)
-            elif k[:4] == 'base' and not merge_base:
+            elif k[:4] == "base" and not merge_base:
                 continue
             else:
                 n_dct[k] = v
     return n_dct
 
 
-
 def split_its(dct):
     """Split a dictionary into a list of dictionaries based on the iteration number."""
     n_dct = {}
-    for key,val in dct.items():
-        if '.' in key:
-            _, ki = key.split('.')
-            it_key = 'it.' + str(int(ki))
-        elif 'base' in key:
-            it_key = 'm'
-        elif 'opt' in key:
-            it_key = 'a'
+    for key, val in dct.items():
+        if "." in key:
+            _, ki = key.split(".")
+            it_key = "it." + str(int(ki))
+        elif "base" in key:
+            it_key = "m"
+        elif "opt" in key:
+            it_key = "a"
         else:
-            it_key = 'z'
-        if not it_key in n_dct:
+            it_key = "z"
+        if it_key not in n_dct:
             n_dct[it_key] = {}
         n_dct[it_key] |= {key: deepcopy(val)}
-    return [v for k,v in sorted(n_dct.items())]
-
+    return [v for k, v in sorted(n_dct.items())]
 
 
 def update_it(dct, it, fix_keys=[]):
     """Update the iteration number in the keys of a dictionary for not fixed keys (new_it = old_it + 1)."""
     n_dct = {}
-    for key,val in dct.items():
+    for key, val in dct.items():
         if isinstance(val, dict):
             val = update_it(val, it, fix_keys)
         n_key = key
         try:
-            pre, suf = n_key.split('.')
+            pre, suf = n_key.split(".")
             if int(suf) <= it:
-                n_key = pre + '.' + str(it + 1)
+                n_key = pre + "." + str(it + 1)
         except:
             pass
         n_val = val
         try:
-            pre, suf = n_val.split('.')
+            pre, suf = n_val.split(".")
             if not any(fk in n_val for fk in fix_keys):
                 if int(suf) <= it:
-                    n_val = pre + '.' + str(it + 1)
+                    n_val = pre + "." + str(it + 1)
         except:
             pass
         n_dct[n_key] = n_val
 
     return n_dct
-
 
 
 def has_key(dct, key):
@@ -105,7 +103,6 @@ def has_key(dct, key):
     return False
 
 
-
 def has_val(dct, val):
     """Check if a value is in a dictionary or any subdictionary."""
     if val in dct.values():
@@ -116,37 +113,34 @@ def has_val(dct, val):
     return False
 
 
-
 def pop_key(dct, key):
     """Remove a key from a dictionary and all subdictionaries."""
-    new_dct={}
-    for k,v in dct.items():     
+    new_dct = {}
+    for k, v in dct.items():
         if k != key:
-            new_dct[k] = v      
+            new_dct[k] = v
             if isinstance(v, dict):
                 new_dct[k] = pop_key(v, key)
     return new_dct
 
 
-
 def pop_val(dct, val):
     """Remove a value from a dictionary and all subdictionaries."""
-    new_dct={}
-    for k,v in dct.items():     
+    new_dct = {}
+    for k, v in dct.items():
         if v != val:
-            new_dct[k] = v      
+            new_dct[k] = v
             if isinstance(v, dict):
                 new_dct[k] = pop_val(v, val)
     return new_dct
 
 
-
 def add_dicts(*dicts):
     """Add multiple dictionaries and their subdictionaries."""
     n_dct = {}
-    
+
     def add_1dct(dct):
-        for (key,val) in dct.items():
+        for key, val in dct.items():
             if isinstance(val, dict):
                 n_dct[key] = add_dicts(n_dct.get(key, {}), val)
             else:
@@ -154,9 +148,8 @@ def add_dicts(*dicts):
 
     for d in dicts:
         add_1dct(d)
-    
-    return n_dct
 
+    return n_dct
 
 
 def is_or_contains_type(dct, typ):
@@ -173,7 +166,6 @@ def is_or_contains_type(dct, typ):
     return False
 
 
-
 def get_it(dct, it):
     """Get the value of a dictionary at a certain iteration number."""
 
@@ -184,8 +176,8 @@ def get_it(dct, it):
     dct_it = {}
     match dct:
         case dict():
-            for (key,val) in dct.items():
-                dct_it[key] = get_it(val, it)       
+            for key, val in dct.items():
+                dct_it[key] = get_it(val, it)
         case list():
             dct_it = _flatten_list(dct)[it]
         case _:
@@ -194,10 +186,15 @@ def get_it(dct, it):
     return dct_it
 
 
-
 def extend_reps(val, total_it, add_val=-1):
     """Add repeating values to a list to reach a total iteration number."""
-    val = list(val) if isinstance(val, Iterable) else [val, ]
+    val = (
+        list(val)
+        if isinstance(val, Iterable)
+        else [
+            val,
+        ]
+    )
     add_val = val[-1] if add_val == -1 else add_val
     dif = total_it - len(val)
     if dif < 0:
@@ -207,7 +204,6 @@ def extend_reps(val, total_it, add_val=-1):
     return val
 
 
-
 def clean_reps(dct, simplify=True):
     """Clean up repeating elements in a dictionary containing lists."""
 
@@ -215,39 +211,39 @@ def clean_reps(dct, simplify=True):
         expr = re.sub(r"'([^']*)'", r"\1", str(lst))
         if not any(isinstance(li, list) for li in lst):
             val = []
-            for i,li in enumerate(lst + ['']):
+            for i, li in enumerate(lst + [""]):
                 if i == 0:
                     f = 1
                 elif li == l0 and type(li) == type(l0):
                     f += 1
                 elif li != l0 or type(li) != type(l0):
-                    val += [f'{f}*[{l0}]'] if f>1 else [f'[{l0}]']
+                    val += [f"{f}*[{l0}]"] if f > 1 else [f"[{l0}]"]
                     f = 1
                 l0 = li
-            val = ' + '.join(val)
+            val = " + ".join(val)
             val = re.sub(r"'([^']*)'", r"\1", str(val))
             if len(val) < len(expr):
                 return val
         return expr
 
     def _clean_list(lst):
-        lst = [_clean_list(li) if isinstance(li,list) else li for li in lst]
+        lst = [_clean_list(li) if isinstance(li, list) else li for li in lst]
         if not any(isinstance(li, list) for li in lst) and len(set(lst)) == 1:
             return lst[0]
         elif simplify:
             return _simplify_list(lst)
         return lst
 
-    for (key,val) in dct.items():
+    for key, val in dct.items():
         match val:
             case dict():
                 dct[key] = clean_reps(val, simplify)
             case list():
                 newval = _clean_list(val)
                 match newval:
-                    case str() as nv if nv.startswith('[') and {'+', '*'} & set(nv):
-                        newval = '1*' + newval
-                    case str() as nv if {'[', ',', ']'} & set(nv):
+                    case str() as nv if nv.startswith("[") and {"+", "*"} & set(nv):
+                        newval = "1*" + newval
+                    case str() as nv if {"[", ",", "]"} & set(nv):
                         newval = val
                 if not isinstance(newval, list):
                     dct[key] = newval
@@ -255,18 +251,17 @@ def clean_reps(dct, simplify=True):
     return dct
 
 
-
 def eval_string(expr):
     """Evaluate a string expression and return the result."""
-    expr = expr.replace(' ', '')
-    expr = re.sub(r'(?<!\d)([a-zA-Z=_~][a-zA-Z0-9.=_]*)(?!\d)', r'"\1"', expr)
+    expr = expr.replace(" ", "")
+    expr = re.sub(r"(?<!\d)([a-zA-Z=_~][a-zA-Z0-9.=_]*)(?!\d)", r'"\1"', expr)
     expr = re.sub(r'"None"|"null"|"~"', "None", expr)
-    
+
     def _eval(node):
         match node:
-            case ast.List(elts=elts): 
+            case ast.List(elts=elts):
                 return [_eval(el) for el in elts]
-            case ast.Tuple(elts=elts): 
+            case ast.Tuple(elts=elts):
                 return tuple(_eval(el) for el in elts)
             case ast.BinOp(left=left, op=ast.Add(), right=right):
                 left, right = _eval(left), _eval(right)
@@ -280,12 +275,12 @@ def eval_string(expr):
                 if isinstance(left, int) and isinstance(right, (list, tuple)):
                     return right * left
                 raise ValueError("Invalid multiplication")
-            case ast.Constant(value=value): 
+            case ast.Constant(value=value):
                 return value
-            case _: 
+            case _:
                 raise ValueError("Unsupported expression")
 
-    return _eval(ast.parse(expr, mode='eval').body)
+    return _eval(ast.parse(expr, mode="eval").body)
 
 
 def eval_list(expr):
@@ -297,28 +292,28 @@ def eval_list(expr):
     return expr
 
 
-
 def check_dict(dct, needed, optional=[]):
     """Check if all needed keys are in the dictionary and remove wrong keys."""
-    #TODO: adjust function -> similar to check_type
+    # TODO: adjust function -> similar to check_type
     allowed = set(needed) | set(optional)
     if dct:
         dct = {key: val for key, val in dct.items() if key in allowed}
         for key in needed:
             if key not in dct:
-                raise ValueError(f'key `{key}` is missing in dictionary')
+                raise ValueError(f"key `{key}` is missing in dictionary")
     return dct
-
 
 
 def fun2mode(dct):
     """Convert 'fun' entries in each section of a dictionary to 'mode' entries."""
     for sec in dct:
-        if 'fun' in dct[sec]:
-            fun = dct[sec].pop('fun')
-            if 'lh' in sec:
-                fun = 'fast' if 'fast' in fun else 'radio' if 'radio' in fun else 'image'
-            if 'data' in sec:
-                fun = 'radio' if 'radio' in fun else 'image'
-            dct[sec]['mode'] = fun
+        if "fun" in dct[sec]:
+            fun = dct[sec].pop("fun")
+            if "lh" in sec:
+                fun = (
+                    "fast" if "fast" in fun else "radio" if "radio" in fun else "image"
+                )
+            if "data" in sec:
+                fun = "radio" if "radio" in fun else "image"
+            dct[sec]["mode"] = fun
     return dct

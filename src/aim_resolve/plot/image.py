@@ -3,37 +3,36 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .util import plot_figure, set_cbar, set_ticks
 from ..model.grid import SignalGrid
-from ..model.map import map_signal 
-
+from ..model.map import map_signal
+from .util import plot_figure, set_cbar, set_ticks
 
 
 def plot_image(
-        array,
-        axes = None,
-        grid = None, 
-        label = None, 
-        name = None,
-        odir = None,
-        cmap = 'inferno',
-        norm = 'linear',
-        vmin = None,
-        vmax = None,
-        cbar = True,
-        cbar_kwargs = {},
-        ticks = 5,
-        origin = 'lower',
-        marker = {},
-        contour = {},
-        square = False,
-        plot_grid = True,
-        plot_label = True,
-        **kwargs,
+    array,
+    axes=None,
+    grid=None,
+    label=None,
+    name=None,
+    odir=None,
+    cmap="inferno",
+    norm="linear",
+    vmin=None,
+    vmax=None,
+    cbar=True,
+    cbar_kwargs={},
+    ticks=5,
+    origin="lower",
+    marker={},
+    contour={},
+    square=False,
+    plot_grid=True,
+    plot_label=True,
+    **kwargs,
 ):
     """
     Plot a single 2D image using plt.imshow.
-    
+
     Parameters
     ----------
     array : np.ndarray
@@ -65,7 +64,7 @@ def plot_image(
     origin : str, optional
         The origin parameter for imshow. Default is 'lower'.
     marker : dict or dict containing subdicts, optional
-        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
+        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}.
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
     contour : dict, optional
         The contours to plot. Keywords are passed to plt.contour. Default is {}.
@@ -80,21 +79,21 @@ def plot_image(
     """
     plot_now = False
     if axes is None:
-        figure = plt.figure(figsize=(5,5))
+        figure = plt.figure(figsize=(5, 5))
         axes = []
         axes.append(figure.add_subplot(1, 1, 1))
         plot_now = True
 
-    array = np.array(array, dtype='float64')
+    array = np.array(array, dtype="float64")
 
     if square:
         spc_old = SignalGrid.build(shape=array.shape, fov=array.shape)
         spc_new = SignalGrid.build(shape=spc_old.shp.max(), fov=spc_old.fov.max())
         array = map_signal(spc_old, spc_new)(array)
-        #TODO: fix grid for squared images. Set to None for now
+        # TODO: fix grid for squared images. Set to None for now
         grid = None
 
-    if norm == 'log' and vmin == None:
+    if norm == "log" and vmin is None:
         if array.min() > 0:
             amin = array.min()
         elif np.any(array > 0):
@@ -104,32 +103,32 @@ def plot_image(
         array = array.clip(amin, None)
 
     img = plt.imshow(
-        X = array.T, 
-        cmap = cmap, 
-        norm = norm, 
-        vmin = vmin, 
-        vmax = vmax, 
-        origin = origin,
+        X=array.T,
+        cmap=cmap,
+        norm=norm,
+        vmin=vmin,
+        vmax=vmax,
+        origin=origin,
         **kwargs,
     )
 
     if contour:
-        contour_array = contour.pop('array', array)
-        plt.contour(contour_array.T, origin='lower', **contour)
+        contour_array = contour.pop("array", array)
+        plt.contour(contour_array.T, origin="lower", **contour)
 
-    set_cbar(axes[-1], img, cbar, **cbar_kwargs)    
+    set_cbar(axes[-1], img, cbar, **cbar_kwargs)
 
     if plot_label and label:
         axes[-1].set_title(label)
-    
+
     set_ticks(axes[-1], grid, ticks, plot_grid)
-    
-    marker = {'m0': marker} if all(k in marker for k in ['x', 'y']) else marker
+
+    marker = {"m0": marker} if all(k in marker for k in ["x", "y"]) else marker
     for mrk in marker.values():
-        if isinstance(mrk, dict) and all(k in mrk for k in ['x', 'y']):
+        if isinstance(mrk, dict) and all(k in mrk for k in ["x", "y"]):
             axes[-1].scatter(**mrk)
         else:
-            raise TypeError('`marker` has to be a dictionary with keys `x`, `y`.')
+            raise TypeError("`marker` has to be a dictionary with keys `x`, `y`.")
 
     if plot_now:
         plot_figure(figure, odir, name)

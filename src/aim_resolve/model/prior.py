@@ -1,28 +1,33 @@
 """Prior model selection and initialization for AIM-Resolve."""
 
-from nifty.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
+from nifty.re import CorrelatedFieldMaker, InvGammaPrior, Model, UniformPrior, VModel
 
 from .gaussian import gaussian_model
 from .integer import integer_model
 from .normal import normal_model
 from .util import check_type
 
-
-
-CFM_KEYS = {'offset_mean', 'offset_std', 'fluctuations' ,'loglogavgslope', 'flexibility', 'asperity', 'non_parametric_kind'}
-NM_KEYS = {'mean', 'std'}
-IGM_KEYS = {'alpha', 'scale', 'mean', 'mode'}
-GSM_KEYS = {'cov_x', 'cov_y', 'scale', 'theta'}
-UM_KEYS = {'u_min', 'u_max'}
-IM_KEYS = {'i_min', 'i_max', 'step'}
-
+CFM_KEYS = {
+    "offset_mean",
+    "offset_std",
+    "fluctuations",
+    "loglogavgslope",
+    "flexibility",
+    "asperity",
+    "non_parametric_kind",
+}
+NM_KEYS = {"mean", "std"}
+IGM_KEYS = {"alpha", "scale", "mean", "mode"}
+GSM_KEYS = {"cov_x", "cov_y", "scale", "theta"}
+UM_KEYS = {"u_min", "u_max"}
+IM_KEYS = {"i_min", "i_max", "step"}
 
 
 def prior_model(
-        prefix,
-        grid,
-        n_copies = 1,
-        **i0_params,
+    prefix,
+    grid,
+    n_copies=1,
+    **i0_params,
 ):
     """
     Initialize one of the prior models based on the provided parameters.
@@ -45,7 +50,7 @@ def prior_model(
     pspec : Callable
         The power spectrum of the correlated field model. Otherwise None.
     """
-    from .grid import SignalGrid, PointGrid
+    from .grid import PointGrid, SignalGrid
 
     check_type(prefix, str)
     check_type(grid, (SignalGrid, PointGrid))
@@ -60,21 +65,15 @@ def prior_model(
                 shape=grid.shape,
                 distances=grid.distances,
                 n_copies=n_copies,
-                **i0_params
+                **i0_params,
             )
         case k if k.issubset(NM_KEYS):
             model = normal_model(
-                prefix=prefix,
-                shape=grid.shape,
-                n_copies=n_copies,
-                **i0_params
+                prefix=prefix, shape=grid.shape, n_copies=n_copies, **i0_params
             )
         case k if k.issubset(IGM_KEYS):
             model = inverse_gamma_model(
-                prefix=prefix,
-                shape=grid.shape,
-                n_copies=n_copies,
-                **i0_params
+                prefix=prefix, shape=grid.shape, n_copies=n_copies, **i0_params
             )
         case k if k.issubset(GSM_KEYS):
             check_type(grid, SignalGrid)
@@ -83,41 +82,35 @@ def prior_model(
                 shape=grid.shape,
                 distances=grid.distances,
                 n_copies=n_copies,
-                **i0_params
+                **i0_params,
             )
         case k if k.issubset(UM_KEYS):
             model = uniform_model(
-                prefix=prefix,
-                shape=grid.shape,
-                n_copies=n_copies,
-                **i0_params
+                prefix=prefix, shape=grid.shape, n_copies=n_copies, **i0_params
             )
         case k if k.issubset(IM_KEYS):
             model = integer_model(
-                prefix=prefix,
-                shape=grid.shape,
-                n_copies=n_copies,
-                **i0_params
+                prefix=prefix, shape=grid.shape, n_copies=n_copies, **i0_params
             )
         case _:
             print(set(i0_params.keys()))
-            raise ValueError('Invalid parameters for prior model')
+            raise ValueError("Invalid parameters for prior model")
     return model, pspec
-        
 
 
-def correlated_field_model(*,
-        prefix,
-        shape,
-        distances,
-        offset_mean = 0,
-        offset_std,
-        fluctuations,
-        loglogavgslope,
-        flexibility = None,
-        asperity = None,
-        non_parametric_kind = 'power',
-        n_copies = 1,
+def correlated_field_model(
+    *,
+    prefix,
+    shape,
+    distances,
+    offset_mean=0,
+    offset_std,
+    fluctuations,
+    loglogavgslope,
+    flexibility=None,
+    asperity=None,
+    non_parametric_kind="power",
+    n_copies=1,
 ):
     """
     Initialize the correlated field model of nifty.re (correlation model).
@@ -157,14 +150,14 @@ def correlated_field_model(*,
     cfm = CorrelatedFieldMaker(prefix)
     cfm.set_amplitude_total_offset(offset_mean, offset_std)
     cfm.add_fluctuations(
-        shape, 
-        distances, 
-        fluctuations, 
-        loglogavgslope, 
-        flexibility, 
+        shape,
+        distances,
+        fluctuations,
+        loglogavgslope,
+        flexibility,
         asperity,
-        non_parametric_kind = non_parametric_kind,
-    )  
+        non_parametric_kind=non_parametric_kind,
+    )
     model = cfm.finalize()
     power = Model(cfm.power_spectrum, domain=model.domain, init=model.init)
 
@@ -174,15 +167,15 @@ def correlated_field_model(*,
         return (model, power)
 
 
-
-def inverse_gamma_model(*,
-        prefix,
-        shape,
-        mean = None,
-        mode = None,
-        alpha = None,
-        scale = None,
-        n_copies = 1,
+def inverse_gamma_model(
+    *,
+    prefix,
+    shape,
+    mean=None,
+    mode=None,
+    alpha=None,
+    scale=None,
+    n_copies=1,
 ):
     """
     Initialize an inverse gamma distributed prior.
@@ -219,13 +212,19 @@ def inverse_gamma_model(*,
         scale = mode * (alpha + 1)
     """
     match (mean, mode, alpha, scale):
-        case (me, mo, None, None) if isinstance(me, (int, float)) and isinstance(mo, (int, float)):
+        case (me, mo, None, None) if isinstance(me, (int, float)) and isinstance(
+            mo, (int, float)
+        ):
             alpha = 2 / (me / mo - 1) + 1
             scale = mo * (alpha + 1)
-        case (None, None, al, sc) if isinstance(al, (int, float)) and isinstance(sc, (int, float)):
+        case (None, None, al, sc) if isinstance(al, (int, float)) and isinstance(
+            sc, (int, float)
+        ):
             pass
         case _:
-            raise ValueError('either `mean` and `mode` or `alpha` and `scale` have to be provided')
+            raise ValueError(
+                "either `mean` and `mode` or `alpha` and `scale` have to be provided"
+            )
     model = InvGammaPrior(alpha, scale, shape=shape, name=prefix)
 
     if n_copies > 1:
@@ -234,13 +233,13 @@ def inverse_gamma_model(*,
         return model
 
 
-
-def uniform_model(*,
-        prefix,
-        shape,
-        u_min,
-        u_max,
-        n_copies = 1,
+def uniform_model(
+    *,
+    prefix,
+    shape,
+    u_min,
+    u_max,
+    n_copies=1,
 ):
     """
     Initialize a uniform distributed prior.

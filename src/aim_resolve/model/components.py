@@ -1,24 +1,24 @@
 """Component model combining multiple signal, point, and tile models."""
 
+from itertools import product
+
 import jax.numpy as jnp
 import numpy as np
-from itertools import product
 from nifty.re import Model, Vector
 
+from ..optimize.samples import domain_keys, domain_tree, model_init
+from .grid import SignalGrid
 from .points import PointModel
 from .signal import SignalModel
-from .grid import SignalGrid
 from .tiles import TileModel
 from .util import check_type, extend_shape
-from ..optimize.samples import domain_keys, domain_tree, model_init
-
 
 
 class ComponentModel(Model):
     """Generate a component model. Use `build` function to create the model."""
 
-    def __init__(self, grid, background, prefix='cm', *components):
-        models = (background, ) + components
+    def __init__(self, grid, background, prefix="cm", *components):
+        models = (background,) + components
         check_type(grid, SignalGrid)
         check_type(prefix, str)
         [check_type(m, (SignalModel, PointModel, TileModel)) for m in models]
@@ -30,8 +30,8 @@ class ComponentModel(Model):
         self.prefix = prefix
         self.set_out_grid(grid)
         super().__init__(
-            domain = Vector(domain_tree(self.models)), 
-            init = model_init(self.models),
+            domain=Vector(domain_tree(self.models)),
+            init=model_init(self.models),
         )
 
     def __call__(self, x, nans=False):
@@ -55,9 +55,9 @@ class ComponentModel(Model):
         if nans:
             res = jnp.where(self.mask, res, jnp.nan)
         return res
-    
+
     @classmethod
-    def build(cls, *, background, prefix='cm', **components):
+    def build(cls, *, background, prefix="cm", **components):
         """
         Build a ComponentModel from the given parameters.
 
@@ -70,27 +70,29 @@ class ComponentModel(Model):
         components : keyword arguments
             Key/Value pairs containing the component models ({'key': model}).
         """
-        models = (background, ) + tuple(components.values())
+        models = (background,) + tuple(components.values())
         check_type(background, SignalModel)
         check_type(prefix, str)
         [check_type(m, (SignalModel, PointModel, TileModel)) for m in models]
         [check_type(m.grid, SignalGrid) for m in models]
 
-        for (i,mi), (j,mj) in product(enumerate(models), enumerate(models)):
+        for (i, mi), (j, mj) in product(enumerate(models), enumerate(models)):
             if i != j and domain_keys(mi) == domain_keys(mj):
-                raise ValueError(f'Two models have the same prefix `{mi.prefix}`.')
+                raise ValueError(f"Two models have the same prefix `{mi.prefix}`.")
             if i != j and np.any(mi.freq != mj.freq):
-                raise ValueError(f'Two models have different frequencies: `{mi.prefix}` and `{mj.prefix}`.')
-            #TODO: ensure that ref_freq_indices are the same
+                raise ValueError(
+                    f"Two models have different frequencies: `{mi.prefix}` and `{mj.prefix}`."
+                )
+            # TODO: ensure that ref_freq_indices are the same
 
         if len(models) == 1:
             grid = background.grid
         else:
             factor = max([m.grid.factor for m in models])
             grid = background.grid.refine(factor // background.grid.factor)
-        
+
         return cls(grid, background, prefix, *models[1:])
-    
+
     def set_out_grid(self, out_grid):
         """Set the output grid for the model and all sub-models.
 
@@ -105,12 +107,12 @@ class ComponentModel(Model):
         for m in self.models:
             m.set_out_grid(out_grid)
         return
-    
+
     @property
     def shape(self):
         """Shape of the output array including frequency and spatial dimensions."""
         return extend_shape(1, self.freq, self.out_grid.shape)
-    
+
     @property
     def mask(self):
         """Boolean mask indicating pixels covered by at least one sub-model."""
@@ -118,7 +120,7 @@ class ComponentModel(Model):
         for m in self.models:
             res += m.map_function(np.ones(m.shape))
         return res > 0
-    
+
     def copy(self):
         """Return a copy of the component model."""
         return ComponentModel(self.grid, self.background, self.prefix, *self.components)
@@ -137,56 +139,58 @@ class ComponentModel(Model):
     def objects(self):
         """Tuple of SignalModel components (diffuse objects)."""
         return tuple(c for c in self.components if isinstance(c, SignalModel))
-    
+
     @property
     def points(self):
         """Tuple of PointModel components."""
         return tuple(c for c in self.components if isinstance(c, PointModel))
-    
+
     @property
     def tiles(self):
         """Tuple of TileModel components."""
         return tuple(c for c in self.components if isinstance(c, TileModel))
-    
+
     @property
     def signals(self):
         """Tuple of all SignalModel instances (background + objects)."""
-        return (self.background, ) + self.objects
-    
+        return (self.background,) + self.objects
+
     @property
     def diffuse(self):
         """ComponentModel containing only the background and diffuse object models."""
         return ComponentModel(self.grid, self.background, self.prefix, *self.objects)
-    
+
     @property
     def separate(self):
         """Tuple of the diffuse component model and individual point models."""
-        return (self.diffuse, ) + self.points
-    
+        return (self.diffuse,) + self.points
+
     @property
     def points_and_objects(self):
         """ComponentModel containing only point and object components (no background)."""
-        return ComponentModel(self.grid, self.components[0], self.prefix, *self.components[1:])
-    
+        return ComponentModel(
+            self.grid, self.components[0], self.prefix, *self.components[1:]
+        )
+
     @property
     def ref_freq_model(self):
         """Return the reference frequency model."""
-        return self._spectral_property('ref_freq_model')
+        return self._spectral_property("ref_freq_model")
 
     @property
     def spectral_index(self):
         """Return the spectral index model."""
-        return self._spectral_property('spectral_index')
+        return self._spectral_property("spectral_index")
 
     @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
-        return self._spectral_property('spectral_deviations')
+        return self._spectral_property("spectral_deviations")
 
     @property
     def spectral_model(self):
         """Return the spectral model."""
-        return self._spectral_property('spectral_model')
+        return self._spectral_property("spectral_model")
 
     def _spectral_property(self, attr):
         """Helper function to create spectral properties.

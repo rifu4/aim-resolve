@@ -8,17 +8,16 @@ from .model.map import map_signal
 from .model.util import check_type, to_shape
 
 
-
 def masks_from_maps(
-        points_map,
-        object_maps,
-        it,
-        freq = [1.],
-        factor = 1,
-        margin_fac = 0.2,
-        margin_min = 2,
-        max_objects = 5,
-        tile_size = 0,
+    points_map,
+    object_maps,
+    it,
+    freq=[1.0],
+    factor=1,
+    margin_fac=0.2,
+    margin_min=2,
+    max_objects=5,
+    tile_size=0,
 ):
     """Create component masks from point-source and object detection maps.
 
@@ -52,15 +51,15 @@ def masks_from_maps(
     """
     mask_dct = {}
     margin_min *= factor
-    tile_size = to_shape(tile_size, (2,), 'int64') * factor
+    tile_size = to_shape(tile_size, (2,), "int64") * factor
 
     if np.any(points_map == 1):
         ps_coos = np.argwhere(points_map == 1)
         ps_maps = np.zeros((len(ps_coos),) + points_map.shape)
-        for i,co in enumerate(ps_coos):
+        for i, co in enumerate(ps_coos):
             ps_maps[i, co[0], co[1]] = 1
             ps_maps[i] = add_margin(ps_maps[i], margin_min, round=False)
-        mask_dct[f'p0.{it}'] = np.asarray(ps_maps)
+        mask_dct[f"p0.{it}"] = np.asarray(ps_maps)
 
     oj_maps, ts_maps = [], []
     for i in range(object_maps.shape[0]):
@@ -70,22 +69,24 @@ def masks_from_maps(
         o_mrg = int(max(o_mrg))
         o_map = add_margin(o_map, o_mrg, round=False)
 
-        o_pix = [1 + om.max() - om.min() for om in np.where(o_map>0)]
+        o_pix = [1 + om.max() - om.min() for om in np.where(o_map > 0)]
         if np.all(o_pix <= tile_size):
             ts_maps.append(o_map)
         elif i < max_objects:
             oj_maps.append(o_map)
 
     for i in range(len(oj_maps)):
-        mask_dct[f'o{i}.{it}'] = np.asarray(oj_maps[i])
+        mask_dct[f"o{i}.{it}"] = np.asarray(oj_maps[i])
 
     if len(ts_maps) > 0:
         ts_maps = np.concatenate([ti[None] for ti in ts_maps], axis=0)
-        mask_dct[f't0.{it}'] = np.asarray(ts_maps)
+        mask_dct[f"t0.{it}"] = np.asarray(ts_maps)
 
-    mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
+    mask_dct["sum"] = np.sum(
+        [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0
+    )
 
-    mask_dct[f'bg.{it}'] = np.floor(1 - mask_dct['sum']).clip(0,1)
+    mask_dct[f"bg.{it}"] = np.floor(1 - mask_dct["sum"]).clip(0, 1)
 
     if len(freq) > 1:
         for k, v in mask_dct.items():
@@ -94,11 +95,10 @@ def masks_from_maps(
     return mask_dct
 
 
-
 def masks_from_model(
-        sky,
-        factor = 1,
-        margin_min = 2,
+    sky,
+    factor=1,
+    margin_min=2,
 ):
     """Create component masks from an existing sky model.
 
@@ -126,7 +126,11 @@ def masks_from_model(
 
     for sky_pi in sky.points:
         ones_pi = remove_freq_axis(np.ones(sky_pi.shape), sky.freq)
-        mask_pi = np.array(map_signal(sky_pi.points.grid, sky.grid.update(n_copies=sky_pi.n_copies))(ones_pi))
+        mask_pi = np.array(
+            map_signal(sky_pi.points.grid, sky.grid.update(n_copies=sky_pi.n_copies))(
+                ones_pi
+            )
+        )
         for i in range(mask_pi.shape[0]):
             mask_pi[i] = add_margin(mask_pi[i], margin_min, round=True)
         mask_dct[sky_pi.prefix] = np.asarray(mask_pi)
@@ -138,24 +142,27 @@ def masks_from_model(
 
     for sky_ti in sky.tiles:
         ones_ti = remove_freq_axis(np.ones(sky_ti.shape), sky.freq)
-        mask_ti = map_signal(sky_ti.tiles.grid, sky.grid.update(n_copies=sky_ti.n_copies))(ones_ti)
+        mask_ti = map_signal(
+            sky_ti.tiles.grid, sky.grid.update(n_copies=sky_ti.n_copies)
+        )(ones_ti)
         mask_dct[sky_ti.prefix] = np.asarray(mask_ti)
 
-    mask_dct['sum'] = np.sum([np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0)
+    mask_dct["sum"] = np.sum(
+        [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_dct.values()], axis=0
+    )
 
-    mask_dct[sky.background.prefix] = np.floor(1 - mask_dct['sum']).clip(0,1)
+    mask_dct[sky.background.prefix] = np.floor(1 - mask_dct["sum"]).clip(0, 1)
 
     if sky.freq.size > 1:
         for k, v in mask_dct.items():
             mask_dct[k] = add_freq_axis(v, sky.freq)
-    
+
     return mask_dct
 
 
-
 def masks_to_boxes(
-        sky,
-        mask_dct,
+    sky,
+    mask_dct,
 ):
     """Map masks to the grids of the corresponding model components.
 
@@ -187,27 +194,28 @@ def masks_to_boxes(
 
     for sky_pi in sky.points:
         if mask_dct[sky_pi.prefix].shape != sky_pi.grid.shape:
-            mask_pi = np.ceil(map_signal(sky.grid, sky_pi.grid)(mask_dct[sky_pi.prefix]))
+            mask_pi = np.ceil(
+                map_signal(sky.grid, sky_pi.grid)(mask_dct[sky_pi.prefix])
+            )
             mask_box[sky_pi.prefix] = np.asarray(mask_pi.astype(bool))
 
-    for sky_oi in sky.objects:  
+    for sky_oi in sky.objects:
         if mask_dct[sky_oi.prefix].shape != sky_oi.grid.shape:
             mask_oi = map_signal(sky.grid, sky_oi.grid)(mask_dct[sky_oi.prefix])
-            if np.any((mask_oi > 0.) & (mask_oi < 1.)) and 'sum' in mask_dct:
-                mask_oi = (2 * mask_dct[sky_oi.prefix] - mask_dct['sum']).clip(0,1)
+            if np.any((mask_oi > 0.0) & (mask_oi < 1.0)) and "sum" in mask_dct:
+                mask_oi = (2 * mask_dct[sky_oi.prefix] - mask_dct["sum"]).clip(0, 1)
                 mask_oi = np.ceil(map_signal(sky.grid, sky_oi.grid)(mask_oi))
             mask_box[sky_oi.prefix] = np.asarray(mask_oi.astype(bool))
 
     for sky_ti in sky.tiles:
         if mask_dct[sky_ti.prefix].shape != sky_ti.grid.shape:
             mask_ti = map_signal(sky.grid, sky_ti.grid)(mask_dct[sky_ti.prefix])
-            if np.any((mask_ti > 0.) & (mask_ti < 1.)) and 'sum' in mask_dct:
-                mask_ti = (2 * mask_dct[sky_ti.prefix] - mask_dct['sum']).clip(0,1)
+            if np.any((mask_ti > 0.0) & (mask_ti < 1.0)) and "sum" in mask_dct:
+                mask_ti = (2 * mask_dct[sky_ti.prefix] - mask_dct["sum"]).clip(0, 1)
                 mask_ti = np.ceil(map_signal(sky.grid, sky_ti.grid)(mask_ti))
             mask_box[sky_ti.prefix] = np.asarray(mask_ti.astype(bool))
 
     return mask_box
-
 
 
 def add_margin(array, margin, round=False):
@@ -236,8 +244,10 @@ def add_margin(array, margin, round=False):
     if isinstance(margin, int):
         margin = (margin, margin)
     mx, my = margin
-    new_array = distance_transform_edt(1 - array, sampling=[1/(mx+.5), 1/(my+.5)])
-    new_array = (1 - new_array).clip(0,1)
+    new_array = distance_transform_edt(
+        1 - array, sampling=[1 / (mx + 0.5), 1 / (my + 0.5)]
+    )
+    new_array = (1 - new_array).clip(0, 1)
     if round:
         new_array = np.ceil(new_array)
     return new_array

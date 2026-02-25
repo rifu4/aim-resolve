@@ -2,14 +2,13 @@
 
 import jax.numpy as jnp
 import numpy as np
-from nifty.re import Model, VModel
+from nifty.re import Model
 
-from .grid import SignalGrid, PointGrid
+from .grid import PointGrid, SignalGrid
 from .map import map_signal
 from .signal import SignalModel
 from .spectral import spectral_model
-from .util import check_type, to_shape, extend_shape
-
+from .util import check_type, extend_shape, to_shape
 
 
 class PointModel(Model):
@@ -18,7 +17,7 @@ class PointModel(Model):
     Use the ``build`` class method to create the model.
     """
 
-    def __init__(self, grid, freq, points, prefix='pm'):
+    def __init__(self, grid, freq, points, prefix="pm"):
         check_type(grid, SignalGrid)
         check_type(freq, np.ndarray)
         check_type(points, SignalModel)
@@ -58,7 +57,17 @@ class PointModel(Model):
         return res
 
     @classmethod
-    def build(cls, *, grid, point_grid, freq=[1.], params, prefix='pm', offset=0, nonlinearity='exp'):
+    def build(
+        cls,
+        *,
+        grid,
+        point_grid,
+        freq=[1.0],
+        params,
+        prefix="pm",
+        offset=0,
+        nonlinearity="exp",
+    ):
         """Build a PointModel from the given parameters.
 
         Parameters
@@ -86,25 +95,27 @@ class PointModel(Model):
 
         point_grid = PointGrid.build(**point_grid)
 
-        grid = SignalGrid.build(**{'factor': point_grid.factor} | grid)
+        grid = SignalGrid.build(**{"factor": point_grid.factor} | grid)
 
         if isinstance(freq, Observation):
             freq = freq.freq
-        freq = to_shape(freq, (len(freq),), 'float64')
+        freq = to_shape(freq, (len(freq),), "float64")
 
         if nonlinearity:
             nonlinearity = getattr(jnp, nonlinearity, None)
 
         model_grid = SignalGrid.build(space=point_grid.shape)
-        model = spectral_model(f'{prefix} ', model_grid, freq, nonlinearity, point_grid.n_copies, **params)
+        model = spectral_model(
+            f"{prefix} ", model_grid, freq, nonlinearity, point_grid.n_copies, **params
+        )
 
         offset_shape = extend_shape(point_grid.n_copies, freq, (1, 1), offset=True)
-        offset = to_shape(offset, offset_shape, 'float64')
+        offset = to_shape(offset, offset_shape, "float64")
 
         points = SignalModel(point_grid, freq, model, prefix, offset, nonlinearity)
 
         return cls(grid, freq, points, prefix)
-    
+
     def set_out_grid(self, out_grid):
         """Set the output grid and update the map function.
 
@@ -116,11 +127,13 @@ class PointModel(Model):
         check_type(out_grid, SignalGrid)
         self.map_function = map_signal(self.points.grid, out_grid)
         return
-    
+
     @property
     def shape(self):
         """Shape of the point model output."""
-        return extend_shape(self.points.grid.n_copies, self.freq, self.points.grid.shape)
+        return extend_shape(
+            self.points.grid.n_copies, self.freq, self.points.grid.shape
+        )
 
     @property
     def n_copies(self):
@@ -132,7 +145,7 @@ class PointModel(Model):
         """Boolean mask indicating valid pixels."""
         res = self.map_function(np.ones(self.points.target.shape))
         return res > 0
-    
+
     def set_offset(self, offset):
         """Set the offset for the point model.
 
@@ -141,10 +154,12 @@ class PointModel(Model):
         offset : float or list of floats
             Offsets for the individual point signals.
         """
-        offset_shape = extend_shape(self.points.grid.n_copies, self.freq, (1, 1), offset=True)
-        self.points.offset = to_shape(offset, offset_shape, 'float64')
+        offset_shape = extend_shape(
+            self.points.grid.n_copies, self.freq, (1, 1), offset=True
+        )
+        self.points.offset = to_shape(offset, offset_shape, "float64")
         return
-    
+
     def copy(self):
         """Return a shallow copy of the point model."""
         return PointModel(self.grid, self.freq, self.points, self.prefix)
@@ -152,17 +167,23 @@ class PointModel(Model):
     @property
     def ref_freq_model(self):
         """Return the reference frequency model."""
-        return PointModel(self.grid, np.ones((1,)), self.points.ref_freq_model, self.prefix)
+        return PointModel(
+            self.grid, np.ones((1,)), self.points.ref_freq_model, self.prefix
+        )
 
     @property
     def spectral_index(self):
         """Return the spectral index model."""
-        return PointModel(self.grid, np.ones((1,)), self.points.spectral_index, self.prefix)
+        return PointModel(
+            self.grid, np.ones((1,)), self.points.spectral_index, self.prefix
+        )
 
     @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
-        return PointModel(self.grid, self.freq, self.points.spectral_deviations, self.prefix)
+        return PointModel(
+            self.grid, self.freq, self.points.spectral_deviations, self.prefix
+        )
 
     @property
     def spectral_model(self):

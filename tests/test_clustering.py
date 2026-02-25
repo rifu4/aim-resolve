@@ -1,14 +1,13 @@
 """Tests for aim_resolve.clustering."""
 
 import numpy as np
-import pytest
 
 from aim_resolve.clustering import dbscan_clustering, objects2points
-
 
 # ---------------------------------------------------------------------------
 # dbscan_clustering
 # ---------------------------------------------------------------------------
+
 
 class TestDbscanClustering:
     """Tests for the DBSCAN-based object clustering."""
@@ -95,6 +94,7 @@ class TestDbscanClustering:
 # objects2points
 # ---------------------------------------------------------------------------
 
+
 class TestObjects2Points:
     """Tests for converting single-pixel noise clusters to points."""
 
@@ -113,9 +113,7 @@ class TestObjects2Points:
         noise_map = np.zeros((64, 64))
         noise_map[30, 30] = 1  # isolated single pixel
 
-        result = objects2points(
-            points_map.copy(), noise_map, print_ps=False, eps=0.3
-        )
+        result = objects2points(points_map.copy(), noise_map, print_ps=False, eps=0.3)
         assert result[30, 30] == 1
 
     def test_output_is_binary(self):
@@ -125,9 +123,7 @@ class TestObjects2Points:
         noise_map = np.zeros((64, 64))
         noise_map[10, 10] = 1  # overlapping pixel
 
-        result = objects2points(
-            points_map.copy(), noise_map, print_ps=False, eps=0.3
-        )
+        result = objects2points(points_map.copy(), noise_map, print_ps=False, eps=0.3)
         assert result.max() <= 1
         assert result.min() >= 0
 
@@ -139,8 +135,6 @@ class TestObjects2Points:
         noise_map = np.zeros((64, 64))
         noise_map[30, 30] = 1
 
-        result = objects2points(
-            points_map.copy(), noise_map, print_ps=False, eps=0.3
-        )
+        result = objects2points(points_map.copy(), noise_map, print_ps=False, eps=0.3)
         assert result[5, 5] == 1
         assert result[50, 50] == 1

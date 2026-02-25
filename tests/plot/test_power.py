@@ -1,11 +1,11 @@
 """Tests for aim_resolve.plot.power — plot_power smoke tests."""
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pytest
 
 from aim_resolve.plot.power import plot_power
 

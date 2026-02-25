@@ -2,8 +2,6 @@
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
-
 from nifty.re import Model, Vector
 
 from aim_resolve.fast_resolve.opt_kl import SkyResidualModel, my_lh

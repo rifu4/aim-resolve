@@ -4,14 +4,13 @@ import jax.numpy as jnp
 from jax import random
 from nifty.re import Model, Vector
 
+from ..model.grid import SignalGrid
+from ..model.util import check_type
+from ..optimize.samples import domain_tree, model_init
 from .background import BackgroundGenerator
 from .objects import ObjectGenerator
 from .points import PointGenerator
 from .tiles import TileGenerator
-from ..model.grid import SignalGrid
-from ..model.util import check_type
-from ..optimize.samples import domain_tree, model_init
-
 
 
 class ComponentGenerator(Model):
@@ -46,8 +45,15 @@ class ComponentGenerator(Model):
         self.tiles = tiles
         self.objects = objects
         super().__init__(
-            domain = Vector(domain_tree((self.background, self.points, self.tiles, self.objects), error=False)), 
-            init = model_init((self.background, self.points, self.tiles, self.objects), error=False),
+            domain=Vector(
+                domain_tree(
+                    (self.background, self.points, self.tiles, self.objects),
+                    error=False,
+                )
+            ),
+            init=model_init(
+                (self.background, self.points, self.tiles, self.objects), error=False
+            ),
         )
 
     def __call__(self, x, *, key=random.PRNGKey(0)):
@@ -55,19 +61,21 @@ class ComponentGenerator(Model):
 
         if self.points:
             val += self.points(x, key=key)
-        
+
         if self.tiles:
             val += self.tiles(x)
-        
+
         if self.objects:
             val += self.objects(x, key=key)
 
         val = val.at[1:].set(jnp.clip(val[1:], 0, 1))
-        
+
         return val
-    
+
     @classmethod
-    def build(cls, *, grid, background, points=None, tiles=None, objects=None, func='exp'):
+    def build(
+        cls, *, grid, background, points=None, tiles=None, objects=None, func="exp"
+    ):
         """Build a composite component generator from configuration.
 
         Parameters
@@ -98,7 +106,7 @@ class ComponentGenerator(Model):
 
         if tiles:
             tiles = TileGenerator.build(grid=grid, func=func, **tiles)
-        
+
         if objects:
             objects = ObjectGenerator.build(grid=grid, func=func, **objects)
 

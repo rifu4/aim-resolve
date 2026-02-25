@@ -1,7 +1,8 @@
 """Tests for aim_resolve.transition."""
 
-import pytest
 from functools import partial
+
+import pytest
 
 from aim_resolve.transition import transition_func
 

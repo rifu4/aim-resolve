@@ -1,22 +1,22 @@
 """Likelihood construction utilities for image and radio data."""
 
-import jax.numpy as jnp
-import numpy as np
 from functools import reduce
-from nifty8 import makeOp
 from operator import add
 
+import jax.numpy as jnp
+import numpy as np
+from nifty8 import makeOp
+
+from .fast_resolve.convolve import NInvConvolve, PSFConvolve
 from .fast_resolve.response import build_exact_responses
-from .fast_resolve.convolve import PSFConvolve, NInvConvolve
 from .model.noise import NoiseModel
 from .resolve.model import ComponentResponse
 from .resolve.observation import Observation
 
 
-
 def likelihood_func(
-        mode,
-        **kwargs,
+    mode,
+    **kwargs,
 ):
     """Create a likelihood dictionary using the mode-specific builder.
 
@@ -37,24 +37,26 @@ def likelihood_func(
     TypeError
         If *mode* is not recognised.
     """
-    if 'image' in mode:
+    if "image" in mode:
         return image_likelihood(**kwargs)
-    elif 'fast' in mode:
+    elif "fast" in mode:
         return fast_likelihood(**kwargs)
-    elif 'radio' in mode:
+    elif "radio" in mode:
         return radio_likelihood(**kwargs)
-    elif 'sum' in mode:
+    elif "sum" in mode:
         return likelihood_sum(**kwargs)
     else:
-        raise TypeError(f'Unknown likelihood mode. Available modes are `image`, `fast`, `radio`, and `sum`, but got mode `{mode}`.')
+        raise TypeError(
+            f"Unknown likelihood mode. Available modes are `image`, `fast`, `radio`, and `sum`, but got mode `{mode}`."
+        )
 
 
-
-def image_likelihood(*,
-        sky,
-        data,
-        noise = dict(max_std=0.001, parameters=dict()),
-):    
+def image_likelihood(
+    *,
+    sky,
+    data,
+    noise=dict(max_std=0.001, parameters=dict()),
+):
     """Build a likelihood dictionary for image data.
 
     Parameters
@@ -75,29 +77,29 @@ def image_likelihood(*,
         ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
         ``noise_model``.
     """
-    max_std = noise['max_std'] if 'max_std' in noise else 0.001
+    max_std = noise["max_std"] if "max_std" in noise else 0.001
     noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
 
     sky.set_out_grid(data.grid)
 
     lh_dct = dict(
-        data = data.noisy_val,
-        sky_model = sky,
-        sky_response = sky,
-        noise_cov_inv = None,
-        noise_std_inv = (max_std * np.max(data.val))**-1,
-        noise_model = noise_model,
+        data=data.noisy_val,
+        sky_model=sky,
+        sky_response=sky,
+        noise_cov_inv=None,
+        noise_std_inv=(max_std * np.max(data.val)) ** -1,
+        noise_model=noise_model,
     )
     return lh_dct
 
 
-
-def radio_likelihood(*,
-        sky,
-        data,
-        noise = dict(wgt_fac=1., parameters=dict()),
-        wgridding = False,
-):  
+def radio_likelihood(
+    *,
+    sky,
+    data,
+    noise=dict(wgt_fac=1.0, parameters=dict()),
+    wgridding=False,
+):
     """Build a likelihood dictionary for radio visibility data.
 
     Parameters
@@ -119,28 +121,28 @@ def radio_likelihood(*,
         ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
         ``noise_model``.
     """
-    wgt_fac = noise['wgt_fac'] if 'wgt_fac' in noise else 1.
+    wgt_fac = noise["wgt_fac"] if "wgt_fac" in noise else 1.0
     noise_model = NoiseModel.build(shape=data.vis.shape, **noise)
 
     lh_dct = dict(
-        data = data.vis,
-        sky_model = sky,
-        sky_response = ComponentResponse(sky, data, wgridding),
-        noise_cov_inv = lambda x: wgt_fac * data.weight * x,
-        noise_std_inv = None,
-        noise_model = noise_model,
+        data=data.vis,
+        sky_model=sky,
+        sky_response=ComponentResponse(sky, data, wgridding),
+        noise_cov_inv=lambda x: wgt_fac * data.weight * x,
+        noise_std_inv=None,
+        noise_model=noise_model,
     )
     return lh_dct
 
 
-
-def fast_likelihood(*,
-        sky,
-        data,
-        psf_kernel_fn = '',
-        n_inv_kernel_fn = '',
-        noise = dict(parameters=dict()),
-        split = {},
+def fast_likelihood(
+    *,
+    sky,
+    data,
+    psf_kernel_fn="",
+    n_inv_kernel_fn="",
+    noise=dict(parameters=dict()),
+    split={},
 ):
     """Build a fast-resolve likelihood dictionary for radio data.
 
@@ -170,46 +172,45 @@ def fast_likelihood(*,
     lh_dct : dict
         Likelihood dictionary with keys ``data``, ``sky_model``,
         ``sky_response``, ``noise_model`` and ``RNR``.
-    """ 
+    """
     if isinstance(data, Observation):
         data = data.to_resolve_obs()
     obs = data.to_double_precision()
 
-    print('sky model shape:', sky.target.shape)
+    print("sky model shape:", sky.target.shape)
 
     R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
 
     N_inv = makeOp(obs.weight)
     data = R.adjoint(N_inv(obs.vis)).val
-    print('dirty image shape:', data.shape)
+    print("dirty image shape:", data.shape)
 
     psf_conv = PSFConvolve.build(
-        sky = sky,
-        RNR_l = RNR_l,
-        psf_kernel_fn = psf_kernel_fn,
-        split = split,
+        sky=sky,
+        RNR_l=RNR_l,
+        psf_kernel_fn=psf_kernel_fn,
+        split=split,
     )
 
     sky_response = NInvConvolve.build(
-        psf_conv = psf_conv,
-        RNR = RNR,
-        n_inv_kernel_fn = n_inv_kernel_fn,
-        noise = noise,
+        psf_conv=psf_conv,
+        RNR=RNR,
+        n_inv_kernel_fn=n_inv_kernel_fn,
+        noise=noise,
     )
 
     lh_dct = dict(
-        data = jnp.array(data),
-        sky_model = sky,
-        sky_response = sky_response,
-        noise_model = sky_response.noise_model,
-        RNR = RNR,
+        data=jnp.array(data),
+        sky_model=sky,
+        sky_response=sky_response,
+        noise_model=sky_response.noise_model,
+        RNR=RNR,
     )
     return lh_dct
 
 
-
 def likelihood_sum(
-        **lhs,
+    **lhs,
 ):
     """Sum multiple likelihood objects into a single composite likelihood.
 

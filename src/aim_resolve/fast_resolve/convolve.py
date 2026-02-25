@@ -1,21 +1,20 @@
 """FFT-based convolution operators for fast-resolve likelihood evaluation."""
 
 import dataclasses
-import jax.numpy as jnp
-import numpy as np
 import os
 import pickle
-from jax import vmap
-from jax.numpy.fft import fftn, ifftn
-from jax.lax import dynamic_slice
-from nifty.re import Model, Vector, smap
 from typing import Any
 
-from .kernel import build_psf_kernel, build_n_inv_kernel
+import jax.numpy as jnp
+import numpy as np
+from jax.lax import dynamic_slice
+from jax.numpy.fft import fftn, ifftn
+from nifty.re import Model, Vector, smap
+
 # from ..model.map import downsample, upsample
 from ..model.noise import NoiseModel
 from ..optimize.samples import domain_tree, model_init
-
+from .kernel import build_n_inv_kernel, build_psf_kernel
 
 
 class PSFConvolve(Model):
@@ -37,13 +36,15 @@ class PSFConvolve(Model):
         self.sky = sky
         self.grid = sky.grid
         self.fft_kernel = build_fft_kernel(psf_kernel, psf_kernel.shape, self.grid.dvol)
-        print('psf kernel shape:', self.fft_kernel.shape)
+        print("psf kernel shape:", self.fft_kernel.shape)
         self.padder = build_padder(self.sky.target.shape, self.fft_kernel.shape)
-        self.slicer = build_slicer(tuple(k//2 for k in psf_kernel.shape), self.sky.target.shape)
+        self.slicer = build_slicer(
+            tuple(k // 2 for k in psf_kernel.shape), self.sky.target.shape
+        )
         super().__init__(domain=sky.domain, init=sky.init)
 
     def __call__(self, x, old_rec=0):
-        #TODO: set old_rec to static and add to init (similar to fft-kernel) to avoid recompilation when it changes
+        # TODO: set old_rec to static and add to init (similar to fft-kernel) to avoid recompilation when it changes
         res = self.sky(x) - old_rec
         res = self.padder(res)
         res = fft_convolve(res, self.fft_kernel)
@@ -51,7 +52,7 @@ class PSFConvolve(Model):
         return res
 
     @classmethod
-    def build(cls, *, sky, RNR_l, psf_kernel_fn='', split={}):
+    def build(cls, *, sky, RNR_l, psf_kernel_fn="", split={}):
         """Build a PSF convolution operator.
 
         Loads or creates the PSF kernel and optionally applies
@@ -81,21 +82,22 @@ class PSFConvolve(Model):
             If the cached kernel shape does not match the expected shape.
         """
         if os.path.isfile(psf_kernel_fn):
-            psf_kernel = pickle.load(open(psf_kernel_fn, 'rb'))
+            psf_kernel = pickle.load(open(psf_kernel_fn, "rb"))
         else:
             psf_kernel = build_psf_kernel(RNR_l)
             if psf_kernel_fn:
-                pickle.dump(psf_kernel, open(psf_kernel_fn, 'wb'))
+                pickle.dump(psf_kernel, open(psf_kernel_fn, "wb"))
 
-        rk_shape = sky.target.shape[:-2] + tuple(s*2 for s in sky.target.shape[-2:])
+        rk_shape = sky.target.shape[:-2] + tuple(s * 2 for s in sky.target.shape[-2:])
         if psf_kernel.shape != rk_shape:
-            raise ValueError(f'psf kernel has wrong shape, expected {rk_shape}, got {psf_kernel.shape}.')
-        
+            raise ValueError(
+                f"psf kernel has wrong shape, expected {rk_shape}, got {psf_kernel.shape}."
+            )
+
         if split:
             return PSFSplitConvolve(sky, psf_kernel, **split)
         else:
             return cls(sky, psf_kernel)
-    
 
 
 class PSFSplitConvolve(Model):
@@ -123,24 +125,37 @@ class PSFSplitConvolve(Model):
         self.grid = sky.grid
         self.size = size
         self.factor = factor
-        self.kernel_high, self.kernel_low = build_split_kernel(psf_kernel, self.grid.shape, self.size, self.factor, self.grid.dvol)
-        print('split psf kernel shapes:', self.kernel_high.shape, self.kernel_low.shape)
+        self.kernel_high, self.kernel_low = build_split_kernel(
+            psf_kernel, self.grid.shape, self.size, self.factor, self.grid.dvol
+        )
+        print("split psf kernel shapes:", self.kernel_high.shape, self.kernel_low.shape)
 
-        shape_high = (sky.freq.size, ) + self.grid.shape
+        shape_high = (sky.freq.size,) + self.grid.shape
         self.padder_high = build_padder(shape_high, self.kernel_high.shape)
-        self.slicer_high = build_slicer((self.size//2,) * 2, shape_high)
+        self.slicer_high = build_slicer((self.size // 2,) * 2, shape_high)
 
-        shape_low = (sky.freq.size, ) + tuple(s//self.factor for s in self.grid.shape)
+        shape_low = (sky.freq.size,) + tuple(s // self.factor for s in self.grid.shape)
         self.padder_low = build_padder(shape_low, self.kernel_low.shape)
-        self.slicer_low = build_slicer(tuple(k * (self.factor-1)//(2*self.factor) for k in psf_kernel.shape), shape_low)
+        self.slicer_low = build_slicer(
+            tuple(k * (self.factor - 1) // (2 * self.factor) for k in psf_kernel.shape),
+            shape_low,
+        )
 
         super().__init__(domain=sky.domain, init=sky.init)
 
     def __call__(self, x, old_rec=0):
         res = self.sky(x) - old_rec
-        res = split_fft_convolve(res, self.kernel_high, self.kernel_low, self.padder_high, self.padder_low, self.slicer_high, self.slicer_low, self.factor)
+        res = split_fft_convolve(
+            res,
+            self.kernel_high,
+            self.kernel_low,
+            self.padder_high,
+            self.padder_low,
+            self.slicer_high,
+            self.slicer_low,
+            self.factor,
+        )
         return res
-
 
 
 class NInvConvolve(Model):
@@ -163,12 +178,12 @@ class NInvConvolve(Model):
     def __init__(self, psf_conv, n_inv_kernel, noise_model):
         self.psf_conv = psf_conv
         self.grid = psf_conv.grid
-        self.fft_kernel = 1. / jnp.sqrt(n_inv_kernel)
-        print('n inv kernel shape:', self.fft_kernel.shape)
+        self.fft_kernel = 1.0 / jnp.sqrt(n_inv_kernel)
+        print("n inv kernel shape:", self.fft_kernel.shape)
         self.noise_model = noise_model
         super().__init__(
-            domain = Vector(domain_tree((self.psf_conv, self.noise_model), error=False)), 
-            init = model_init((self.psf_conv, self.noise_model), error=False),
+            domain=Vector(domain_tree((self.psf_conv, self.noise_model), error=False)),
+            init=model_init((self.psf_conv, self.noise_model), error=False),
         )
 
     def __call__(self, x, old_rec=0, res_data=0):
@@ -178,7 +193,7 @@ class NInvConvolve(Model):
         return res
 
     @classmethod
-    def build(cls, *, psf_conv, RNR, n_inv_kernel_fn='', noise=None):
+    def build(cls, *, psf_conv, RNR, n_inv_kernel_fn="", noise=None):
         """Build an inverse-noise convolution operator.
 
         Loads or creates the inverse-noise kernel and wraps it together
@@ -215,12 +230,13 @@ class NInvConvolve(Model):
 
         nk_shape = psf_conv.target.shape
         if n_inv_kernel.shape != nk_shape:
-            raise ValueError(f'n inv kernel has wrong shape, expected {nk_shape}, got {n_inv_kernel.shape}.')
+            raise ValueError(
+                f"n inv kernel has wrong shape, expected {nk_shape}, got {n_inv_kernel.shape}."
+            )
 
         noise_model = NoiseModel.build(shape=psf_conv.target.shape, **noise)
 
         return cls(psf_conv, n_inv_kernel, noise_model)
-
 
 
 def downsample(array, factor):
@@ -242,7 +258,7 @@ def downsample(array, factor):
     assert h % factor == 0 and w % factor == 0, "Dims must be divisible by factor."
     shape = array.shape[:-2] + (h // factor, factor, w // factor, factor)
     return array.reshape(shape).mean(axis=(-3, -1))
-    
+
 
 def upsample(array, factor):
     """Up-sample the last two axes by repeating pixels.
@@ -262,7 +278,6 @@ def upsample(array, factor):
     return array.repeat(factor, axis=-2).repeat(factor, axis=-1)
 
 
-
 def fft_convolve_2d(x, kernel):
     """Convolve a single 2-D image with a 2-D kernel via FFT."""
     return ifftn(kernel * fftn(x)).real
@@ -271,9 +286,11 @@ def fft_convolve_2d(x, kernel):
 def fft_convolve(x, kernel):
     """Batch-convolve along the leading axis using ``fft_convolve_2d``."""
     return smap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
-    
 
-def split_fft_convolve(x, kernel_high, kernel_low, padder_high, padder_low, slicer_high, slicer_low, factor):
+
+def split_fft_convolve(
+    x, kernel_high, kernel_low, padder_high, padder_low, slicer_high, slicer_low, factor
+):
     """Perform a split high/low-resolution FFT convolution.
 
     Parameters
@@ -310,8 +327,7 @@ def split_fft_convolve(x, kernel_high, kernel_low, padder_high, padder_low, slic
     return jnp.squeeze(x_high + x_low)
 
 
-
-def build_fft_kernel(kernel, shape, dvol=1.):
+def build_fft_kernel(kernel, shape, dvol=1.0):
     """Build an FFT-space kernel from a spatial-domain kernel."""
     return jnp.fft.fftn(kernel, shape[-2:], axes=(-2, -1)) * dvol
 
@@ -329,8 +345,7 @@ def build_slicer(start_indices, out_shape):
     return lambda x: dynamic_slice(x, start_indices, out_shape)
 
 
-
-def build_split_kernel(kernel, shape, size, factor, dvol=1.):
+def build_split_kernel(kernel, shape, size, factor, dvol=1.0):
     """Split a PSF kernel into high- and low-resolution FFT kernels.
 
     Parameters
@@ -355,16 +370,18 @@ def build_split_kernel(kernel, shape, size, factor, dvol=1.):
     """
     kernel = kernel[None] if kernel.ndim == 2 else kernel
     n_freq = kernel.shape[0]
-    slices = (slice(0, n_freq), )
-    slices += tuple(slice(k//2 - size//2, k//2 + size//2) for k in kernel.shape[-2:])
+    slices = (slice(0, n_freq),)
+    slices += tuple(
+        slice(k // 2 - size // 2, k // 2 + size // 2) for k in kernel.shape[-2:]
+    )
 
     # high-res kernel
-    fshape_high = (n_freq, ) + tuple(s+size for s in shape)
+    fshape_high = (n_freq,) + tuple(s + size for s in shape)
     kernel_high = np.array(kernel[slices])
     kernel_high = build_fft_kernel(kernel_high, fshape_high, dvol)
 
     # low-res kernel
-    fshape_low = (n_freq, ) + tuple(k//factor for k in kernel.shape[-2:])
+    fshape_low = (n_freq,) + tuple(k // factor for k in kernel.shape[-2:])
     kernel_low = np.array(kernel.copy())
     kernel_low[slices] = 0
     kernel_low = downsample(kernel_low, factor)

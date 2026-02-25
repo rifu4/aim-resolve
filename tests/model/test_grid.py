@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from aim_resolve.model.grid import SignalGrid, PointGrid
-
+from aim_resolve.model.grid import PointGrid, SignalGrid
 
 # ---------- SignalGrid ----------
+
 
 class TestSignalGridBuild:
     def test_default_build(self):
@@ -27,10 +27,12 @@ class TestSignalGridBuild:
 
     def test_default_distances(self):
         g = SignalGrid.build(space=(8, 8))
-        np.testing.assert_allclose(g.distances, (1/8, 1/8))
+        np.testing.assert_allclose(g.distances, (1 / 8, 1 / 8))
 
     def test_n_copies(self):
-        g = SignalGrid.build(space=(16, 16), n_copies=3, center=[(0, 0), (1, 1), (2, 2)])
+        g = SignalGrid.build(
+            space=(16, 16), n_copies=3, center=[(0, 0), (1, 1), (2, 2)]
+        )
         assert g.n_copies == 3
 
 
@@ -81,7 +83,7 @@ class TestSignalGridContainment:
     def test_not_contains(self):
         small = SignalGrid.build(space=(32, 32))
         big = SignalGrid.build(space=(64, 64))
-        assert not (big in small)
+        assert big not in small
 
 
 class TestSignalGridRefine:
@@ -127,6 +129,7 @@ class TestSignalGridRepr:
 
 
 # ---------- PointGrid ----------
+
 
 class TestPointGridBuild:
     def test_single_point(self):

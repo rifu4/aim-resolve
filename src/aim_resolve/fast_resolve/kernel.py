@@ -4,7 +4,6 @@ import nifty8 as ift
 import numpy as np
 
 
-
 def build_psf_kernel(RNR_l):
     """Build the PSF convolution kernel from a padded RNR operator.
 
@@ -34,19 +33,18 @@ def build_psf_kernel(RNR_l):
                 raise ValueError("rnr_l domain must have 3 dimensions.")
             kernels.append(build_psf_kernel(rnr_l))
         return np.concatenate(kernels, axis=0)
-    
+
     dom_l = RNR_l.domain
     sdom_l = ift.DomainTuple.make(dom_l[-1:])
     shp_l = sdom_l.shape
 
     delta = np.zeros(shp_l)
-    delta[shp_l[0]//2, shp_l[1]//2] = 1 / sdom_l.scalar_weight()
+    delta[shp_l[0] // 2, shp_l[1] // 2] = 1 / sdom_l.scalar_weight()
     delta = np.broadcast_to(delta, dom_l.shape)
     delta = ift.makeField(dom_l, delta)
     kernel = RNR_l(delta).val
 
     return kernel
-
 
 
 def build_n_inv_kernel(RNR, relativ_min_val=1e-3):
@@ -88,19 +86,19 @@ def build_n_inv_kernel(RNR, relativ_min_val=1e-3):
     FFT = ift.FFTOperator(sdom)
 
     delta = np.zeros(shp)
-    delta[shp[0]//2, shp[1]//2] = 1 / sdom.scalar_weight()
+    delta[shp[0] // 2, shp[1] // 2] = 1 / sdom.scalar_weight()
     delta = np.broadcast_to(delta, dom.shape)
     delta = ift.makeField(dom, delta)
     kernel = RNR(delta).val
 
-    kernel = np.roll(kernel, -shp[0]//2, axis=-2)
-    kernel = np.roll(kernel, -shp[1]//2, axis=-1)
+    kernel = np.roll(kernel, -shp[0] // 2, axis=-2)
+    kernel = np.roll(kernel, -shp[1] // 2, axis=-1)
     kernel = kernel[None] if len(dom.shape) == 2 else kernel
 
     n_inv_kernel = np.zeros_like(kernel)
     for i in range(kernel.shape[0]):
         kernel_i = ift.makeField(RNR.target[-1], kernel[i])
-    
+
         max_val = np.max(FFT(kernel_i).abs().val)
         min_val = relativ_min_val * max_val
         min_val = ift.full(FFT.target, min_val)
@@ -113,13 +111,18 @@ def build_n_inv_kernel(RNR, relativ_min_val=1e-3):
 
         kernel_pos = rls2 @ FFT.inverse @ rls1.adjoint @ pos_eig_val
 
-        cov = ift.ScalingOperator(kernel_pos.target, 1e-2*max_val)
-        lh = ift.GaussianEnergy(data=kernel_i, inverse_covariance=cov.inverse) @ kernel_pos
+        cov = ift.ScalingOperator(kernel_pos.target, 1e-2 * max_val)
+        lh = (
+            ift.GaussianEnergy(data=kernel_i, inverse_covariance=cov.inverse)
+            @ kernel_pos
+        )
         init_pos = (FFT(kernel_i) - min_val).abs().log()
         energy = ift.EnergyAdapter(position=init_pos, op=lh, want_metric=True)
 
-        ic_newton = ift.DeltaEnergyController(name='Newton', iteration_limit=80, tol_rel_deltaE=0)
-        #minimizer = ift.NewtonCG(ic_newton, max_cg_iterations=400, energy_reduction_factor=1e-3)
+        ic_newton = ift.DeltaEnergyController(
+            name="Newton", iteration_limit=80, tol_rel_deltaE=0
+        )
+        # minimizer = ift.NewtonCG(ic_newton, max_cg_iterations=400, energy_reduction_factor=1e-3)
         minimizer = ift.NewtonCG(ic_newton)
         res = minimizer(energy)[0].position
 

@@ -1,14 +1,14 @@
 """Response operator construction for radio interferometric imaging."""
 
+from functools import partial
+
 import jax.numpy as jnp
 import numpy as np
-from functools import partial
 from jax import vmap
 
-from .observation import Observation
 from ..model.grid import SignalGrid
 from ..model.util import check_type
-
+from .observation import Observation
 
 
 def point_response(x, in_coos, in_grid, observation):
@@ -39,13 +39,13 @@ def point_response(x, in_coos, in_grid, observation):
         vmap_one_point = vmap(one_point_response, in_axes=(0, 0, None, None))
         res = vmap_one_point(x, in_coos, in_grid.dis, observation)
         return jnp.sum(res, axis=0)
-    
+
 
 def one_point_response(
-        x,
-        in_coos,
-        in_dis,
-        observation,
+    x,
+    in_coos,
+    in_dis,
+    observation,
 ):
     """Compute the visibility response of a single point source.
 
@@ -73,11 +73,10 @@ def one_point_response(
     uvw = np.transpose((uvw[..., None] * freq / speedoflight), (0, 2, 1)).reshape(-1, 3)
     uv = (2 * np.pi * uvw[:, :2] * in_dis * np.array([1, -1])) % (2 * np.pi)
     u, v = uv.T
-    
+
     res = vol * x * jnp.exp(-1j * (u * in_coos[0] + v * in_coos[1]))
 
     return jnp.expand_dims(res.reshape(-1, len(freq)), 0)
-
 
 
 def signal_response(in_grid, observation, wgridding=False, epsilon=1e-9):
@@ -106,7 +105,6 @@ def signal_response(in_grid, observation, wgridding=False, epsilon=1e-9):
         return ducc_response(in_grid, observation, wgridding, epsilon)
     else:
         return finu_response(in_grid, observation, epsilon)
-    
 
 
 def ducc_response(in_grid, observation, wgridding=True, epsilon=1e-9):
@@ -137,36 +135,36 @@ def ducc_response(in_grid, observation, wgridding=True, epsilon=1e-9):
         multiple signals.
     """
     from jaxbind.contrib import jaxducc0
+
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
     if in_grid.n_copies > 1:
-        raise ValueError('ducc response cannot vmap over multiple signals')
+        raise ValueError("ducc response cannot vmap over multiple signals")
 
     freq = observation.freq
     uvw = observation.uvw
     vol = in_grid.dis.prod()
 
     wg = jaxducc0.get_wgridder(
-        pixsize_x = in_grid.dis[0],
-        pixsize_y = in_grid.dis[1],
-        npix_x = in_grid.shape[0],
-        npix_y = in_grid.shape[1],
-        center_x = in_grid.cen[0],
-        center_y = - in_grid.cen[1],
-        do_wgridding = wgridding,
-        epsilon = epsilon,
-        nthreads = 1,
-        verbosity = 0,
-        flip_v = True,
+        pixsize_x=in_grid.dis[0],
+        pixsize_y=in_grid.dis[1],
+        npix_x=in_grid.shape[0],
+        npix_y=in_grid.shape[1],
+        center_x=in_grid.cen[0],
+        center_y=-in_grid.cen[1],
+        do_wgridding=wgridding,
+        epsilon=epsilon,
+        nthreads=1,
+        verbosity=0,
+        flip_v=True,
     )
     wgridder = partial(wg, uvw, freq)
-    
+
     def apply_ducc(x):
         res = vol * wgridder(x)[0]
         return jnp.expand_dims(res, 0)
 
     return apply_ducc
-
 
 
 def finu_response(in_grid, observation, epsilon=1e-9):
@@ -193,15 +191,16 @@ def finu_response(in_grid, observation, epsilon=1e-9):
         over multiple signals yet.
     """
     from jax_finufft import nufft2
+
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
     if in_grid.n_copies > 1:
-        raise ValueError('finu response cannot vmap over multiple signals yet')
+        raise ValueError("finu response cannot vmap over multiple signals yet")
 
     speedoflight = 299792458.0
     freq = observation.freq
     uvw = observation.uvw
-    cen = in_grid.cen * np.array([1,-1])
+    cen = in_grid.cen * np.array([1, -1])
     vol = in_grid.dis.prod()
 
     uvw = np.transpose((uvw[..., None] * freq / speedoflight), (0, 2, 1)).reshape(-1, 3)
@@ -214,7 +213,6 @@ def finu_response(in_grid, observation, epsilon=1e-9):
         return jnp.expand_dims(res.reshape(-1, len(freq)), 0)
 
     return apply_finu
-
 
 
 def rotate(xy, phi):

@@ -1,7 +1,6 @@
 """Tests for aim_resolve.mask."""
 
 import numpy as np
-import pytest
 
 from aim_resolve.mask import (
     add_freq_axis,
@@ -10,10 +9,10 @@ from aim_resolve.mask import (
     remove_freq_axis,
 )
 
-
 # ---------------------------------------------------------------------------
 # add_freq_axis / remove_freq_axis
 # ---------------------------------------------------------------------------
+
 
 class TestAddFreqAxis:
     """Test inserting a frequency dimension."""
@@ -73,6 +72,7 @@ class TestFreqAxisRoundtrip:
 # add_margin
 # ---------------------------------------------------------------------------
 
+
 class TestAddMargin:
     """Test the distance-based margin addition."""
 
@@ -118,6 +118,7 @@ class TestAddMargin:
 # ---------------------------------------------------------------------------
 # masks_from_maps
 # ---------------------------------------------------------------------------
+
 
 class TestMasksFromMaps:
     """Test creating component masks from detection maps."""
@@ -173,9 +174,7 @@ class TestMasksFromMaps:
             r = 10 + i * 14
             objects[i, r : r + 5, r : r + 5] = 1
 
-        masks = masks_from_maps(
-            points, objects, it=0, max_objects=3, tile_size=0
-        )
+        masks = masks_from_maps(points, objects, it=0, max_objects=3, tile_size=0)
         obj_keys = [k for k in masks if k.startswith("o")]
         assert len(obj_keys) <= 3
 
@@ -188,8 +187,6 @@ class TestMasksFromMaps:
         objects[1, 70:75, 70:75] = 1
         objects[2, 90:95, 90:95] = 1
 
-        masks = masks_from_maps(
-            points, objects, it=0, tile_size=32
-        )
+        masks = masks_from_maps(points, objects, it=0, tile_size=32)
         tile_keys = [k for k in masks if k.startswith("t")]
         assert len(tile_keys) >= 1

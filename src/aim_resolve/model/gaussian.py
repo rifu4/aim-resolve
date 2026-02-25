@@ -1,23 +1,30 @@
 """Gaussian spatial model for AIM-Resolve."""
 
-import jax.numpy as jnp
-import numpy as np
 from collections.abc import Mapping
 from functools import partial
-from typing import Union
-from nifty.re import Model, VModel, WrappedCall, random_like, lognormal_prior, normal_prior
+
+import jax.numpy as jnp
+import numpy as np
+from nifty.re import (
+    Model,
+    VModel,
+    WrappedCall,
+    lognormal_prior,
+    normal_prior,
+    random_like,
+)
 
 
-
-def gaussian_model(*,
-        prefix: str,
-        shape: np.ndarray,
-        distances: np.ndarray,
-        cov_x: Union[tuple, float],
-        cov_y: Union[tuple, float],
-        scale: Union[tuple, float] = 1.,
-        theta: Union[tuple, float] = 0.,
-        n_copies: int = 1,
+def gaussian_model(
+    *,
+    prefix: str,
+    shape: np.ndarray,
+    distances: np.ndarray,
+    cov_x: tuple | float,
+    cov_y: tuple | float,
+    scale: tuple | float = 1.0,
+    theta: tuple | float = 0.0,
+    n_copies: int = 1,
 ) -> Model:
     """
     Define a Gaussian model with the given parameters.
@@ -52,36 +59,33 @@ def gaussian_model(*,
         Gaussian spatial profile.
     """
     ptree = {}
-    cov_x = prior_or_const(cov_x, ptree, prefix+'cov_x', normal_prior)
-    cov_y = prior_or_const(cov_y, ptree, prefix+'cov_y', normal_prior)
-    scale = prior_or_const(scale, ptree, prefix+'scale', normal_prior)
-    theta = prior_or_const(theta, ptree, prefix+'theta', normal_prior)
+    cov_x = prior_or_const(cov_x, ptree, prefix + "cov_x", normal_prior)
+    cov_y = prior_or_const(cov_y, ptree, prefix + "cov_y", normal_prior)
+    scale = prior_or_const(scale, ptree, prefix + "scale", normal_prior)
+    theta = prior_or_const(theta, ptree, prefix + "theta", normal_prior)
 
     coordinates = centered_coos(np.array(shape), np.array(distances))
 
     def gaussian(primals: Mapping) -> jnp.ndarray:
-        cx = cov_x(primals) if prefix+'cov_x' in primals else cov_x
-        cy = cov_y(primals) if prefix+'cov_y' in primals else cov_y
-        sc = scale(primals) if prefix+'scale' in primals else scale
-        th = theta(primals) if prefix+'theta' in primals else theta
+        cx = cov_x(primals) if prefix + "cov_x" in primals else cov_x
+        cy = cov_y(primals) if prefix + "cov_y" in primals else cov_y
+        sc = scale(primals) if prefix + "scale" in primals else scale
+        th = theta(primals) if prefix + "theta" in primals else theta
 
         x, y = coordinates
 
-        a = jnp.cos(th)**2/(2*cx**2) + jnp.sin(th)**2/(2*cy**2)
-        b = -jnp.sin(2*th)/(4*cx**2) + jnp.sin(2*th)/(4*cy**2)
-        c = jnp.sin(th)**2/(2*cx**2) + jnp.cos(th)**2/(2*cy**2)
-        return sc * jnp.exp(-(a*x**2 + 2*b*x*y + c*y**2))
-    
-    init = {
-        k: partial(random_like, primals=v) for k, v in ptree.items()
-    }
+        a = jnp.cos(th) ** 2 / (2 * cx**2) + jnp.sin(th) ** 2 / (2 * cy**2)
+        b = -jnp.sin(2 * th) / (4 * cx**2) + jnp.sin(2 * th) / (4 * cy**2)
+        c = jnp.sin(th) ** 2 / (2 * cx**2) + jnp.cos(th) ** 2 / (2 * cy**2)
+        return sc * jnp.exp(-(a * x**2 + 2 * b * x * y + c * y**2))
+
+    init = {k: partial(random_like, primals=v) for k, v in ptree.items()}
     model = Model(gaussian, domain=ptree.copy(), init=init)
 
     if n_copies > 1:
         return VModel(model, n_copies)
     else:
         return model
-
 
 
 def prior_or_const(value, ptree, name, prior=lognormal_prior):
@@ -109,7 +113,7 @@ def prior_or_const(value, ptree, name, prior=lognormal_prior):
         value = WrappedCall(value, name=name)
         ptree.update(value.domain)
     elif not isinstance(value, (int, float)):
-        raise TypeError(f'`{value}` must be of type `tuple`, `list`, `int` or `float`')
+        raise TypeError(f"`{value}` must be of type `tuple`, `list`, `int` or `float`")
     return value
 
 

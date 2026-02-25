@@ -1,8 +1,5 @@
 """Tests for aim_resolve.img_data.objects — get_masks utility."""
 
-import numpy as np
-import pytest
-
 from aim_resolve.img_data.objects import get_masks
 
 

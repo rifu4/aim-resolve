@@ -1,9 +1,7 @@
 """Tests for aim_resolve.modeling."""
 
 import numpy as np
-import pytest
 
-from aim_resolve.mask import remove_freq_axis
 from aim_resolve.modeling import get_offset
 
 

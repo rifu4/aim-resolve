@@ -9,6 +9,8 @@ version = "0.1.0"
 [dependencies]
 python = ">=3.11,<3.13"
 pytest = ">=8.4.2,<9"
+ruff = ">=0.8,<1"
+pre-commit = ">=4.0,<5"
 pip = ">=25.2,<26"
 cuda-version = "12.6.*"
 numpy = ">=2.3.2,<3"
@@ -41,6 +43,8 @@ nifty = { version = ">=9.1.0,<10", extras = ["re"] }
 [feature.cpu.dependencies]
 python = ">=3.11,<3.13"
 pytest = ">=8.4.2,<9"
+ruff = ">=0.8,<1"
+pre-commit = ">=4.0,<5"
 pip = ">=25.2,<26"
 numpy = ">=2.3.2,<3"
 scipy = ">=1.15,<2"

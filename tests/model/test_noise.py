@@ -3,7 +3,7 @@
 import jax
 import pytest
 
-from aim_resolve.model.noise import NoiseModel, LazyNoise
+from aim_resolve.model.noise import LazyNoise, NoiseModel
 
 
 class TestNoiseModelBuild:
@@ -21,9 +21,10 @@ class TestNoiseModelBuild:
 
     def test_scaling_and_varcov_conflict(self):
         from aim_resolve.model.prior import inverse_gamma_model
+
         m = inverse_gamma_model(prefix=None, shape=(2, 2), alpha=2.0, scale=1.0)
         with pytest.raises(ValueError):
-            NoiseModel(model=m, prefix='nm', scaling=True, varcov=True)
+            NoiseModel(model=m, prefix="nm", scaling=True, varcov=True)
 
     def test_build_with_scaling(self):
         nm = NoiseModel.build(

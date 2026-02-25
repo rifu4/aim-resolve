@@ -1,7 +1,8 @@
 """Tests for aim_resolve.extension."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from aim_resolve.extension import extension_func, fun2mode
 

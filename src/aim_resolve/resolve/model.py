@@ -3,14 +3,13 @@
 import jax.numpy as jnp
 from nifty.re import Model
 
-from .observation import Observation
-from .response import point_response, signal_response
 from ..model.components import ComponentModel
 from ..model.points import PointModel
 from ..model.signal import SignalModel
 from ..model.tiles import TileModel
 from ..model.util import check_type
-
+from .observation import Observation
+from .response import point_response, signal_response
 
 
 class SignalResponse(Model):
@@ -41,8 +40,9 @@ class SignalResponse(Model):
         super().__init__(domain=model.domain, init=model.init)
 
     def __call__(self, x):
-        return signal_response(self.model.space, self.observation, self.wgridding)(self.model(x))
-    
+        return signal_response(self.model.space, self.observation, self.wgridding)(
+            self.model(x)
+        )
 
 
 class PointResponse(Model):
@@ -70,9 +70,10 @@ class PointResponse(Model):
         super().__init__(domain=model.domain, init=model.init)
 
     def __call__(self, x):
-        return point_response(self.points(x), self.points.space(x), self.model.space, self.observation)
+        return point_response(
+            self.points(x), self.points.space(x), self.model.space, self.observation
+        )
 
-        
 
 class TileResponse(Model):
     """Generate a tile response model.
@@ -95,7 +96,7 @@ class TileResponse(Model):
         check_type(model, TileModel)
         check_type(observation, Observation)
         if wgridding:
-            raise ValueError('ducc response cannot vmap over multiple signals')
+            raise ValueError("ducc response cannot vmap over multiple signals")
 
         self.model = model
         self.tiles = model.tiles
@@ -104,8 +105,7 @@ class TileResponse(Model):
 
     def __call__(self, x):
         # return signal_response(self.tiles(x), self.tiles.space, self.observation)
-        raise NotImplementedError('TileResponse not implemented yet')
-
+        raise NotImplementedError("TileResponse not implemented yet")
 
 
 class ComponentResponse(Model):
@@ -133,7 +133,7 @@ class ComponentResponse(Model):
         check_type(split, bool)
         check_type(wgridding, bool)
 
-        #TODO: check which way is faster (split or separate)
+        # TODO: check which way is faster (split or separate)
         if split:
             self.models = model.models
         else:
@@ -144,12 +144,16 @@ class ComponentResponse(Model):
 
     def __call__(self, x):
         res = jnp.zeros(self.observation.vis.shape)
-        #TODO: speed up the for loop with jax
+        # TODO: speed up the for loop with jax
         for m in self.models:
             if isinstance(m, PointModel):
-                res += point_response(m.points(x), m.points.space(x), m.space, self.observation)
+                res += point_response(
+                    m.points(x), m.points.space(x), m.space, self.observation
+                )
             elif isinstance(m, TileModel):
-                res += signal_response(m.tiles.space, self.observation, self.wgridding)(m.tiles(x))
+                res += signal_response(m.tiles.space, self.observation, self.wgridding)(
+                    m.tiles(x)
+                )
             else:
                 res += signal_response(m.space, self.observation, self.wgridding)(m(x))
         return res

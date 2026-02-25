@@ -1,20 +1,20 @@
 """Normal (Gaussian) prior model for AIM-Resolve."""
 
 from functools import partial
+
 from jax import vmap
-from typing import Union
 from nifty.re import Model, NormalPrior, WrappedCall, random_like
 
 from .util import to_shape
 
 
-
-def normal_model(*,
-        prefix: str,
-        shape: tuple,
-        mean: Union[tuple, float, int],
-        std: Union[tuple, float, int],
-        n_copies: int = 1,
+def normal_model(
+    *,
+    prefix: str,
+    shape: tuple,
+    mean: tuple | float | int,
+    std: tuple | float | int,
+    n_copies: int = 1,
 ) -> Model:
     """Define a normal model with the given parameters.
 
@@ -40,16 +40,16 @@ def normal_model(*,
         The constructed normal model.
     """
     if n_copies == 0:
-        mean = to_shape(mean, shape, 'float64')
-        std = to_shape(std, shape, 'float64')
+        mean = to_shape(mean, shape, "float64")
+        std = to_shape(std, shape, "float64")
     elif n_copies == 1:
-        mean = to_shape(mean, (), 'float64')
-        std = to_shape(std, (), 'float64')
+        mean = to_shape(mean, (), "float64")
+        std = to_shape(std, (), "float64")
         return NormalPrior(mean, std, shape=shape, name=prefix)
     else:
-        mean = to_shape(mean, (n_copies,), 'float64')
-        std = to_shape(std, (n_copies,), 'float64')
-        shape = (n_copies, ) + shape
+        mean = to_shape(mean, (n_copies,), "float64")
+        std = to_shape(std, (n_copies,), "float64")
+        shape = (n_copies,) + shape
 
     ptree = {}
     call = WrappedCall(lambda x: x, shape=shape, name=prefix)
@@ -59,9 +59,9 @@ def normal_model(*,
         return mean + std * xi
 
     def multi_normal(primals, mean, std):
-        return vmap(standard_to_normal, in_axes=(0,0,0))(call(primals), mean, std)
+        return vmap(standard_to_normal, in_axes=(0, 0, 0))(call(primals), mean, std)
 
-    init = {
-        k: partial(random_like, primals=v) for k, v in ptree.items()
-    }
-    return Model(partial(multi_normal, mean=mean, std=std), domain=ptree.copy(), init=init)
+    init = {k: partial(random_like, primals=v) for k, v in ptree.items()}
+    return Model(
+        partial(multi_normal, mean=mean, std=std), domain=ptree.copy(), init=init
+    )

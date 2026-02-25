@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from aim_resolve.model.gaussian import gaussian_model, prior_or_const, centered_coos
+from aim_resolve.model.gaussian import centered_coos, gaussian_model, prior_or_const
 
 
 class TestCenteredCoos:
@@ -108,6 +108,7 @@ class TestGaussianModel:
 
     def test_n_copies(self):
         from nifty.re import VModel
+
         model = gaussian_model(
             prefix="gm ",
             shape=np.array([8, 8]),

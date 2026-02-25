@@ -6,18 +6,17 @@ import numpy as np
 from .util import plot_figure
 
 
-
 def plot_power(
-        array,
-        axes = None, 
-        label = None,
-        name = None,
-        odir = None,
-        plot_label = True,
-    ):
+    array,
+    axes=None,
+    label=None,
+    name=None,
+    odir=None,
+    plot_label=True,
+):
     """
     Plot a 1D power spectrum of the nifty.re correlated field model.
-    
+
     Parameters
     ----------
     array : np.ndarray
@@ -35,13 +34,13 @@ def plot_power(
     """
     plot_now = False
     if axes is None:
-        figure = plt.figure(figsize=(5,5))
+        figure = plt.figure(figsize=(5, 5))
         axes = []
         axes.append(figure.add_subplot(1, 1, 1))
         plot_now = True
 
-    array = np.array(array, dtype='float64')
-    
+    array = np.array(array, dtype="float64")
+
     k = np.arange(0, array.size)
 
     axes[-1].loglog(k, array)

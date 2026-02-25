@@ -3,10 +3,16 @@
 import numpy as np
 import pytest
 
-from aim_resolve.model.util import check_type, flatten_list, to_shape, is_val, extend_shape
-
+from aim_resolve.model.util import (
+    check_type,
+    extend_shape,
+    flatten_list,
+    is_val,
+    to_shape,
+)
 
 # ---------- check_type ----------
+
 
 class TestCheckType:
     def test_valid_single_type(self):
@@ -29,6 +35,7 @@ class TestCheckType:
 
 # ---------- flatten_list ----------
 
+
 class TestFlattenList:
     def test_flat(self):
         assert flatten_list([1, 2, 3]) == [1, 2, 3]
@@ -45,24 +52,26 @@ class TestFlattenList:
 
 # ---------- to_shape ----------
 
+
 class TestToShape:
     def test_scalar_broadcast(self):
-        arr = to_shape(5.0, (3,), 'float64')
+        arr = to_shape(5.0, (3,), "float64")
         np.testing.assert_array_equal(arr, [5.0, 5.0, 5.0])
         assert arr.shape == (3,)
 
     def test_list_reshape(self):
-        arr = to_shape([1, 2, 3, 4], (2, 2), 'int64')
+        arr = to_shape([1, 2, 3, 4], (2, 2), "int64")
         assert arr.shape == (2, 2)
         assert arr.dtype == np.int64
 
     def test_single_value(self):
-        arr = to_shape(7, (), 'float64')
+        arr = to_shape(7, (), "float64")
         assert arr.shape == ()
         assert float(arr) == 7.0
 
 
 # ---------- is_val ----------
+
 
 class TestIsVal:
     def test_nonzero(self):
@@ -79,6 +88,7 @@ class TestIsVal:
 
 
 # ---------- extend_shape ----------
+
 
 class TestExtendShape:
     def test_single_freq_single_copy(self):

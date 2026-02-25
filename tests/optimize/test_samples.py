@@ -3,13 +3,13 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from nifty.re import Model, Vector
+from nifty.re import Vector
 
-from aim_resolve.optimize.samples import domain_tree, domain_keys, model_init, MySamples
 from aim_resolve.model.normal import normal_model
-
+from aim_resolve.optimize.samples import MySamples, domain_keys, domain_tree, model_init
 
 # ---------- domain_tree ----------
+
 
 class TestDomainTree:
     def test_model(self):
@@ -46,6 +46,7 @@ class TestDomainTree:
 
 # ---------- domain_keys ----------
 
+
 class TestDomainKeys:
     def test_returns_set(self):
         m = normal_model(prefix="test ", shape=(4,), mean=0.0, std=1.0)
@@ -55,6 +56,7 @@ class TestDomainKeys:
 
 
 # ---------- model_init ----------
+
 
 class TestModelInit:
     def test_single(self):
@@ -74,11 +76,13 @@ class TestModelInit:
 
     def test_none(self):
         from nifty.re import Initializer
+
         init = model_init(None)
         assert isinstance(init, Initializer)
 
 
 # ---------- MySamples ----------
+
 
 class TestMySamples:
     def test_mean_map(self):

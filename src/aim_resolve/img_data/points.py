@@ -1,19 +1,19 @@
 """Point-source generator model for synthetic sky images."""
 
+from collections.abc import Callable
+
 import jax.numpy as jnp
 from jax import random, vmap
 from jax.typing import ArrayLike
 from nifty.re import Model, Vector
-from typing import Callable
 
-from .jax_fun import gaussian_filter2d
 from ..model.grid import SignalGrid
 from ..model.integer import integer_model
 from ..model.map import map_array
 from ..model.normal import normal_model
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
-
+from .jax_fun import gaussian_filter2d
 
 
 class PointGenerator(Model):
@@ -49,11 +49,15 @@ class PointGenerator(Model):
         self.i0 = i0
         self.coordinates = coordinates
         self.n_copies = n_copies
-        self.blur = blur if isinstance(blur, ArrayLike) else jnp.zeros(self.i0.target.shape[0])
+        self.blur = (
+            blur if isinstance(blur, ArrayLike) else jnp.zeros(self.i0.target.shape[0])
+        )
         self.func = func
         super().__init__(
-            domain = Vector(domain_tree((self.i0, self.coordinates, self.n_copies), error=False)), 
-            init = model_init((self.i0, self.coordinates, self.n_copies), error=False),
+            domain=Vector(
+                domain_tree((self.i0, self.coordinates, self.n_copies), error=False)
+            ),
+            init=model_init((self.i0, self.coordinates, self.n_copies), error=False),
         )
 
     def __call__(self, x, *, key=random.PRNGKey(0)):
@@ -67,22 +71,33 @@ class PointGenerator(Model):
         in_shape = (1, 1)
         out_shape = self.grid.shape
         out_start = self.coordinates(x)
-        in_start = jnp.zeros_like(out_start, dtype='int32')
+        in_start = jnp.zeros_like(out_start, dtype="int32")
 
-        x_val = map_array(i0_val * nc_mask, n_copies, n_copies, in_shape, out_shape, in_start, out_start, 1)
-        y_val = map_array(nc_mask, n_copies, n_copies, in_shape, out_shape, in_start, out_start, 1)
+        x_val = map_array(
+            i0_val * nc_mask,
+            n_copies,
+            n_copies,
+            in_shape,
+            out_shape,
+            in_start,
+            out_start,
+            1,
+        )
+        y_val = map_array(
+            nc_mask, n_copies, n_copies, in_shape, out_shape, in_start, out_start, 1
+        )
 
-        bl_val = random.permutation(key, self.blur, axis=0)[:i0_val.shape[0]]
+        bl_val = random.permutation(key, self.blur, axis=0)[: i0_val.shape[0]]
         vmap_filter = vmap(gaussian_filter2d, in_axes=(0, 0, None, None))
         x_val = vmap_filter(x_val, bl_val, 2, False)
 
         x_val = jnp.sum(x_val, axis=0)
         y_val = jnp.sum(y_val, axis=0)
-        
+
         return jnp.stack((x_val, y_val, jnp.zeros(x_val.shape)), axis=0)
 
-    @classmethod    
-    def build(cls, *, n_min=0, n_max=0, grid, i0, blur=None, func='exp'):
+    @classmethod
+    def build(cls, *, n_min=0, n_max=0, grid, i0, blur=None, func="exp"):
         """Build a point-source generator from configuration.
 
         Parameters
@@ -111,21 +126,21 @@ class PointGenerator(Model):
         grid = SignalGrid.build(**grid)
 
         i0 = normal_model(
-            prefix = 'pg i0 ',
-            shape = (n_max, 1, 1),
+            prefix="pg i0 ",
+            shape=(n_max, 1, 1),
             **i0,
         )
         coordinates = integer_model(
-            prefix = 'pg coordinates',
-            shape = (n_max, 2),
-            i_min = 0,
-            i_max = grid.shape[0],
+            prefix="pg coordinates",
+            shape=(n_max, 2),
+            i_min=0,
+            i_max=grid.shape[0],
         )
         n_copies = integer_model(
-            prefix = 'pg n copies',
-            shape = (1,),
-            i_min = n_min,
-            i_max = n_max + 1,
+            prefix="pg n copies",
+            shape=(1,),
+            i_min=n_min,
+            i_max=n_max + 1,
         )
         if blur:
             blur = get_blur(n_max, **blur)
@@ -136,14 +151,7 @@ class PointGenerator(Model):
         return cls(grid, i0, coordinates, n_copies, blur, func)
 
 
-
-def get_blur(
-        n_max,
-        *,
-        b_min = 0,
-        b_max = 0,
-        steps = 10
-):
+def get_blur(n_max, *, b_min=0, b_max=0, steps=10):
     """Generate linearly spaced blur sigma values.
 
     Parameters

@@ -1,9 +1,8 @@
 """Tests for aim_resolve.optimize.yml — YAML load/save utilities."""
 
-import os
 import pytest
 
-from aim_resolve.optimize.yml import yaml_load, yaml_save, get_vals
+from aim_resolve.optimize.yml import get_vals, yaml_load, yaml_save
 
 
 class TestGetVals:

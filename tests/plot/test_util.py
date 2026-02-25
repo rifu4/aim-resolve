@@ -1,7 +1,6 @@
 """Tests for aim_resolve.plot.util — rows_and_cols and to_shape."""
 
 import numpy as np
-import pytest
 
 from aim_resolve.plot.util import rows_and_cols, to_shape
 

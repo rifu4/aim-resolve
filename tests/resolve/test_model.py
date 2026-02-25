@@ -4,38 +4,41 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from aim_resolve.resolve.observation import Observation
-from aim_resolve.resolve.model import (
-    SignalResponse,
-    PointResponse,
-    TileResponse,
-    ComponentResponse,
-)
-from aim_resolve.model.grid import SignalGrid
 from aim_resolve.model.signal import SignalModel
-from aim_resolve.model.components import ComponentModel
-
+from aim_resolve.resolve.model import (
+    ComponentResponse,
+    PointResponse,
+    SignalResponse,
+    TileResponse,
+)
+from aim_resolve.resolve.observation import Observation
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_obs(nrow=4, nfreq=1):
     """Minimal Observation."""
     rng = np.random.default_rng(0)
     pol = np.array(["I"])
     freq = np.linspace(1e9, 1.5e9, nfreq)
-    uvw = np.column_stack([rng.standard_normal(nrow), rng.standard_normal(nrow), np.zeros(nrow)])
+    uvw = np.column_stack(
+        [rng.standard_normal(nrow), rng.standard_normal(nrow), np.zeros(nrow)]
+    )
     ant1 = np.zeros((nrow, 1), dtype=int)
     ant2 = np.arange(nrow, dtype=int).reshape(-1, 1)
     time = np.linspace(0, 1, nrow).reshape(-1, 1)
     dfs = []
-    for a, k in zip([uvw, ant1, ant2, time],
-                     [['u', 'v', 'w'], ['ant1'], ['ant2'], ['time']]):
+    for a, k in zip(
+        [uvw, ant1, ant2, time], [["u", "v", "w"], ["ant1"], ["ant2"], ["time"]]
+    ):
         dfs.append(pd.DataFrame(a, columns=[k]))
     antpos = pd.concat(dfs, axis=1)
     idx = pd.MultiIndex.from_product([pol, freq], names=["pol", "freq"])
-    vis_arr = rng.standard_normal((nrow, len(idx))) + 1j * rng.standard_normal((nrow, len(idx)))
+    vis_arr = rng.standard_normal((nrow, len(idx))) + 1j * rng.standard_normal(
+        (nrow, len(idx))
+    )
     vis = pd.DataFrame(vis_arr.astype(np.complex128), columns=idx)
     wgt = pd.DataFrame(np.ones((nrow, len(idx))), columns=idx)
     return Observation(pol, freq, antpos, vis, wgt)
@@ -84,6 +87,7 @@ class TestTileResponseTypeCheck:
         """TileResponse rejects wgridding=True at construction time."""
         obs = _make_obs()
         from aim_resolve.model.tiles import TileModel
+
         tm = TileModel.build(
             grid=dict(space=(16, 16), fov="1deg"),
             tile_grid=dict(space=(8, 8), fov="0.5deg", center=(0, 0)),

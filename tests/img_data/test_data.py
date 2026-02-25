@@ -1,11 +1,12 @@
 """Tests for aim_resolve.img_data.data — ImageData container."""
 
-import numpy as np
 import os
+
+import numpy as np
 import pytest
 
-from aim_resolve.model.grid import SignalGrid
 from aim_resolve.img_data.data import ImageData
+from aim_resolve.model.grid import SignalGrid
 
 
 @pytest.fixture

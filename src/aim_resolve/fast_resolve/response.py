@@ -4,11 +4,10 @@ import nifty8 as ift
 import numpy as np
 
 
-
 def build_exact_responses(
-        observation,
-        grid,
-        freq = np.ones((1,)),
+    observation,
+    grid,
+    freq=np.ones((1,)),
 ):
     """Build exact RNR response operators for fast-resolve.
 
@@ -34,7 +33,7 @@ def build_exact_responses(
         Normal-grid RNR product.
     RNR_l : Operator
         Padded RNR product.
-    """ 
+    """
     import resolve as rve
 
     sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)
@@ -42,11 +41,15 @@ def build_exact_responses(
         freq = freq[(freq >= observation.freq.min()) & (freq <= observation.freq.max())]
     fdom = rve.IRGSpace(freq)
     sky_dom = rve.default_sky_domain(sdom=sdom, fdom=fdom)
-    R = rve.InterferometryResponse(observation, sky_dom, True, 1e-9, verbosity=0, nthreads=8)
+    R = rve.InterferometryResponse(
+        observation, sky_dom, True, 1e-9, verbosity=0, nthreads=8
+    )
 
-    sdom_l = ift.RGSpace(tuple(2*s for s in grid.shape), distances=sdom.distances)
+    sdom_l = ift.RGSpace(tuple(2 * s for s in grid.shape), distances=sdom.distances)
     sky_dom_l = rve.default_sky_domain(sdom=sdom_l, fdom=fdom)
-    R_l = rve.InterferometryResponse(observation, sky_dom_l, True, 1e-9, verbosity=0, nthreads=8)
+    R_l = rve.InterferometryResponse(
+        observation, sky_dom_l, True, 1e-9, verbosity=0, nthreads=8
+    )
 
     if freq.size > 1:
         dch_l = ift.DomainChangerAndReshaper(R_l.domain[2:], R_l.domain)
@@ -63,7 +66,6 @@ def build_exact_responses(
     RNR_l = R_l.adjoint @ N_inv @ R_l
 
     return R, R_l, RNR, RNR_l
-
 
 
 def apply_exact_response(RNR, val):
@@ -94,8 +96,10 @@ def apply_exact_response(RNR, val):
         for rnr in RNR:
             if len(rnr.domain.shape) != 3:
                 raise ValueError("rnr domain must have 3 dimensions.")
-            results.append(apply_exact_response(rnr, val[idx : idx+rnr.domain.shape[0]]))
+            results.append(
+                apply_exact_response(rnr, val[idx : idx + rnr.domain.shape[0]])
+            )
             idx += rnr.domain.shape[0]
         return np.concatenate(results, axis=0)
-    
+
     return RNR(ift.makeField(RNR.domain, np.array(val))).val

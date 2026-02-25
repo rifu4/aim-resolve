@@ -1,46 +1,46 @@
 """Model visualization utilities for signal and component models."""
 
-import numpy as np
-import matplotlib.pyplot as plt
 from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
 from nifty.re import Vector
 
-from .image import plot_image
-from .power import plot_power
-from .util import plot_figure, to_shape
 from ..model.components import ComponentModel
 from ..model.points import PointModel
 from ..model.signal import SignalModel
 from ..model.tiles import TileModel
 from ..optimize.samples import MySamples
-
+from .image import plot_image
+from .power import plot_power
+from .util import plot_figure, to_shape
 
 
 def plot_models(
-        model,
-        samples,
-        name = None,
-        odir = None,
-        rows = None,
-        cols = None,
-        cmap = 'inferno',
-        norm = 'linear',
-        vmin = None,
-        vmax = None,
-        cbar = True,
-        ticks = 5,
-        marker = (),
-        square = False,
-        transpose = False,
-        plot_grid = True,
-        plot_label = True,
-        figsize = (5, 5),
-        dpi = 100,
-        **kwargs,
+    model,
+    samples,
+    name=None,
+    odir=None,
+    rows=None,
+    cols=None,
+    cmap="inferno",
+    norm="linear",
+    vmin=None,
+    vmax=None,
+    cbar=True,
+    ticks=5,
+    marker=(),
+    square=False,
+    transpose=False,
+    plot_grid=True,
+    plot_label=True,
+    figsize=(5, 5),
+    dpi=100,
+    **kwargs,
 ):
     """
     Plot the samples mean or of one or multiple models.
-    
+
     Parameters
     ----------
     model : ComponentModel, PointModel, SignalModel, TileModel or Iterable of those
@@ -85,7 +85,7 @@ def plot_models(
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
     """
-    models, nums = to_shape(model, None, rows, cols, 0., transpose, return_nums=True)
+    models, nums = to_shape(model, None, rows, cols, 0.0, transpose, return_nums=True)
     shape = models.shape[:2]
     rows, cols = shape
 
@@ -95,50 +95,54 @@ def plot_models(
     vmaxs = to_shape(vmax, shape_T, default=-1, transpose=transpose)
     norms = to_shape(norm, shape_T, default=-1, transpose=transpose)
 
-    figsize = to_shape(figsize, (2,), dtype='float64') * np.array(shape[::-1])
+    figsize = to_shape(figsize, (2,), dtype="float64") * np.array(shape[::-1])
     figure = plt.figure(figsize=figsize, dpi=dpi)
     axes = []
-    for i,(x,y) in enumerate(product(range(rows), range(cols))):
+    for i, (x, y) in enumerate(product(range(rows), range(cols))):
         if i >= nums:
             continue
-        axes.append(figure.add_subplot(rows, cols, i+1))
-        
-        model = models[x,y]
+        axes.append(figure.add_subplot(rows, cols, i + 1))
+
+        model = models[x, y]
         if not isinstance(model, (ComponentModel, PointModel, SignalModel, TileModel)):
-            raise TypeError('`model` has to be of type `ComponentModel`, `PointModel`, `SignalModel` or `TileModel`')
+            raise TypeError(
+                "`model` has to be of type `ComponentModel`, `PointModel`, `SignalModel` or `TileModel`"
+            )
         if isinstance(samples, MySamples):
             array = samples.mean(model)
         elif isinstance(samples, (Vector, dict)):
             array = model(samples)
         else:
-            raise TypeError('`samples` has to be of type `MySamples`, `Vector` or `dict`')
+            raise TypeError(
+                "`samples` has to be of type `MySamples`, `Vector` or `dict`"
+            )
 
         if array.ndim == 2:
             plot_image(
-                array = array,
-                axes = axes,
-                grid = models[x, y].grid,
-                label = models[x, y].prefix,
-                cmap = cmaps[x, y],
-                norm = norms[x, y],
-                vmin = vmins[x, y],
-                vmax = vmaxs[x, y],
-                cbar = cbar,
-                ticks = ticks,
-                marker = marker,
-                square = square,
-                plot_grid = plot_grid,
-                plot_label = plot_label,
+                array=array,
+                axes=axes,
+                grid=models[x, y].grid,
+                label=models[x, y].prefix,
+                cmap=cmaps[x, y],
+                norm=norms[x, y],
+                vmin=vmins[x, y],
+                vmax=vmaxs[x, y],
+                cbar=cbar,
+                ticks=ticks,
+                marker=marker,
+                square=square,
+                plot_grid=plot_grid,
+                plot_label=plot_label,
                 **kwargs,
             )
         elif array.ndim == 1:
             plot_power(
-                array = array,
-                axes = axes,
-                label = models[x, y].prefix,
-                plot_label = plot_label,
+                array=array,
+                axes=axes,
+                label=models[x, y].prefix,
+                plot_label=plot_label,
             )
         else:
-            raise ValueError('`array` has to be 1D or 2D')
+            raise ValueError("`array` has to be 1D or 2D")
 
     plot_figure(figure, odir, name)

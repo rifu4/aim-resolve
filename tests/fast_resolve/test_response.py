@@ -1,8 +1,9 @@
 """Tests for aim_resolve.fast_resolve.response — exact response utilities."""
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
-from unittest.mock import MagicMock
 
 from aim_resolve.fast_resolve.response import apply_exact_response
 

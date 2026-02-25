@@ -5,7 +5,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 
 
-
 def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
     """Cluster extended objects in an output map using DBSCAN.
 
@@ -34,13 +33,13 @@ def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
     # check if there are any objects to cluster, if not return empty array
     if X.size == 0:
         if print_cl:
-            print('n objects:', 0)
-            print('n noise points:', 0)
+            print("n objects:", 0)
+            print("n noise points:", 0)
         return np.zeros((0,) + objects_map.shape)
-    
+
     # initialize clustering method
     cl_alg = DBSCAN(**cl_kwargs)
-    
+
     # scale input and apply selected clustering method
     X_scaled = StandardScaler().fit_transform(X)
     clu = cl_alg.fit(X_scaled)
@@ -52,8 +51,8 @@ def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
 
     # print number of detected objects and noise points
     if print_cl:
-        print(f'n objects: {n_clusters}')
-        print('n noise points: %d' % n_noise)
+        print(f"n objects: {n_clusters}")
+        print("n noise points: %d" % n_noise)
 
     # create one output map for each detected object and an empty map for the background
     cluster_maps = np.zeros((n_clusters,) + objects_map.shape)
@@ -74,7 +73,6 @@ def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
     noise_map[loc[0], loc[1]] = 1
 
     return cluster_maps, noise_map
-
 
 
 def objects2points(points_map, noise_map, print_ps=True, **cl_kwargs):
@@ -101,17 +99,19 @@ def objects2points(points_map, noise_map, print_ps=True, **cl_kwargs):
     """
     if np.sum(noise_map) == 0:
         if print_ps:
-            print('n points:', np.sum(points_map == 1))
+            print("n points:", np.sum(points_map == 1))
         return points_map
-    
-    cl_kwargs.pop('min_samples', None)
-    noise_maps, _ = dbscan_clustering(noise_map, min_samples=1, print_cl=False, **cl_kwargs)
+
+    cl_kwargs.pop("min_samples", None)
+    noise_maps, _ = dbscan_clustering(
+        noise_map, min_samples=1, print_cl=False, **cl_kwargs
+    )
     mask = np.sum(noise_maps == 1, axis=(1, 2)) == 1
     add_points = np.sum(noise_maps[mask], axis=0).astype(points_map.dtype)
 
     points_map += add_points
 
     if print_ps:
-        print('n points:', np.sum(points_map == 1))
+        print("n points:", np.sum(points_map == 1))
 
     return points_map.clip(0, 1)

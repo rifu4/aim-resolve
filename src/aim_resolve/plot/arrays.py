@@ -1,8 +1,9 @@
 """Multi-array plotting utilities for images and power spectra."""
 
-import numpy as np
-import matplotlib.pyplot as plt
 from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.gridspec import GridSpec
 
 from .image import plot_image
@@ -10,38 +11,37 @@ from .power import plot_power
 from .util import plot_figure, to_shape
 
 
-
 def plot_arrays(
-        array,
-        grid = None,
-        label = None,
-        name = None,
-        odir = None,
-        rows = None,
-        cols = None,
-        cmap = 'inferno',
-        norm = 'linear',
-        vmin = None,
-        vmax = None,
-        cbar = True,
-        cbar_kwargs = {},
-        ticks = 5,
-        origin = 'lower',
-        marker = {},
-        contour = {},
-        square = False,
-        transpose = False,
-        plot_grid = True,
-        plot_label = True,
-        figsize = (5, 5),
-        dpi = 100,
-        callback = None,
-        grid_kwargs = {},
-        **kwargs,
+    array,
+    grid=None,
+    label=None,
+    name=None,
+    odir=None,
+    rows=None,
+    cols=None,
+    cmap="inferno",
+    norm="linear",
+    vmin=None,
+    vmax=None,
+    cbar=True,
+    cbar_kwargs={},
+    ticks=5,
+    origin="lower",
+    marker={},
+    contour={},
+    square=False,
+    transpose=False,
+    plot_grid=True,
+    plot_label=True,
+    figsize=(5, 5),
+    dpi=100,
+    callback=None,
+    grid_kwargs={},
+    **kwargs,
 ):
     """
     Plot arrays or lists containing multiple 2D images or power spectra.
-    
+
     Parameters
     ----------
     array : np.ndarray or Iterable of np.ndarrays
@@ -74,7 +74,7 @@ def plot_arrays(
     origin : str, optional
         The origin parameter for imshow. Default is 'lower'.
     marker : dict or dict containing subdicts, optional
-        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
+        The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}.
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
     contour : dict, optional
         The contours to plot. Keywords are passed to plt.contour. Default is {}.
@@ -98,7 +98,7 @@ def plot_arrays(
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
     """
-    arrays, nums = to_shape(array, None, rows, cols, 0., transpose, return_nums=True)
+    arrays, nums = to_shape(array, None, rows, cols, 0.0, transpose, return_nums=True)
     shape = arrays.shape[:2]
     rows, cols = shape
 
@@ -114,12 +114,12 @@ def plot_arrays(
     markers = to_shape(marker, shape_T, default={}, transpose=transpose)
     contours = to_shape(contour, shape_T, default={}, transpose=transpose)
 
-    figsize = to_shape(figsize, (2,), dtype='float64') * np.array(shape[::-1])
+    figsize = to_shape(figsize, (2,), dtype="float64") * np.array(shape[::-1])
     figure = plt.figure(figsize=figsize, dpi=dpi)
     axes = []
     grid = GridSpec(rows, cols, figure=figure, **grid_kwargs)
 
-    for i,(x,y) in enumerate(product(range(rows), range(cols))):
+    for i, (x, y) in enumerate(product(range(rows), range(cols))):
         if i >= nums:
             continue
         axes.append(figure.add_subplot(grid[x, y]))
@@ -128,37 +128,37 @@ def plot_arrays(
 
         if array.ndim == 2:
             plot_image(
-                array = array,
-                axes = axes,
-                grid = grids[x, y],
-                label = labels[x, y],
-                cmap = cmaps[x, y],
-                norm = norms[x, y],
-                vmin = vmins[x, y],
-                vmax = vmaxs[x, y],
-                cbar = cbars[x, y],
-                cbar_kwargs = cbar_kwargs[x, y],
-                ticks = ticks,
-                origin = origin,
-                marker = markers[x, y],
-                contour = contours[x, y],
-                square = square,
-                plot_grid = plot_grid,
-                plot_label = plot_label,
+                array=array,
+                axes=axes,
+                grid=grids[x, y],
+                label=labels[x, y],
+                cmap=cmaps[x, y],
+                norm=norms[x, y],
+                vmin=vmins[x, y],
+                vmax=vmaxs[x, y],
+                cbar=cbars[x, y],
+                cbar_kwargs=cbar_kwargs[x, y],
+                ticks=ticks,
+                origin=origin,
+                marker=markers[x, y],
+                contour=contours[x, y],
+                square=square,
+                plot_grid=plot_grid,
+                plot_label=plot_label,
                 **kwargs,
             )
         elif array.ndim == 1:
             plot_power(
-                array = array,
-                axes = axes,
-                label = labels[x,y],
-                plot_label = plot_label,
+                array=array,
+                axes=axes,
+                label=labels[x, y],
+                plot_label=plot_label,
                 **kwargs,
             )
         else:
             continue
             # raise ValueError('`array` has to be 1D or 2D')
-        
+
     if callable(callback):
         callback(figure, axes)
 

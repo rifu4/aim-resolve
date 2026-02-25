@@ -3,14 +3,20 @@
 import numpy as np
 from torch.utils.data import DataLoader
 
-from .dataset import TensorDataset, transform_data, add_coordinates, merge_facet_array
-from .model import SegmentationModel
 from ..img_data.data import ImageData
 from ..model.util import check_type
+from .dataset import TensorDataset, add_coordinates, merge_facet_array, transform_data
+from .model import SegmentationModel
 
 
-
-def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinates=False, print_ps=True):
+def model_predict(
+    reconstruction,
+    seg_model,
+    transform,
+    n_orders=None,
+    coordinates=False,
+    print_ps=True,
+):
     """Detect point sources and extended objects in a reconstructed image.
 
     Parameters
@@ -44,7 +50,7 @@ def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinat
 
     seg_model = SegmentationModel.load(**seg_model)
 
-    rec_val = np.expand_dims(reconstruction.val, axis=(0,1))
+    rec_val = np.expand_dims(reconstruction.val, axis=(0, 1))
 
     min_value = rec_val.max() / (10**n_orders) if n_orders else 0
 
@@ -55,27 +61,28 @@ def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinat
         dataset = add_coordinates(dataset, reconstruction.space)
 
     dataset = TensorDataset(dataset)
-    
+
     rec_loader = DataLoader(dataset, batch_size=dataset.x.shape[0], shuffle=False)
 
     sample = next(iter(rec_loader))
-    pred = seg_model.forward_sigmoid(sample['x'])
+    pred = seg_model.forward_sigmoid(sample["x"])
     pred = pred.detach().numpy()
 
-    facet_size = transform.get('facet_size', None)
+    facet_size = transform.get("facet_size", None)
     if isinstance(facet_size, int):
         factor = rec_val.shape[-1] // facet_size
         pred = merge_facet_array(pred, factor)
         pred = pred.squeeze()
 
     if print_ps:
-        print('n points:', np.sum(pred[0] == 1))
+        print("n points:", np.sum(pred[0] == 1))
 
     return pred[0], pred[1]
 
 
-
-def brightest_pixels(reconstruction, transform, n_orders=None, cutoff=0.5, print_ps=True, **kwargs):
+def brightest_pixels(
+    reconstruction, transform, n_orders=None, cutoff=0.5, print_ps=True, **kwargs
+):
     """Detect sources by selecting the brightest pixels above a cutoff.
 
     Parameters
@@ -106,12 +113,12 @@ def brightest_pixels(reconstruction, transform, n_orders=None, cutoff=0.5, print
     check_type(reconstruction, ImageData)
     check_type(n_orders, (int, type(None)))
 
-    rec_val = np.expand_dims(reconstruction.val, axis=(0,1))
+    rec_val = np.expand_dims(reconstruction.val, axis=(0, 1))
 
     if n_orders:
-        print('recon min/max:', rec_val.min(), rec_val.max())
-        print('orders cutoff min:', rec_val.max() / (10**n_orders))
-        rec_val = rec_val.clip(rec_val.max()/(10**n_orders), None)
+        print("recon min/max:", rec_val.min(), rec_val.max())
+        print("orders cutoff min:", rec_val.max() / (10**n_orders))
+        rec_val = rec_val.clip(rec_val.max() / (10**n_orders), None)
 
     dataset = (rec_val, np.zeros_like(rec_val))
     dataset = transform_data(dataset, **transform)
@@ -120,6 +127,6 @@ def brightest_pixels(reconstruction, transform, n_orders=None, cutoff=0.5, print
     oj_map = np.where(dataset[0] > cutoff, 1, 0)
 
     if print_ps:
-        print('n points:', np.sum(ps_map[0] == 1))
+        print("n points:", np.sum(ps_map[0] == 1))
 
-    return ps_map[0,0], oj_map[0,0]
+    return ps_map[0, 0], oj_map[0, 0]

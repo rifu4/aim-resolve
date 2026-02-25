@@ -1,7 +1,7 @@
 """Tests for aim_resolve.fast_resolve.convolve — FFT convolution helpers."""
 
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from aim_resolve.fast_resolve.convolve import (
@@ -16,10 +16,10 @@ from aim_resolve.fast_resolve.convolve import (
     upsample,
 )
 
-
 # ---------------------------------------------------------------------------
 # downsample / upsample
 # ---------------------------------------------------------------------------
+
 
 class TestDownsample:
     def test_shape_2d(self):
@@ -84,6 +84,7 @@ class TestUpsample:
 # build_fft_kernel
 # ---------------------------------------------------------------------------
 
+
 class TestBuildFFTKernel:
     def test_output_shape(self):
         kernel = np.random.default_rng(0).random((2, 32, 32))
@@ -100,6 +101,7 @@ class TestBuildFFTKernel:
 # ---------------------------------------------------------------------------
 # build_padder / build_slicer
 # ---------------------------------------------------------------------------
+
 
 class TestBuildPadder:
     def test_padding_shape(self):
@@ -135,6 +137,7 @@ class TestBuildSlicer:
 # fft_convolve_2d / fft_convolve
 # ---------------------------------------------------------------------------
 
+
 class TestFFTConvolve:
     def test_identity_kernel(self):
         """Convolving with a delta should return approximately the input."""
@@ -167,6 +170,7 @@ class TestFFTConvolve:
 # build_split_kernel
 # ---------------------------------------------------------------------------
 
+
 class TestBuildSplitKernel:
     def test_output_types(self):
         kernel = np.random.default_rng(1).random((1, 32, 32))
@@ -196,6 +200,7 @@ class TestBuildSplitKernel:
 # split_fft_convolve (integration-like test)
 # ---------------------------------------------------------------------------
 
+
 class TestSplitFFTConvolve:
     def test_output_shape_3d(self):
         """Output should match the input spatial shape."""
@@ -213,9 +218,13 @@ class TestSplitFFTConvolve:
 
         x = jnp.ones((1, 16, 16))
         result = split_fft_convolve(
-            x, k_high, k_low,
-            padder_high, padder_low,
-            slicer_high, slicer_low,
+            x,
+            k_high,
+            k_low,
+            padder_high,
+            padder_low,
+            slicer_high,
+            slicer_low,
             factor=2,
         )
         assert result.shape == (16, 16)  # squeezed

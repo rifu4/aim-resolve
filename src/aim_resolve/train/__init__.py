@@ -2,4 +2,4 @@
 
 from .dataset import Dataset
 from .model import SegmentationModel
-from .predict import model_predict, brightest_pixels
+from .predict import brightest_pixels, model_predict
