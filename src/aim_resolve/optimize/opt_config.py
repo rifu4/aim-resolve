@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .opt_kl import optimize_kl
 from .samples import domain_keys
-from .util import clean_dict, merge_dicts, split_its, add_dicts, clean_reps, get_it, is_or_contains_type, extend_reps, eval_string, eval_list
+from .util import clean_dict, merge_dicts, split_its, add_dicts, clean_reps, get_it, is_or_contains_type, extend_reps, eval_string, eval_list, fun2mode
 from .yml import yaml_load, yaml_save
 from ..fast_resolve.opt_kl import fast_optimize_kl
 
@@ -112,6 +112,8 @@ class OptimizeKLConfig:
         '''Check and get the mode of the likelihood and set the optimization parameters accordingly.'''
         dct = self.sections
 
+        dct = fun2mode(dct)
+
         self.opt_params = dict(
             n_iter = ['n_total_iterations'],
             static = ['odir', 'position_or_samples', 'key', 'resume'],
@@ -124,6 +126,8 @@ class OptimizeKLConfig:
             lh_key = dct[opt_key].get('likelihood', None)
             if lh_key is None:
                 raise KeyError(f'key `likelihood` is missing in opt-section `{opt_key}`')
+            if isinstance(lh_key, list):
+                lh_key = lh_key[0]
             if not lh_key[1:] in dct:
                 raise KeyError(f'section `{lh_key[1:]}` is missing in `self.sections`')
             mode = dct[lh_key[1:]].get('mode')
