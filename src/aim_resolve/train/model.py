@@ -1,3 +1,5 @@
+"""Neural network model definitions for source detection."""
+
 import os
 import torch
 import lightning as pl
@@ -11,7 +13,20 @@ from ..model.util import check_type
 
 
 class SegmentationModel(pl.LightningModule):
-    '''Base class for segmentation models for saving, loading, and plotting, based on pytorch lightning.'''
+    """Base class for segmentation models based on PyTorch Lightning.
+
+    Provides helpers for saving, loading, training, and plotting
+    segmentation predictions.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The underlying neural network.
+    loss_fn : torch.nn.Module
+        The loss function used for training.
+    config : dict
+        Configuration dictionary with keys ``optimizer`` and ``scheduler``.
+    """
 
     def __init__(self, model, loss_fn, config):
         super().__init__()
@@ -28,22 +43,31 @@ class SegmentationModel(pl.LightningModule):
 
     @classmethod
     def build(cls, *, arch, model_args, loss, optimizer, scheduler):
-        '''
-        Build the model from the given parameters.
+        """Build the model from the given parameters.
 
         Parameters
         ----------
         arch : str
-            The arch of the model to build.
+            The architecture of the model to build.
         model_args : dict
             Dictionary containing the arguments for the model.
         loss : str
             The loss function to use for training the model.
         optimizer : dict
-            The optimizer to use for training the model.
+            The optimizer configuration.
         scheduler : dict
-            The learning rate scheduler to use for training the model.
-        '''
+            The learning rate scheduler configuration.
+
+        Returns
+        -------
+        SegmentationModel
+            A newly constructed model instance.
+
+        Raises
+        ------
+        ValueError
+            If *loss* is not a recognised loss function name.
+        """
         check_type(arch, str)
         check_type(model_args, dict)
         check_type(loss, str)
@@ -76,16 +100,15 @@ class SegmentationModel(pl.LightningModule):
         return cls(model, loss_fn, config)
 
     def save(self, name, odir=''):
-        '''
-        Save the model model, arch, and config to a `.pth` file.
+        """Save the model state and config to a ``.pth`` file.
 
         Parameters
         ----------
         name : str
-            Name of the file to save the model to
+            Name of the file to save the model to.
         odir : str, optional
-            Output directory for the file, by default ''
-        '''
+            Output directory for the file, by default ''.
+        """
         os.makedirs(odir, exist_ok=True)
         if not name.endswith('.pth'):
             name_pth = name + '.pth'
@@ -96,16 +119,20 @@ class SegmentationModel(pl.LightningModule):
 
     @classmethod
     def load(cls, name, odir=''):
-        '''
-        Load a model from a file.
+        """Load a model from a ``.pth`` file.
 
         Parameters
         ----------
         name : str
-            Name of the file to load the model from
+            Name of the file to load the model from.
         odir : str, optional
-            Output directory for the file, by default ''
-        '''
+            Directory containing the file, by default ''.
+
+        Returns
+        -------
+        SegmentationModel
+            The loaded model in evaluation mode.
+        """
         if not name.endswith('.pth'):
             name_pth = name + '.pth'
 
@@ -118,24 +145,23 @@ class SegmentationModel(pl.LightningModule):
         return model
     
     def plot_predictions(self, dataset, name, odir='', n_copies=5, label=False, **kwargs):
-        '''
-        Plot a number of samples.
+        """Plot a number of prediction samples.
 
         Parameters
         ----------
         dataset : Dataset
-            Dataset containing the data to plot
+            Dataset containing the data to plot.
         name : str
-            Name of the plot
+            Name of the plot.
         odir : str, optional
-            Output directory for the plot, by default ''
+            Output directory for the plot, by default ''.
         n_copies : int, optional
-            Number of samples to plot, by default 5
+            Number of samples to plot, by default 5.
         label : bool, optional
-            Whether to add labels ['points', 'objects', 'sky'] to the plot, by default False
-        **kwargs : additional keyword arguments
-            Additional keyword arguments to pass to the plotting function
-        '''
+            Whether to add labels to the plot, by default False.
+        **kwargs
+            Additional keyword arguments forwarded to the plotting function.
+        """
         from ..plot.arrays import plot_arrays
 
         check_type(dataset, Dataset)
@@ -170,14 +196,52 @@ class SegmentationModel(pl.LightningModule):
         return
     
     def forward(self, image):
+        """Run the forward pass of the underlying model.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Raw logits from the model.
+        """
         return self.model.forward(image)
 
     def forward_sigmoid(self, image):
+        """Run forward pass and return thresholded sigmoid predictions.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean mask where sigmoid output exceeds 0.5.
+        """
         pred = self.forward(image)
         pred = torch.sigmoid(pred.squeeze())
         return pred > 0.5
     
     def shared_step(self, batch, stage):
+        """Perform a single training/validation/test step.
+
+        Parameters
+        ----------
+        batch : dict
+            Batch dictionary with keys ``x`` (images) and ``y`` (masks).
+        stage : str
+            Current stage name (e.g. ``'train'``, ``'valid'``, ``'test'``).
+
+        Returns
+        -------
+        dict
+            Dictionary containing loss and per-class statistics.
+        """
         image = batch['x']
         mask = batch['y']
 
@@ -205,6 +269,15 @@ class SegmentationModel(pl.LightningModule):
         }
 
     def shared_epoch_end(self, outputs, stage):
+        """Aggregate step metrics at the end of an epoch.
+
+        Parameters
+        ----------
+        outputs : list of dict
+            Collected outputs from each step.
+        stage : str
+            Current stage name.
+        """
         # aggregate step metics
         tp = torch.cat([x['tp'] for x in outputs])
         fp = torch.cat([x['fp'] for x in outputs])
@@ -233,18 +306,21 @@ class SegmentationModel(pl.LightningModule):
         self.log_dict(metrics, prog_bar=True)
 
     def training_step(self, batch, batch_idx):
+        """Execute a single training step."""
         train_loss_info = self.shared_step(batch, 'train')
         # append the metics of each step to the
         self.training_step_outputs.append(train_loss_info)
         return train_loss_info
 
     def on_train_epoch_end(self):
+        """Aggregate and log training metrics at epoch end."""
         self.shared_epoch_end(self.training_step_outputs, 'train')
         # empty set output list
         self.training_step_outputs.clear()
         return
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        """Execute a single validation step."""
         # Create key for each dataloader, e.g., 'valid0', 'valid1', etc.
         key = f'valid{dataloader_idx}'
         valid_loss_info = self.shared_step(batch, key)
@@ -257,6 +333,7 @@ class SegmentationModel(pl.LightningModule):
         return valid_loss_info
 
     def on_validation_epoch_end(self):
+        """Aggregate and log validation metrics at epoch end."""
         # Loop over all dataloader outputs
         for key, outputs in self.validation_step_outputs.items():
             self.shared_epoch_end(outputs, key)
@@ -266,17 +343,20 @@ class SegmentationModel(pl.LightningModule):
 
 
     def test_step(self, batch, batch_idx):
+        """Execute a single test step."""
         test_loss_info = self.shared_step(batch, 'test')
         self.test_step_outputs.append(test_loss_info)
         return test_loss_info
 
     def on_test_epoch_end(self):
+        """Aggregate and log test metrics at epoch end."""
         self.shared_epoch_end(self.test_step_outputs, 'test')
         # empty set output list
         self.test_step_outputs.clear()
         return
 
     def configure_optimizers(self):
+        """Configure the optimizer and learning rate scheduler."""
         return {
             'optimizer': self.optim_fn,
             'lr_scheduler': {

@@ -1,3 +1,5 @@
+"""Power spectrum plotting utilities."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +15,7 @@ def plot_power(
         odir = None,
         plot_label = True,
     ):
-    '''
+    """
     Plot a 1D power spectrum of the nifty.re correlated field model.
     
     Parameters
@@ -30,7 +32,7 @@ def plot_power(
         The output directory to save the plot. Default is None.
     plot_label : bool, optional
         Whether to plot the label as title. Default is True.
-    '''
+    """
     plot_now = False
     if axes is None:
         figure = plt.figure(figsize=(5,5))

@@ -1,3 +1,5 @@
+"""KL divergence optimization routines for variational inference."""
+
 import os
 import inspect
 import logging
@@ -21,14 +23,14 @@ from .samples import MySamples, get_samples
 
 
 def get_at_nit(c, nit):
-    '''Get the value of `c` at the iteration `nit`.'''
+    """Get the value of `c` at the iteration `nit`."""
     if callable(c) and len(inspect.getfullargspec(c).args) == 1:
         c = c(nit)
     return c
 
 
 def my_lh(*, data, sky_response, noise_cov_inv=None, noise_std_inv=None, noise_model=None, **kwargs):
-    '''Likelihood function that is passed to the OptimizeVI class. Builds a likelihood at each iteration.'''
+    """Likelihood function that is passed to the OptimizeVI class. Builds a likelihood at each iteration."""
 
     if noise_cov_inv:
         noise_std_inv = get_at_nit(noise_cov_inv, 1)**0.5
@@ -90,7 +92,7 @@ def optimize_kl(
     callback: Optional[Callable[[MySamples, OptimizeVIState], None]] = None,
     odir: Optional[str] = None,
 ) -> tuple[MySamples, OptimizeVIState]:
-    '''
+    """
     One-stop-shop for MGVI/geoVI style VI approximation. Can be used with the `OptimizeKLConfig` class.
 
     Parameters
@@ -170,7 +172,7 @@ def optimize_kl(
         Posterior samples.
     opt_vi_st : OptimizeVIState
         State of the optimization.
-    '''
+    """
     LAST_FILENAME = "last.pkl"
     MINISANITY_FILENAME = "minisanity.txt"
     last_fn = os.path.join(odir, LAST_FILENAME) if odir is not None else None

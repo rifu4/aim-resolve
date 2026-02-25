@@ -1,3 +1,5 @@
+"""Builder utilities for constructing pipeline sections from configuration."""
+
 from .data import data_func
 from .likelihood import likelihood_func
 from .model.components import ComponentModel
@@ -9,21 +11,33 @@ from .transition import transition_func
 
 
 def get_builders(sections : dict):
-    '''
-    Create the builders dictionary if it isn`t specified.
-    
+    """Create a builders dictionary mapping section names to their builder functions.
+
+    Automatically selects the correct builder function for each section
+    based on the section key prefix.
+
+    For sky sections the dictionary values indicate the sky model type.
+    For other sections the ``mode`` key selects the concrete implementation:
+
+    - **data** : ``image`` or ``radio``
+    - **lh** : ``image``, ``fast``, ``radio`` or ``sum``
+    - **trans** : ``anew``, ``freq``, ``addt`` or ``zoom``
+
     Parameters
     ----------
     sections : dict
-        Dictionary containing the sections of the model.
-        -> automatically selects the correct function to use depending on the section key.
+        Dictionary of section names to their configuration values.
 
-    For the sky sections the used keys indicate the type of the sky model.
-    For the other section it is necessary to specify the `mode`:
-    - data: `image` or `radio`
-    - lh: `image`, `fast`, `radio` or `sum`
-    - trans: `anew`, `freq`, `addt` or `zoom`
-    '''
+    Returns
+    -------
+    builders : dict
+        Dictionary mapping section names to callable builder functions.
+
+    Raises
+    ------
+    ValueError
+        If a sky section type cannot be determined from its values.
+    """
     builders = {}
     for sec,val in sections.items():
         sec = str(sec)

@@ -1,3 +1,5 @@
+"""Utility functions for optimization configuration processing."""
+
 import ast
 import re
 from collections.abc import Iterable
@@ -6,10 +8,10 @@ from copy import deepcopy
 
 
 def clean_dict(dct):
-    '''Clean up a dictionary by removing all 1. order keys that are not referenced in any value of the dictionary.'''
+    """Clean up a dictionary by removing all 1. order keys that are not referenced in any value of the dictionary."""
 
     def _need_key(key, dct):
-        '''Check if a key is referenced in any value of the dictionary.'''
+        """Check if a key is referenced in any value of the dictionary."""
         if 'opt' in key and not 'base' in key:
             return True
         for k,v in dct.items():               
@@ -32,7 +34,7 @@ def clean_dict(dct):
 
 
 def merge_dicts(dcts, merge_base=False):
-    '''Merge multiple dictionaries and subdictionaries into one dictionary.'''
+    """Merge multiple dictionaries and subdictionaries into one dictionary."""
     n_dct = {}
     for d in dcts:
         for k,v in d.items():
@@ -47,7 +49,7 @@ def merge_dicts(dcts, merge_base=False):
 
 
 def split_its(dct):
-    '''Split a dictionary into a list of dictionaries based on the iteration number.'''
+    """Split a dictionary into a list of dictionaries based on the iteration number."""
     n_dct = {}
     for key,val in dct.items():
         if '.' in key:
@@ -67,7 +69,7 @@ def split_its(dct):
 
 
 def update_it(dct, it, fix_keys=[]):
-    '''Update the iteration number in the keys of a dictionary for not fixed keys (new_it = old_it + 1).'''
+    """Update the iteration number in the keys of a dictionary for not fixed keys (new_it = old_it + 1)."""
     n_dct = {}
     for key,val in dct.items():
         if isinstance(val, dict):
@@ -94,7 +96,7 @@ def update_it(dct, it, fix_keys=[]):
 
 
 def has_key(dct, key):
-    '''Check if a key is in a dictionary or any subdictionary.'''
+    """Check if a key is in a dictionary or any subdictionary."""
     if key in dct.keys():
         return True
     for v in dct.values():
@@ -105,7 +107,7 @@ def has_key(dct, key):
 
 
 def has_val(dct, val):
-    '''Check if a value is in a dictionary or any subdictionary.'''
+    """Check if a value is in a dictionary or any subdictionary."""
     if val in dct.values():
         return True
     for v in dct.values():
@@ -116,7 +118,7 @@ def has_val(dct, val):
 
 
 def pop_key(dct, key):
-    '''Remove a key from a dictionary and all subdictionaries.'''
+    """Remove a key from a dictionary and all subdictionaries."""
     new_dct={}
     for k,v in dct.items():     
         if k != key:
@@ -128,7 +130,7 @@ def pop_key(dct, key):
 
 
 def pop_val(dct, val):
-    '''Remove a value from a dictionary and all subdictionaries.'''
+    """Remove a value from a dictionary and all subdictionaries."""
     new_dct={}
     for k,v in dct.items():     
         if v != val:
@@ -140,7 +142,7 @@ def pop_val(dct, val):
 
 
 def add_dicts(*dicts):
-    '''Add multiple dictionaries and their subdictionaries.'''
+    """Add multiple dictionaries and their subdictionaries."""
     n_dct = {}
     
     def add_1dct(dct):
@@ -158,7 +160,7 @@ def add_dicts(*dicts):
 
 
 def is_or_contains_type(dct, typ):
-    '''Check if a dictionary or any subdictionary contains a certain type.'''
+    """Check if a dictionary or any subdictionary contains a certain type."""
     if isinstance(dct, typ):
         return True
     elif isinstance(dct, dict):
@@ -173,7 +175,7 @@ def is_or_contains_type(dct, typ):
 
 
 def get_it(dct, it):
-    '''Get the value of a dictionary at a certain iteration number.'''
+    """Get the value of a dictionary at a certain iteration number."""
 
     def _flatten_list(lst):
         lst = [_flatten_list(val) if isinstance(val, list) else val for val in lst]
@@ -194,7 +196,7 @@ def get_it(dct, it):
 
 
 def extend_reps(val, total_it, add_val=-1):
-    '''Add repeating values to a list to reach a total iteration number.'''
+    """Add repeating values to a list to reach a total iteration number."""
     val = list(val) if isinstance(val, Iterable) else [val, ]
     add_val = val[-1] if add_val == -1 else add_val
     dif = total_it - len(val)
@@ -207,7 +209,7 @@ def extend_reps(val, total_it, add_val=-1):
 
 
 def clean_reps(dct, simplify=True):
-    '''Clean up repeating elements in a dictionary containing lists.'''
+    """Clean up repeating elements in a dictionary containing lists."""
 
     def _simplify_list(lst):
         expr = re.sub(r"'([^']*)'", r"\1", str(lst))
@@ -255,7 +257,7 @@ def clean_reps(dct, simplify=True):
 
 
 def eval_string(expr):
-    '''Evaluate a string expression and return the result.'''
+    """Evaluate a string expression and return the result."""
     expr = expr.replace(' ', '')
     expr = re.sub(r'(?<!\d)([a-zA-Z=_~][a-zA-Z0-9.=_]*)(?!\d)', r'"\1"', expr)
     expr = re.sub(r'"None"|"null"|"~"', "None", expr)
@@ -287,7 +289,7 @@ def eval_string(expr):
 
 
 def eval_list(expr):
-    '''Evaluate string expressions in a list and return the result.'''
+    """Evaluate string expressions in a list and return the result."""
     if isinstance(expr, list):
         return [eval_list(el) for el in expr]
     elif isinstance(expr, str):
@@ -297,7 +299,7 @@ def eval_list(expr):
 
 
 def check_dict(dct, needed, optional=[]):
-    '''Check if all needed keys are in the dictionary and remove wrong keys.'''
+    """Check if all needed keys are in the dictionary and remove wrong keys."""
     #TODO: adjust function -> similar to check_type
     allowed = set(needed) | set(optional)
     if dct:
@@ -310,6 +312,7 @@ def check_dict(dct, needed, optional=[]):
 
 
 def fun2mode(dct):
+    """Convert 'fun' entries in each section of a dictionary to 'mode' entries."""
     for sec in dct:
         if 'fun' in dct[sec]:
             fun = dct[sec].pop('fun')

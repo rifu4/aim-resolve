@@ -1,3 +1,5 @@
+"""Signal model for AIM-Resolve astronomical reconstruction."""
+
 import dataclasses
 import jax.numpy as jnp
 import numpy as np
@@ -15,7 +17,12 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class SignalModel(Model):
-    '''Generate a signal model. Use `build` function to create the model.'''
+    """Signal model combining spatial and spectral components.
+
+    Wraps a spectral model with optional nonlinearity, offset, and
+    Gaussian modulation. Use the ``build`` class method to construct
+    instances from configuration dictionaries.
+    """
 
     mask: Any = dataclasses.field(default=None, metadata=dict(static=False))
 
@@ -42,6 +49,20 @@ class SignalModel(Model):
         )
 
     def __call__(self, x, *, map=False):
+        """Evaluate the signal model.
+
+        Parameters
+        ----------
+        x : dict
+            Latent parameter dictionary.
+        map : bool, optional
+            If True, apply the map function to the result. Default is False.
+
+        Returns
+        -------
+        res : jnp.ndarray
+            The evaluated signal.
+        """
         res = self.model(x)
         if self.nonlinearity:
             res *= self.nonlinearity(self.offset)
@@ -58,27 +79,30 @@ class SignalModel(Model):
 
     @classmethod
     def build(cls, *, grid, freq=[1.], params, prefix='sm', offset=0, nonlinearity='exp', gaussian=None):
-        '''
+        """
         Build a SignalModel from the given parameters.
 
         Parameters
         ----------
         grid : dict
-            Dictionary containing the signal grid parameters (see SignalGrid)
+            Dictionary containing the signal grid parameters (see SignalGrid).
         freq : list or np.ndarray or Observation
-            Frequencies of the signal model. If an Observation is given, the frequencies are extracted from it, by default '[1.]'
+            Frequencies of the signal model. If an Observation is given,
+            the frequencies are extracted from it. Default is ``[1.]``.
         params : dict
-            Dictionary containing the spectral model parameters of the signal (see spectral_model)
+            Dictionary containing the spectral model parameters of the
+            signal (see spectral_model).
         prefix : str, optional
-            Prefix for the model, by default 'sm'
+            Prefix for the model. Default is ``'sm'``.
         offset : float, optional
-            Offset to add to the signal, by default 0
+            Offset to add to the signal. Default is 0.
         nonlinearity : str, optional
-            Function to apply to the signal, by default 'exp'
+            Function to apply to the signal. Default is ``'exp'``.
         gaussian : dict, optional
-            Dictionary containing the gaussian model parameters (see gaussian_model), by default None
-            -> multiply the signal with a gaussian
-        '''
+            Dictionary containing the gaussian model parameters
+            (see gaussian_model). Multiplies the signal with a gaussian.
+            Default is None.
+        """
         from ..resolve.observation import Observation
 
         if 'coordinates' in grid:
@@ -103,52 +127,81 @@ class SignalModel(Model):
         return cls(grid, freq, model, prefix, offset, nonlinearity, gaussian)
     
     def set_out_grid(self, out_grid):
+        """Set the output grid and configure the map function.
+
+        Parameters
+        ----------
+        out_grid : SignalGrid
+            The output signal grid to map onto.
+        """
         check_type(out_grid, SignalGrid)
         self.map_function = map_signal(self.grid, out_grid)
         return
 
     @property
     def shape(self):
+        """Shape of the signal model output array."""
         return extend_shape(1, self.freq, self.grid.shape)
     
     def set_offset(self, offset):
-        '''
+        """
         Set the offset for the signal model.
 
         Parameters
         ----------
         offset : float
-            Offset to add to the signal model
-        '''
+            Offset to add to the signal model.
+        """
         self.offset = to_shape(offset, (), 'float64')
         return
     
     def copy(self):
+        """Return a shallow copy of this SignalModel."""
         return SignalModel(self.grid, self.freq, self.model, self.prefix, self.offset, self.nonlinearity, self.gaussian)
 
     @property
     def ref_freq_model(self):
-        '''Return the reference frequency model.'''
+        """Return the reference frequency model."""
         offset = self.offset[:,0] if self.offset.ndim == 4 else self.offset
         return self._spectral_property('i0', 'reference_frequency_distribution', offset, self.nonlinearity, self.gaussian)
 
     @property
     def spectral_index(self):
-        '''Return the spectral index model.'''
+        """Return the spectral index model."""
         return self._spectral_property('alpha', 'spectral_index_distribution', 0, None, None)
 
     @property
     def spectral_deviations(self):
-        '''Return the spectral deviations model.'''
+        """Return the spectral deviations model."""
         return self._spectral_property('deviations', 'spectral_deviations_distribution', 0, None, None)
 
     @property
     def spectral_model(self):
-        '''Return the spectral model.'''
+        """Return the spectral model."""
         return self._spectral_property('', 'spectral_distribution', 0, None, None)
 
     def _spectral_property(self, mfm_attr, ubik_attr, offset=0, nonlinearity=None, gaussian=None):
-        '''Helper function to create spectral properties.'''
+        """Create a SignalModel for a specific spectral property.
+
+        Parameters
+        ----------
+        mfm_attr : str
+            Attribute name on the MultiFrequencyModel (e.g. ``'i0'``,
+            ``'alpha'``, ``'deviations'``, or ``''`` for the full model).
+        ubik_attr : str
+            Attribute name for the ubik-style spectral model fallback.
+        offset : float or jnp.ndarray, optional
+            Offset applied to the resulting sub-model. Default is 0.
+        nonlinearity : callable or None, optional
+            Nonlinearity applied to the sub-model. Default is None.
+        gaussian : Model or None, optional
+            Optional Gaussian modulation model. Default is None.
+
+        Returns
+        -------
+        sig : SignalModel
+            A SignalModel wrapping the requested spectral property.
+        """
         if self.freq.size > 1:
             model = self.model
             n_copies = 1

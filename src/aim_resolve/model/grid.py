@@ -1,3 +1,5 @@
+"""Grid classes for defining signal and point model domains."""
+
 import numpy as np
 from jax import vmap
 
@@ -6,7 +8,11 @@ from .util import check_type, is_val, to_shape
 
 
 class SignalGrid():
-    '''Class to represent a signal grid at a specific location in the sky. Use `build` function to create the grid.'''
+    """Signal grid at a specific location in the sky.
+
+    Represents a rectangular pixel grid used for modeling extended signals.
+    Use the ``build`` classmethod to create a grid instance.
+    """
 
     def __init__(self, space, center=(0,0), factor=1, distances=(1.,1.), n_copies=1):
         check_type(space, tuple, int)
@@ -23,6 +29,7 @@ class SignalGrid():
         self.n_copies = n_copies
 
     def __repr__(self):
+        """Return a string representation of the SignalGrid."""
         return f'SignalGrid(space={self.space}, center={self.center}, factor={self.factor}, distances={self.distances})'
     
     def __eq__(self, other):
@@ -48,24 +55,28 @@ class SignalGrid():
     
     @classmethod
     def build(cls, *, space, center=(0,0), factor=1, distances=None, fov=None, n_copies=1):
-        '''
-        Build a SignalGrid from the given parameters.
+        """Build a SignalGrid from the given parameters.
 
         Parameters
         ----------
         space : int or tuple
-            The space of the grid
+            The space of the grid.
         center : int or tuple, optional
-            The center of the space, by default None
+            The center of the space, by default (0, 0).
         factor : int, optional
-            The upsampling factor of the space, by default 1
+            The upsampling factor of the space, by default 1.
         distances : float or tuple, optional
-            The distance between the pixels, by default None
+            The distance between the pixels, by default None.
         fov : float or tuple, optional
-            The field of view of the space, by default None
+            The field of view of the space, by default None.
         n_copies : int, optional
-            The number of copies of the space, by default 1
-        '''
+            The number of copies of the space, by default 1.
+
+        Returns
+        -------
+        SignalGrid
+            The constructed signal grid instance.
+        """
         n_c = to_shape(n_copies, (), 'int64')
         if not is_val(n_c):
             n_c = 1
@@ -100,49 +111,59 @@ class SignalGrid():
 
     @property
     def spc(self):
+        """Space dimensions as a NumPy array."""
         return np.array(self.space)
     
     @property
     def shp(self):
+        """Shape of the grid as a NumPy array."""
         return np.array(self.shape)
 
     @property
     def cen(self):
+        """Center coordinates as a NumPy array."""
         return np.array(self.center)
     
     @property
     def fac(self):
+        """Upsampling factor as a NumPy array."""
         return np.array(self.factor)
     
     @property
     def dis(self):
+        """Pixel distances as a NumPy array."""
         return np.array(self.distances)
     
     @property
     def fov(self):
+        """Field of view of the grid."""
         return self.spc * self.dis
     
     @property
     def ndim(self):
+        """Number of dimensions of the grid."""
         return len(self.space)
 
     @property
     def size(self):
+        """Total number of grid elements."""
         return self.shp.prod()
     
     @property
     def dvol(self):
+        """Volume element of one pixel."""
         return self.dis.prod() / (self.fac**self.ndim)
         
     @property
     def lims(self):
+        """Spatial limits of the grid."""
         if self.n_copies == 1:
             return space_lims(self.spc, self.cen)
         else:
             return vmap(space_lims, in_axes=(None, 0))(self.spc, self.cen)
         
     def refine(self, factor):
-        '''Multiply the resolution of the grid by a factor.'''
+        """Multiply the resolution of the grid by a factor."""
         check_type(factor, int)
         return SignalGrid(self.space, self.center, self.factor * factor, self.distances, self.n_copies)
     
@@ -152,13 +173,13 @@ class SignalGrid():
         return SignalGrid.build(**dct)
 
     def multiply_space(self, factor):
-        '''Multiply the space of the grid by a factor.'''
+        """Multiply the space of the grid by a factor."""
         check_type(factor, (int, float))
         space = tuple(int(round(si * factor)) for si in self.space)
         return SignalGrid(space, self.center, self.factor, self.distances, self.n_copies)
 
     def to_dict(self, *keys):
-        '''Convert the grid to a dictionary ({space: [sx,sy], ...}).'''
+        """Convert the grid to a dictionary ({space: [sx,sy], ...})."""
         if not keys:
             keys = ('center', 'factor', 'n_copies')
         dct = {'space': self.spc.tolist()}
@@ -176,13 +197,29 @@ class SignalGrid():
 
 
 def space_lims(spc, cen):
-    '''Generate the limits of the space.'''
+    """Generate the spatial limits from space dimensions and center.
+
+    Parameters
+    ----------
+    spc : array-like
+        Space dimensions.
+    cen : array-like
+        Center coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of lower and upper limits for each dimension.
+    """
     return spc[:,None] / 2 * np.array([-1, 1]) + cen[:,None]
     
 
 
 class PointGrid():
-    '''Class to represent a signal grid at a specific location in the sky. Use `build` function to create the grid.'''
+    """Point grid for modeling point sources at specific sky coordinates.
+
+    Use the ``build`` classmethod to create a grid instance.
+    """
 
     def __init__(self, coordinates, factor=1, n_copies=1):
         check_type(coordinates, tuple, (tuple, float), float)
@@ -195,20 +232,27 @@ class PointGrid():
         self.n_copies = n_copies
 
     def __repr__(self):
+        """Return a string representation of the PointGrid."""
         return f'PointGrid(coordinates={self.coordinates}, factor={self.factor}, n_copies={self.n_copies})'
     
     @classmethod
     def build(cls, *, coordinates, factor=1, n_copies=1):
-        '''
-        Build a PointSpace object from the given parameters.
-        
+        """Build a PointGrid from the given parameters.
+
         Parameters
         ----------
         coordinates : float or tuple
-            The coordinates of the point sources
+            The coordinates of the point sources.
+        factor : int, optional
+            The upsampling factor, by default 1.
         n_copies : int, optional
-            The number of point sources, by default 1
-        '''
+            The number of point sources, by default 1.
+
+        Returns
+        -------
+        PointGrid
+            The constructed point grid instance.
+        """
         n_c = to_shape(n_copies, (), 'int64')
         if not is_val(n_c):
             n_c = 1
@@ -232,26 +276,32 @@ class PointGrid():
 
     @property
     def coos(self):
+        """Coordinates as a NumPy array."""
         return np.array(self.coordinates)
     
     @property
     def shp(self):
+        """Shape of the grid as a NumPy array."""
         return np.array(self.shape)
     
     @property
     def fac(self):
+        """Upsampling factor as a NumPy array."""
         return np.array(self.factor)
     
     @property
     def ndim(self):
+        """Number of dimensions of the grid."""
         return len(self.shape)
 
     @property
     def size(self):
+        """Total number of grid elements."""
         return self.shp.prod()
     
     @property
     def lims(self):
+        """Spatial limits of the point grid."""
         return self.coos.reshape(-1, 2)[:,:,None].repeat(2, axis=-1)
     
     def refine(self, factor):
@@ -268,7 +318,7 @@ class PointGrid():
         return PointGrid.build(**dct)
 
     def to_dict(self, *keys):
-        '''Convert the grid to a dictionary ({coordinates: [[cx,cy], ...], ...}).'''
+        """Convert the grid to a dictionary ({coordinates: [[cx,cy], ...], ...})."""
         if not keys:
             keys = ('factor', 'n_copies')
         dct = {'coordinates': self.coos.tolist()}

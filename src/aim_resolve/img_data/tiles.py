@@ -1,3 +1,5 @@
+"""Tile component generator model for synthetic sky images."""
+
 import jax.numpy as jnp
 from nifty.re import Model, Vector, VModel
 from typing import Callable
@@ -12,7 +14,25 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class TileGenerator(Model):
-    '''Generate a tile model. Use `build` function to create the model.'''
+    """Generative model for tile-based extended components.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    grid : SignalGrid
+        Spatial grid of the output image.
+    i0 : Model or VModel
+        Prior model for tile intensities.
+    centers : Model
+        Model producing integer tile centre coordinates.
+    n_copies : Model
+        Model producing the number of active tiles.
+    gaussian : Model, VModel or None
+        Optional Gaussian envelope per tile.
+    func : callable or None
+        Point-wise activation function.
+    """
 
     def __init__(self, grid, i0, centers, n_copies, gaussian=None, func=jnp.exp):
         check_type(grid, SignalGrid)
@@ -67,27 +87,30 @@ class TileGenerator(Model):
 
     @classmethod
     def build(cls, *, n_min=0, n_max=0, grid, tile_size, i0, gaussian=None, func='exp'):
-        '''
-        Build a tile generator model.
+        """Build a tile generator from configuration dictionaries.
 
         Parameters
         ----------
-        n_min : int
-            Minimum number of tiles to generate
-        n_max : int
-            Maximum number of tiles to generate
+        n_min : int, optional
+            Minimum number of tiles. Default is 0.
+        n_max : int, optional
+            Maximum number of tiles. Default is 0.
         grid : dict
-            Dictionary containing the signal grid parameters (see SignalGrid)
-        tile_size : tuple
-            Size of the tile components in pixels
+            Signal grid parameters (see ``SignalGrid``).
+        tile_size : tuple of int
+            ``(height, width)`` of each tile in pixels.
         i0 : dict
-            Dictionary containing the prior model parameters of the signal (see prior_model)
-        gaussian : dict, optional
-            Dictionary containing the gaussian model parameters (see gaussian_model), by default None
-            -> multiply the tile components with a gaussian
-        func : str, optional
-            Function to apply to the signal, by default 'exp'
-        '''
+            Prior model parameters for tile intensities.
+        gaussian : dict or None, optional
+            Gaussian envelope parameters. Default is None.
+        func : str or None, optional
+            ``jax.numpy`` activation function name. Default is ``'exp'``.
+
+        Returns
+        -------
+        TileGenerator
+            The constructed tile generator.
+        """
         check_type(n_min, int)
         check_type(n_max, int)
  

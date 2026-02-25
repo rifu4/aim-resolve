@@ -1,3 +1,5 @@
+"""Clustering utilities for source detection in U-Net output maps."""
+
 import numpy as np
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
@@ -5,25 +7,27 @@ from sklearn.preprocessing import StandardScaler
 
 
 def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
-    '''
-    function to cluster the extended objects in the output map of the U-Net.
+    """Cluster extended objects in an output map using DBSCAN.
 
     Parameters
     ----------
     objects_map : np.ndarray
-        The objects map of the U-Net.
-    print_clu : bool
-        Whether to print the number of detected objects and noise points. Default is True.
+        Binary objects map from the U-Net.
+    print_cl : bool, optional
+        Whether to print the number of detected objects and noise points.
+        Default is True.
     **cl_kwargs
-        Necessary keyword arguments for the clustering method.
+        Keyword arguments forwarded to ``sklearn.cluster.DBSCAN``.
 
     Returns
     -------
     cluster_maps : np.ndarray
-        An array of output maps, one for each detected object.
+        Array of shape ``(n_objects, *objects_map.shape)`` with one binary
+        map per detected object, sorted by descending pixel count.
     noise_map : np.ndarray
-        One output map containing the noise points.
-    '''
+        Binary map of the same shape as *objects_map* containing the
+        noise points.
+    """
     # extract locations of the extended objects from the output map
     X = np.argwhere(objects_map == 1)
 
@@ -74,25 +78,27 @@ def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
 
 
 def objects2points(points_map, noise_map, print_ps=True, **cl_kwargs):
-    '''
-    function to add one-pixel sized objects to the points map.
+    """Convert single-pixel noise clusters to point sources.
+
+    Re-clusters the noise map and adds clusters consisting of exactly one
+    pixel to *points_map*.
 
     Parameters
     ----------
     points_map : np.ndarray
-        The points map of the U-Net.
+        Binary point-source map from the U-Net.
     noise_map : np.ndarray
-        The noise map of clustering.
-    print_ps : bool
-        Whether to print the number of points in the points map. Default is True.
+        Binary noise map from ``dbscan_clustering``.
+    print_ps : bool, optional
+        Whether to print the total number of points. Default is True.
     **cl_kwargs
-        Necessary keyword arguments for the clustering method.
-    
+        Keyword arguments forwarded to ``dbscan_clustering``.
+
     Returns
     -------
     points_map : np.ndarray
-        The updated points map with noise points converted to points.
-    '''
+        Updated point-source map with single-pixel noise clusters added.
+    """
     if np.sum(noise_map) == 0:
         if print_ps:
             print('n points:', np.sum(points_map == 1))

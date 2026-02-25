@@ -1,3 +1,5 @@
+"""Model visualization utilities for signal and component models."""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
@@ -36,7 +38,7 @@ def plot_models(
         dpi = 100,
         **kwargs,
 ):
-    '''
+    """
     Plot the samples mean or of one or multiple models.
     
     Parameters
@@ -82,7 +84,7 @@ def plot_models(
         The dpi of the figure. Default is 300.
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
-    '''
+    """
     models, nums = to_shape(model, None, rows, cols, 0., transpose, return_nums=True)
     shape = models.shape[:2]
     rows, cols = shape

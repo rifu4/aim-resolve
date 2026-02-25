@@ -1,3 +1,5 @@
+"""Prediction and inference utilities for trained detection models."""
+
 import numpy as np
 from torch.utils.data import DataLoader
 
@@ -9,31 +11,34 @@ from ..model.util import check_type
 
 
 def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinates=False, print_ps=True):
-    '''
-    Detect point sources and extended objects in a reconstructed image.
+    """Detect point sources and extended objects in a reconstructed image.
 
     Parameters
     ----------
     reconstruction : ImageData
         The input reconstruction.
     seg_model : dict
-        Dictionary containing the model name and odir (see SegmentationModel.load).
+        Dictionary containing the model name and odir
+        (see ``SegmentationModel.load``).
     transform : dict
-        Dictionary containing transformation parameters (see transform_data)
+        Dictionary containing transformation parameters
+        (see ``transform_data``).
     n_orders : int or None, optional
-        If provided the reconstruction is cut to `n_orders` orders of magnitude from below, by default None
+        If provided the reconstruction is cut to *n_orders* orders of
+        magnitude from below, by default None.
     coordinates : bool, optional
-        Whether to add coordinates to the data, by default True
+        Whether to add coordinates to the data, by default False.
     print_ps : bool, optional
-        Whether to print the number of detected point sources, by default True
-    
+        Whether to print the number of detected point sources,
+        by default True.
+
     Returns
     -------
     points_map : np.ndarray
         The detected point sources.
-    object_maps : np.ndarray
+    object_map : np.ndarray
         The detected extended objects.
-    '''
+    """
     check_type(reconstruction, ImageData)
     check_type(n_orders, (int, type(None)))
 
@@ -71,6 +76,33 @@ def model_predict(reconstruction, seg_model, transform, n_orders=None, coordinat
 
 
 def brightest_pixels(reconstruction, transform, n_orders=None, cutoff=0.5, print_ps=True, **kwargs):
+    """Detect sources by selecting the brightest pixels above a cutoff.
+
+    Parameters
+    ----------
+    reconstruction : ImageData
+        The input reconstruction.
+    transform : dict
+        Dictionary containing transformation parameters.
+    n_orders : int or None, optional
+        If provided, clip the reconstruction to *n_orders* orders of
+        magnitude from the maximum, by default None.
+    cutoff : float, optional
+        Threshold above which pixels are considered sources,
+        by default 0.5.
+    print_ps : bool, optional
+        Whether to print the number of detected point sources,
+        by default True.
+    **kwargs
+        Additional keyword arguments (unused).
+
+    Returns
+    -------
+    ps_map : np.ndarray
+        Point-source map (all zeros).
+    oj_map : np.ndarray
+        Object map based on the brightness cutoff.
+    """
     check_type(reconstruction, ImageData)
     check_type(n_orders, (int, type(None)))
 

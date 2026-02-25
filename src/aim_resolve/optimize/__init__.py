@@ -1,3 +1,5 @@
+"""Optimization subpackage for variational inference and KL minimization."""
+
 from .opt_config import OptimizeKLConfig
 from .opt_kl import optimize_kl
 from .opt_vi import MyOptimizeVI

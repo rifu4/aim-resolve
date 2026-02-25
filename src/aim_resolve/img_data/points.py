@@ -1,3 +1,5 @@
+"""Point-source generator model for synthetic sky images."""
+
 import jax.numpy as jnp
 from jax import random, vmap
 from jax.typing import ArrayLike
@@ -15,7 +17,25 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class PointGenerator(Model):
-    '''Generate a point model. Use `build` function to create the model.'''
+    """Generative model for point sources with optional Gaussian blur.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    grid : SignalGrid
+        Spatial grid of the output image.
+    i0 : Model
+        Prior model for point-source intensities.
+    coordinates : Model
+        Model producing integer pixel coordinates.
+    n_copies : Model
+        Model producing the number of active sources.
+    blur : array_like or None
+        Array of blur sigma values for Gaussian smoothing.
+    func : callable or None
+        Point-wise activation function.
+    """
 
     def __init__(self, grid, i0, coordinates, n_copies, blur=None, func=jnp.exp):
         check_type(grid, SignalGrid)
@@ -63,25 +83,28 @@ class PointGenerator(Model):
 
     @classmethod    
     def build(cls, *, n_min=0, n_max=0, grid, i0, blur=None, func='exp'):
-        '''
-        Build a point generator model.
+        """Build a point-source generator from configuration.
 
         Parameters
         ----------
-        n_min : int
-            Minimum number of points, by default 0
-        n_max : int
-            Maximum number of points, by default 0
+        n_min : int, optional
+            Minimum number of sources. Default is 0.
+        n_max : int, optional
+            Maximum number of sources. Default is 0.
         grid : dict
-            Dictionary containing the signal grid parameters (see SignalGrid)
+            Signal grid parameters (see ``SignalGrid``).
         i0 : dict
-            Dictionary containing the prior model parameters of the signal (see prior_model)
-        blur : dict, optional
-            Dictionary containing the parameters to generate the blur array, by default None
-            -> apply different gaussian filters to the point sources
-        func : str, optional
-            Function to apply to the signal, by default 'exp'
-        '''
+            Prior model parameters for source intensities.
+        blur : dict or None, optional
+            Blur array parameters (see ``get_blur``). Default is None.
+        func : str or None, optional
+            ``jax.numpy`` activation function name. Default is ``'exp'``.
+
+        Returns
+        -------
+        PointGenerator
+            The constructed point-source generator.
+        """
         check_type(n_min, int)
         check_type(n_max, int)
 
@@ -121,18 +144,22 @@ def get_blur(
         b_max = 0,
         steps = 10
 ):
-    '''
-    Generate an array containing different blur values.
+    """Generate linearly spaced blur sigma values.
 
     Parameters
     ----------
     n_max : int
-        Maximum number of points to generate
+        Number of point sources.
     b_min : float, optional
-        Minimum blur value, by default 0
+        Minimum blur sigma. Default is 0.
     b_max : float, optional
-        Maximum blur value, by default 0
+        Maximum blur sigma. Default is 0.
     steps : int, optional
-        Number of blur values to generate, by default 10
-    '''
+        Minimum number of values to generate. Default is 10.
+
+    Returns
+    -------
+    jnp.ndarray
+        Array of blur sigma values.
+    """
     return jnp.linspace(b_min, b_max, max(n_max, steps))

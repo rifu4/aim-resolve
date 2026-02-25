@@ -1,3 +1,5 @@
+"""Observation data handling for radio interferometric measurements."""
+
 import pickle
 import numpy as np
 import pandas as pd
@@ -12,11 +14,13 @@ INVTABLE = {val: key for key, val in TABLE.items()}
 
 
 class Observation():
-    '''A class to represent a radio interferometric observation. It is based on the resolve observation class.'''
+    """A class to represent a radio interferometric observation.
+
+    It is based on the resolve observation class.
+    """
 
     def __init__(self, pol, freq, antpos, vis, weight, name=None):
-        '''
-        Initialize the Observation class.
+        """Initialize the Observation class.
 
         Parameters
         ----------
@@ -24,15 +28,15 @@ class Observation():
             Polarizations.
         freq : array
             Frequencies.
-        antpos : Pandas DataFrame
+        antpos : pandas.DataFrame
             Antenna positions.
-        vis : Pandas DataFrame
+        vis : pandas.DataFrame
             Visibilities.
-        weight : Pandas DataFrame
+        weight : pandas.DataFrame
             Weights.
-        name : str
+        name : str, optional
             Name of the observed source.
-        '''
+        """
         self._pol = pol
         self._frq = freq
         self._antpos = antpos
@@ -41,14 +45,13 @@ class Observation():
         self.name = name
 
     def save(self, fname):
-        '''
-        Save the observation to a pickle file.
+        """Save the observation to a pickle file.
 
         Parameters
         ----------
         fname : str
             File name of the observation file that is saved.
-        '''
+        """
         dct = {
             'pol': self._pol, 
             'freq': self._frq, 
@@ -64,14 +67,23 @@ class Observation():
 
     @classmethod
     def load(self, fname):
-        '''
-        Load an observation from either a pickle or npz file.
-        
+        """Load an observation from either a pickle or npz file.
+
         Parameters
         ----------
         fname : str
             File name of the observation file that is imported.
-        '''
+
+        Returns
+        -------
+        Observation
+            The loaded observation instance.
+
+        Raises
+        ------
+        ValueError
+            If the file format is not recognised.
+        """
         if '.npz' in fname:
             return self.load_npz(fname)
         elif '.pkl' in fname:
@@ -81,14 +93,36 @@ class Observation():
     
     @classmethod
     def load_pkl(self, fname):
-        '''Load an observation from a pickle file.'''
+        """Load an observation from a pickle file.
+
+        Parameters
+        ----------
+        fname : str
+            Path to the pickle file.
+
+        Returns
+        -------
+        Observation
+            The loaded observation instance.
+        """
         with open(fname, 'rb') as f:
             dct = pickle.load(f)
         return Observation(**dct)
 
     @classmethod
     def load_npz(self, fname):
-        '''Load an observation from a npz file that was saved using the resolve observation class.'''
+        """Load an observation from a npz file saved by the resolve observation class.
+
+        Parameters
+        ----------
+        fname : str
+            Path to the ``.npz`` file.
+
+        Returns
+        -------
+        Observation
+            The loaded observation instance.
+        """
         dct = np.load(fname)
         pol = np.array([TABLE[ii] for ii in dct['polarization']]) if dct['polarization'].size > 0 else np.array(['I'])
         freq = dct['freq']
@@ -105,7 +139,13 @@ class Observation():
         return Observation(pol, freq, df_antpos, df_vis, df_weight, name)
     
     def to_resolve_obs(self):
-        '''Convert the observation to a resolve observation.'''
+        """Convert the observation to a resolve observation.
+
+        Returns
+        -------
+        resolve.Observation
+            The observation in resolve format.
+        """
         import resolve as rve
 
         obs = rve.Observation(
@@ -208,7 +248,20 @@ class Observation():
             raise ValueError('unknown precision')
     
     def dirty_image(self, grid, freq=np.ones((1,))):
-        '''Compute the dirty image of the observation.'''
+        """Compute the dirty image of the observation.
+
+        Parameters
+        ----------
+        grid : SignalGrid
+            The signal grid defining the image domain.
+        freq : array, optional
+            Frequency array, by default ``np.ones((1,))``.
+
+        Returns
+        -------
+        np.ndarray
+            The dirty image.
+        """
         from ..fast_resolve.response import build_exact_responses
         obs = self.to_resolve_obs()
         N_inv = makeOp(obs.weight)

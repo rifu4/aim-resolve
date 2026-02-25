@@ -1,3 +1,5 @@
+"""Response operator construction for radio interferometric imaging."""
+
 import jax.numpy as jnp
 import numpy as np
 from functools import partial
@@ -10,20 +12,24 @@ from ..model.util import check_type
 
 
 def point_response(x, in_coos, in_grid, observation):
-    '''
-    Map one or more point sources from their coordinates to the UV-space.
+    """Map one or more point sources from their coordinates to UV-space.
 
     Parameters
     ----------
     x : np.ndarray
-        The points to be mapped
+        The point amplitudes to be mapped.
     in_coos : np.ndarray
-        The coordinates of the points
-    obs : Observation
-        The radio observation
-    grid : SignalGrid
-        The SignalGrid the point sources are defined in
-    '''
+        The coordinates of the point sources.
+    in_grid : SignalGrid
+        The signal grid the point sources are defined on.
+    observation : Observation
+        The radio observation.
+
+    Returns
+    -------
+    jnp.ndarray
+        The visibilities corresponding to the point sources.
+    """
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
 
@@ -41,6 +47,24 @@ def one_point_response(
         in_dis,
         observation,
 ):
+    """Compute the visibility response of a single point source.
+
+    Parameters
+    ----------
+    x : jnp.ndarray
+        Amplitude of the point source (2-d array).
+    in_coos : jnp.ndarray
+        Coordinates of the point source.
+    in_dis : np.ndarray
+        Pixel distances of the signal grid.
+    observation : Observation
+        The radio observation.
+
+    Returns
+    -------
+    jnp.ndarray
+        Visibility contribution of the point source.
+    """
     speedoflight = 299792458.0
     freq = observation.freq
     uvw = observation.uvw
@@ -57,20 +81,24 @@ def one_point_response(
 
 
 def signal_response(in_grid, observation, wgridding=False, epsilon=1e-9):
-    '''
-    Apply the signal response to one or more signals
-    
+    """Apply the signal response to one or more signals.
+
     Parameters
     ----------
     in_grid : SignalGrid
-        The input space of the signal
+        The input space of the signal.
     observation : Observation
-        The radio observation
+        The radio observation.
     wgridding : bool, optional
-        Whether to use wgridding (ducc response), by default False
+        Whether to use wgridding (ducc response), by default False.
     epsilon : float, optional
-        The tolerance for the response function, by default 1e-9
-    '''
+        The tolerance for the response function, by default 1e-9.
+
+    Returns
+    -------
+    callable
+        A function that maps a sky image to visibilities.
+    """
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
 
@@ -82,20 +110,32 @@ def signal_response(in_grid, observation, wgridding=False, epsilon=1e-9):
 
 
 def ducc_response(in_grid, observation, wgridding=True, epsilon=1e-9):
-    '''
-    Apply the ducc response to one signal. Does not work with multiple signals.
-    
+    """Apply the ducc response to one signal.
+
+    Does not work with multiple signals.
+
     Parameters
     ----------
     in_grid : SignalGrid
-        The input space of the signal
+        The input space of the signal.
     observation : Observation
-        The radio observation
+        The radio observation.
     wgridding : bool, optional
-        Whether to use wgridding, by default True
+        Whether to use wgridding, by default True.
     epsilon : float, optional
-        The tolerance for the ducc response, by default 1e-9
-    '''
+        The tolerance for the ducc response, by default 1e-9.
+
+    Returns
+    -------
+    callable
+        A function that maps a sky image to visibilities using ducc.
+
+    Raises
+    ------
+    ValueError
+        If ``in_grid.n_copies > 1`` since ducc cannot vmap over
+        multiple signals.
+    """
     from jaxbind.contrib import jaxducc0
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
@@ -130,18 +170,28 @@ def ducc_response(in_grid, observation, wgridding=True, epsilon=1e-9):
 
 
 def finu_response(in_grid, observation, epsilon=1e-9):
-    '''
-    Apply the finufft response to one or more signals
-    
+    """Apply the finufft response to one or more signals.
+
     Parameters
     ----------
     in_grid : SignalGrid
-        The input space of the signal
+        The input space of the signal.
     observation : Observation
-        The radio observation
+        The radio observation.
     epsilon : float, optional
-        The tolerance for the finufft response, by default 1e-9
-    '''
+        The tolerance for the finufft response, by default 1e-9.
+
+    Returns
+    -------
+    callable
+        A function that maps a sky image to visibilities using finufft.
+
+    Raises
+    ------
+    ValueError
+        If ``in_grid.n_copies > 1`` since finu response cannot vmap
+        over multiple signals yet.
+    """
     from jax_finufft import nufft2
     check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
@@ -168,6 +218,20 @@ def finu_response(in_grid, observation, epsilon=1e-9):
 
 
 def rotate(xy, phi):
+    """Rotate 2-d coordinates by a given angle.
+
+    Parameters
+    ----------
+    xy : np.ndarray
+        Array of shape ``(N, 2)`` with 2-d coordinates.
+    phi : float
+        Rotation angle in radians.
+
+    Returns
+    -------
+    np.ndarray
+        Rotated coordinates with the same shape as *xy*.
+    """
     c = np.cos(phi)
     s = np.sin(phi)
     R = np.array([[c, s], [-s, c]])

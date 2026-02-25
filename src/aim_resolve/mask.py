@@ -1,3 +1,5 @@
+"""Mask creation and manipulation utilities for sky model components."""
+
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
@@ -18,29 +20,36 @@ def masks_from_maps(
         max_objects = 5,
         tile_size = 0,
 ):
-    '''
-    Create masks from point source and object maps.
+    """Create component masks from point-source and object detection maps.
 
     Parameters
     ----------
     points_map : np.ndarray
-        The point source map.
+        Binary point-source map.
     object_maps : np.ndarray
-        The object maps.
+        Array of binary object maps with shape ``(n_objects, H, W)``.
     it : int
-        The iteration number.
+        Iteration number used as suffix in the mask keys.
+    freq : list, optional
+        List of frequencies. A frequency axis is added when
+        ``len(freq) > 1``. Default is ``[1.]``.
     factor : int, optional
-        The refinement factor for the masks. Default is 1.
+        Refinement factor applied to margins and tile sizes. Default is 1.
     margin_fac : float, optional
-        The margin factor for the object maps. Default is 0.2.
+        Fractional margin around objects. Default is 0.2.
     margin_min : int, optional
-        The minimum margin for the object maps. Default is 2.
+        Minimum margin in pixels (before applying *factor*). Default is 2.
     max_objects : int, optional
-        The maximum number of objects to include in the masks dict. Default is 5.
+        Maximum number of individual object masks to include. Default is 5.
     tile_size : int, optional
-        The size of the tiles. Default is 0.
-        -> If an object fits into the tile size, it will be added to the tile mask.
-    '''
+        Tile size threshold. Objects fitting within this size are grouped
+        as tiles. Default is 0.
+
+    Returns
+    -------
+    mask_dct : dict
+        Dictionary of mask arrays keyed by component identifier.
+    """
     mask_dct = {}
     margin_min *= factor
     tile_size = to_shape(tile_size, (2,), 'int64') * factor
@@ -91,19 +100,26 @@ def masks_from_model(
         factor = 1,
         margin_min = 2,
 ):
-    '''
-    Create masks from a sky model.
+    """Create component masks from an existing sky model.
+
+    Generates one mask per model component (points, objects, tiles,
+    background) based on the component grids.
 
     Parameters
     ----------
     sky : ComponentModel
-        The sky model.
-        -> Creates masks for all components in the model (points, objects, tiles).
+        Sky model containing the component definitions.
     factor : int, optional
-        The refinement factor for the masks. Default is 1.
+        Refinement factor applied to margins. Default is 1.
     margin_min : int, optional
-        The minimum margin for the point sources. Default is 2.
-    '''
+        Minimum margin in pixels (before applying *factor*) for point
+        sources. Default is 2.
+
+    Returns
+    -------
+    mask_dct : dict
+        Dictionary of mask arrays keyed by component prefix.
+    """
     check_type(sky, ComponentModel)
     mask_dct = {}
     margin_min *= factor
@@ -141,17 +157,25 @@ def masks_to_boxes(
         sky,
         mask_dct,
 ):
-    '''
-    Maps the masks to the grids of the model components and subtracts other components from the masks.
+    """Map masks to the grids of the corresponding model components.
+
+    Reprojects each mask onto the component's own grid and handles
+    overlap between neighbouring components.
 
     Parameters
     ----------
     sky : ComponentModel
-        The sky model.
+        Sky model providing the component grid definitions.
     mask_dct : dict
-        Dictionary containing the masks for the components. 
-        -> created using the `masks_from_maps` or `masks_from_model` function.
-    '''
+        Mask dictionary produced by ``masks_from_maps`` or
+        ``masks_from_model``.
+
+    Returns
+    -------
+    mask_box : dict
+        Dictionary of boolean mask arrays on the respective component
+        grids.
+    """
     check_type(sky, ComponentModel)
 
     mask_box = mask_dct.copy()
@@ -187,7 +211,26 @@ def masks_to_boxes(
 
 
 def add_margin(array, margin, round=False):
-    '''Adds a falloff margin to the input array using the `scipy.ndimage.distance_transform_edt` function.'''
+    """Add a smooth fall-off margin around non-zero regions.
+
+    Uses ``scipy.ndimage.distance_transform_edt`` to create a distance-based
+    fall-off that extends *margin* pixels from the boundary of the input.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        2-D binary input array.
+    margin : int or tuple of int
+        Margin size in pixels. A scalar is applied to both axes.
+    round : bool, optional
+        If True, the result is rounded up to binary values. Default is
+        False.
+
+    Returns
+    -------
+    new_array : np.ndarray
+        Array of the same shape with the added margin.
+    """
     if np.all(array == 0):
         return array
     if isinstance(margin, int):
@@ -201,6 +244,20 @@ def add_margin(array, margin, round=False):
 
 
 def add_freq_axis(array, freq):
+    """Insert a frequency axis into a spatial array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Array with 2 or 3 spatial dimensions.
+    freq : array_like
+        Frequency list. The axis is only added when ``len(freq) > 1``.
+
+    Returns
+    -------
+    array : np.ndarray
+        Array with an additional frequency axis (if applicable).
+    """
     if len(freq) > 1:
         if array.ndim == 2:
             return array[None, :, :]
@@ -210,6 +267,20 @@ def add_freq_axis(array, freq):
 
 
 def remove_freq_axis(array, freq):
+    """Remove the frequency axis from an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Array with 3 or 4 dimensions including a frequency axis.
+    freq : array_like
+        Frequency list. The axis is only removed when ``len(freq) > 1``.
+
+    Returns
+    -------
+    array : np.ndarray
+        Array with the frequency axis removed (if applicable).
+    """
     if len(freq) > 1:
         if array.ndim == 4:
             return array[:, 0, :, :]

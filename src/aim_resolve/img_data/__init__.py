@@ -1,3 +1,5 @@
+"""Image data generation and handling for synthetic sky models."""
+
 from .background import BackgroundGenerator
 from .components import ComponentGenerator
 from .data import ImageData, ImageDataGenerator

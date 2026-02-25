@@ -1,47 +1,49 @@
+"""Setup and configuration management for KL optimization iterations."""
+
 from .util import clean_dict, merge_dicts, split_its, update_it, pop_val
 from .yml import yaml_load, yaml_save
 
 
 
 class SetupKLConfig:
-    '''Class to update a yaml configuration file for the OptimizeKLConfig class with additional iterations and sections.'''
+    """Class to update a yaml configuration file for the OptimizeKLConfig class with additional iterations and sections."""
 
     def __init__(self, sections):
-        '''
+        """
         Initialize the SetupKLConfig class.
 
         Parameters
         ----------
         sections : dict
             Configuration sections.
-        '''
+        """
         self.sections = dict(sections)
         self.get_it()
 
 
     @classmethod
     def from_file(cls, fname):
-        '''
+        """
         Load a configuration file and create a SetupKLConfig object.
 
         Parameters
         ----------
         fname : str or list of str
             File name(s) of the config file that is imported.
-        '''
+        """
         sections = yaml_load(fname)
 
         return cls(sections)
     
 
     def to_file(self, fname):
-        '''Write configuration in standardized form to a file.
+        """Write configuration in standardized form to a file.
 
         Parameters
         ----------
         fname : str
             Path to which the config shall be written.
-        '''
+        """
         dct = clean_dict(self.sections)
         dct_lst = split_its(dct)
 
@@ -49,13 +51,13 @@ class SetupKLConfig:
 
 
     def get_it(self):
-        '''Get the current iteration number'''
+        """Get the current iteration number."""
         keys = sorted([k for k in filter(lambda x: 'lh' in x, self.sections)])
         self.it = int(keys[-1].split('.')[1])
 
 
     def add_it(self, fix_keys=[], del_comp=True, it=None):
-        '''
+        """
         Add a new iteration to the configuration file.
         
         Parameters
@@ -66,7 +68,7 @@ class SetupKLConfig:
             If True, all components are deleted from the sky model of the next iteration.
         it : int
             Current iteration number after which the new iteration is added.
-        '''
+        """
         dct = self.sections
         it = int(it) if it != None else self.it
         _it = f'.{it}'
@@ -100,7 +102,7 @@ class SetupKLConfig:
 
 
     def add_trans(self, it=None, mode='addt', **kwargs):
-        '''
+        """
         Add a transition section to the configuration file.
         
         Parameters
@@ -111,7 +113,7 @@ class SetupKLConfig:
             Transition mode. Default is `addt`.
         kwargs : dict
             Parameters for the transition function.
-        '''
+        """
         dct = self.sections
         it = int(it) if it != None else self.it
         _it = f'.{it}'
@@ -135,7 +137,7 @@ class SetupKLConfig:
 
 
     def add_sec(self, sec_key, **kwargs):
-        '''
+        """
         Add a new section to the configuration file.
         
         Parameters
@@ -144,12 +146,12 @@ class SetupKLConfig:
             Key of the new section.
         kwargs : dict
             Parameters for the new section.
-        '''
+        """
         self.modify_sec(sec_key, **kwargs)
 
 
     def modify_sec(self, sec_key, merge_base=True, **kwargs):
-        '''
+        """
         Modify a section in the configuration file.
 
         Parameters
@@ -160,7 +162,7 @@ class SetupKLConfig:
             If False, keys containing `base` are not merged.
         kwargs : dict
             Parameters that shall be changed in or added to the section.
-        '''
+        """
         dct = self.sections
 
         if sec_key not in dct:
@@ -170,14 +172,14 @@ class SetupKLConfig:
 
     
     def remove_sec(self, sec_key):
-        '''
+        """
         Remove a section from the configuration file.
 
         Parameters
         ----------
         key : str
             Key of the section that is removed.
-        '''
+        """
         dct = self.sections
         dct.pop(sec_key)
         dct = pop_val(dct, sec_key)

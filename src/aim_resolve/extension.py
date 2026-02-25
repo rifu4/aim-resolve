@@ -1,3 +1,5 @@
+"""Extension utilities for multi-frequency and zoom workflows."""
+
 from .optimize.set_config import SetupKLConfig
 from .optimize.yml import yaml_load
 
@@ -7,16 +9,28 @@ def extension_func(
         mode,
         **kwargs,
 ):
-    '''
-    Versatile extension function -> performs the wanted extension specified in the 'mode' parameter
-    
-    Parameters:
-    -----------
-    mode : str
-        Extension mode. Can be `zoom` and `freq`.
-    kwargs : dict
-        Additional keyword arguments passed to the extension functions (see extension functions).
-    '''
+    """Perform a configuration extension for multi-frequency or zoom workflows.
+
+    Parameters
+    ----------
+    mode : {'freq', 'zoom'}
+        Extension mode.
+    **kwargs
+        Additional keyword arguments forwarded to the selected extension
+        function.
+
+    Returns
+    -------
+    base : str
+        Path to the base configuration file.
+    ext_file : str
+        Path to the newly created extension configuration file.
+
+    Raises
+    ------
+    TypeError
+        If *mode* is not recognised.
+    """
     if mode == 'freq':
         return freq_extension(**kwargs)
     elif mode == 'zoom':
@@ -34,24 +48,39 @@ def freq_extension(*,
         ref_freq_index = 1,
         **kwargs,
 ):
-    '''
-    Perform a multi-frequency extension on an existing optimization configuration file.
-    
-    Parameters:
-    -----------
+    """Create a multi-frequency extension configuration.
+
+    Reads an existing single-frequency configuration, duplicates the
+    current iteration, updates frequency-dependent sections and writes
+    the result to a new file.
+
+    Parameters
+    ----------
     odir : str
-        Output directory where the existing configuration file is located.
+        Output directory containing the ``files/`` sub-directory.
     file : str
-        Name of the existing configuration file.
-    freq : list or int
-        List of frequencies, a list of frequency indices or the number of frequencies.
+        Name of the existing configuration file inside ``odir/files/``.
+    freq : list
+        List of target frequencies.
+    base : str, optional
+        Name of the base configuration file. Default is ``'base.yml'``.
+    ref_freq_index : int, optional
+        Index of the reference frequency in *freq*. Default is 1.
+    **kwargs
+        Additional section overrides applied before writing.
+
+    Returns
+    -------
     base : str
-        Name of the base configuration file. Default is `base.yml`.
-    ref_freq_index : int
-        Index of the reference frequency in the `freq` list.
-    kwargs : dict
-        Additional options to overwrite an existing section of the initial config file.
-    '''
+        Path to the base configuration file.
+    ext_file : str
+        Path to the newly created extension configuration file.
+
+    Raises
+    ------
+    TypeError
+        If *freq* is not a list.
+    """
     base = f'{odir}/files/{base}'
     base_dct = yaml_load(base)
 
@@ -112,22 +141,32 @@ def zoom_extension(*,
         base = 'base.yml',
         **kwargs,
 ):
-    '''
-    Perform a zoom extension on an existing optimization configuration file.
-    
-    Parameters:
-    -----------
+    """Create a zoom extension configuration.
+
+    Reads an existing configuration, duplicates the current iteration,
+    increases the grid resolution by *zoom* and writes the result to a
+    new file.
+
+    Parameters
+    ----------
     odir : str
-        Output directory where the existing configuration file is located.
+        Output directory containing the ``files/`` sub-directory.
     file : str
-        Name of the existing configuration file.
+        Name of the existing configuration file inside ``odir/files/``.
     zoom : int
-        Zoom factor to apply.
+        Zoom factor to apply to non-background grids.
+    base : str, optional
+        Name of the base configuration file. Default is ``'base.yml'``.
+    **kwargs
+        Additional section overrides applied before writing.
+
+    Returns
+    -------
     base : str
-        Name of the base configuration file. Default is `base.yml`.
-    kwargs : dict
-        Additional options to overwrite an existing section of the initial config file.
-    '''
+        Path to the base configuration file.
+    ext_file : str
+        Path to the newly created extension configuration file.
+    """
     base = f'{odir}/files/{base}'
     base_dct = yaml_load(base)
 
@@ -172,6 +211,18 @@ def zoom_extension(*,
 
 
 def fun2mode(cfg):
+    """Replace legacy ``fun`` keys with ``mode`` keys in a configuration.
+
+    Parameters
+    ----------
+    cfg : SetupKLConfig
+        Configuration object whose sections may contain ``fun`` entries.
+
+    Returns
+    -------
+    cfg : SetupKLConfig
+        The updated configuration with ``mode`` keys replacing ``fun``.
+    """
     for sec in cfg.sections:
         if 'fun' in cfg.sections[sec]:
             fun = cfg.sections[sec].pop('fun')

@@ -1,3 +1,5 @@
+"""Sky-model construction utilities for multi-component reconstruction."""
+
 import numpy as np
 
 from .mask import remove_freq_axis
@@ -15,7 +17,22 @@ def model_background(
         freq,
         rec_val,
     ):
-    # create background model dictionary
+    """Create a background model configuration dictionary.
+
+    Parameters
+    ----------
+    bg_mask : np.ndarray
+        Binary mask for the background region.
+    freq : list
+        List of frequencies.
+    rec_val : np.ndarray
+        Reconstruction values to derive the offset from.
+
+    Returns
+    -------
+    bg_dct : dict
+        Background model dictionary with an ``offset`` entry.
+    """
     bg_dct = dict(
         offset =  get_offset('background', rec_val, bg_mask, freq),
     )
@@ -30,7 +47,29 @@ def model_points(
         freq,
         rec_sub,
     ):
-    # extract locations of the point sources from the output map
+    """Create a point-source model configuration dictionary.
+
+    Extracts point-source locations from the detection map, converts
+    pixel coordinates to grid coordinates and computes initial offsets.
+
+    Parameters
+    ----------
+    ps_masks : np.ndarray
+        Masks for the individual point sources.
+    ps_map : np.ndarray
+        Binary point-source detection map.
+    grid : SignalGrid
+        Reference grid for coordinate conversion.
+    freq : list
+        List of frequencies.
+    rec_sub : np.ndarray
+        Background-subtracted reconstruction for offset calculation.
+
+    Returns
+    -------
+    ps_dct : dict or False
+        Point-source model dictionary, or ``False`` if no sources found.
+    """
     ps_coos = np.argwhere(ps_map == 1).astype('float64')
 
     # check if there are any point sources to extract, if not return empty list
@@ -64,6 +103,30 @@ def model_objects(
         rec_sub,
         gaussian = None,
 ):
+    """Create an extended-object model configuration dictionary.
+
+    Determines the bounding box from the mask, builds a sub-grid and
+    computes initial offsets.
+
+    Parameters
+    ----------
+    oj_mask : np.ndarray
+        Binary mask for the extended object.
+    grid : SignalGrid
+        Reference grid for coordinate conversion.
+    freq : list
+        List of frequencies.
+    rec_sub : np.ndarray
+        Background-subtracted reconstruction for offset calculation.
+    gaussian : dict or None, optional
+        Gaussian smoothing parameters (``mean_fac``, ``std_fac``).
+        Default is None.
+
+    Returns
+    -------
+    oj_dct : dict
+        Object model dictionary with grid, frequency and offset entries.
+    """
     pix = np.argwhere(remove_freq_axis(oj_mask, freq) > 0)
     lim = np.array([pix.min(axis=0) - 1, pix.max(axis=0) + 1])
     lim = lim.clip(0, grid.shp-1)
@@ -103,6 +166,31 @@ def model_tiles(
         tile_size = 32,
         gaussian = None,
 ):
+    """Create a tile model configuration dictionary.
+
+    Computes tile centres from the provided masks and builds a tile grid.
+
+    Parameters
+    ----------
+    ts_masks : np.ndarray
+        Array of binary tile masks.
+    grid : SignalGrid
+        Reference grid for coordinate conversion.
+    freq : list
+        List of frequencies.
+    rec_sub : np.ndarray
+        Background-subtracted reconstruction for offset calculation.
+    tile_size : int, optional
+        Spatial size of each tile in pixels. Default is 32.
+    gaussian : dict or None, optional
+        Gaussian smoothing parameters (``mean_fac``, ``std_fac``).
+        Default is None.
+
+    Returns
+    -------
+    ts_dct : dict
+        Tile model dictionary with grid, frequency and offset entries.
+    """
     tile_size = to_shape(tile_size, (2,), 'int64')
 
     ts_cen = []
@@ -143,7 +231,28 @@ def get_offset(
         mask,
         freq,
 ):
-    '''Sets the offsets of the sky model based on the background reconstruction and the mask.'''
+    """Compute the log-scale offset for a model component.
+
+    The offset is derived from the reconstruction within the masked
+    region and depends on the model type.
+
+    Parameters
+    ----------
+    model : str or Model
+        Model instance or descriptive string (e.g. ``'point'``,
+        ``'background'``, ``'tile'``).
+    rec_sub : np.ndarray
+        Background-subtracted reconstruction values.
+    mask : np.ndarray
+        Boolean mask selecting the relevant region.
+    freq : list
+        List of frequencies (used to strip the frequency axis).
+
+    Returns
+    -------
+    offset : float or list of float
+        Log-scale offset(s) for the component.
+    """
     rec_sub = remove_freq_axis(rec_sub, freq)
     mask = remove_freq_axis(mask, freq).astype(bool)
 
@@ -169,6 +278,22 @@ def get_offset(
 
 
 def draw_boxes(cfg_sections, grid, it):
+    """Draw bounding boxes of tile and object components on a map.
+
+    Parameters
+    ----------
+    cfg_sections : dict
+        Configuration sections containing component grid definitions.
+    grid : SignalGrid
+        Reference grid that defines the output map size.
+    it : int
+        Iteration number used to filter relevant sections.
+
+    Returns
+    -------
+    box_map : np.ndarray
+        2-D map with component outlines drawn as ones.
+    """
     box_map = np.zeros(grid.shape)
 
     for k,v in cfg_sections.items():

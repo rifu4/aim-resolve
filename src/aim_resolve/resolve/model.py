@@ -1,3 +1,5 @@
+"""Sky model construction for radio interferometric imaging."""
+
 import jax.numpy as jnp
 from nifty.re import Model
 
@@ -12,11 +14,13 @@ from ..model.util import check_type
 
 
 class SignalResponse(Model):
-    '''Generate a signal response model. Applies the radio response to a signal or component model.'''
+    """Generate a signal response model.
+
+    Applies the radio response to a signal or component model.
+    """
 
     def __init__(self, model, observation, wgridding=False):
-        '''
-        Initialize the signal response model.
+        """Initialize the signal response model.
 
         Parameters
         ----------
@@ -26,7 +30,7 @@ class SignalResponse(Model):
             Observation data.
         wgridding : bool
             Whether to use wgridding or not.
-        '''
+        """
         check_type(model, (SignalModel, ComponentModel))
         check_type(observation, Observation)
         check_type(wgridding, bool)
@@ -42,11 +46,13 @@ class SignalResponse(Model):
 
 
 class PointResponse(Model):
-    '''Generate a point response model. Applies the radio response to a point model.'''
+    """Generate a point response model.
+
+    Applies the radio response to a point model.
+    """
 
     def __init__(self, model, observation):
-        '''
-        Initialize the point response model.
+        """Initialize the point response model.
 
         Parameters
         ----------
@@ -54,7 +60,7 @@ class PointResponse(Model):
             The point model the point response function is applied to.
         observation : Observation
             Observation data.
-        '''
+        """
         check_type(model, PointModel)
         check_type(observation, Observation)
 
@@ -69,11 +75,13 @@ class PointResponse(Model):
         
 
 class TileResponse(Model):
-    '''Generate a tile response model. Applies the radio response to a tile model.'''
+    """Generate a tile response model.
+
+    Applies the radio response to a tile model.
+    """
 
     def __init__(self, model, observation, wgridding=False):
-        '''
-        Initialize the tile response model.
+        """Initialize the tile response model.
 
         Parameters
         ----------
@@ -83,7 +91,7 @@ class TileResponse(Model):
             Observation data.
         wgridding : bool
             Whether to use wgridding or not.
-        '''
+        """
         check_type(model, TileModel)
         check_type(observation, Observation)
         if wgridding:
@@ -101,23 +109,25 @@ class TileResponse(Model):
 
 
 class ComponentResponse(Model):
-    '''Generate a component response model. Applies the radio response to a component model.'''
+    """Generate a component response model.
+
+    Applies the radio response to a component model.
+    """
 
     def __init__(self, model, observation, split=False, wgridding=False):
-        '''
-        Initialize the component response model.
+        """Initialize the component response model.
 
         Parameters
         ----------
         model : ComponentModel
-            The component model the component response function is applied to
+            The component model the component response function is applied to.
         observation : Observation
-            Observation data
+            Observation data.
         split : bool
-            Whether to split the model into separate components
+            Whether to split the model into separate components.
         wgridding : bool
-            Whether to use wgridding or not
-        '''
+            Whether to use wgridding or not.
+        """
         check_type(model, ComponentModel)
         check_type(observation, Observation)
         check_type(split, bool)

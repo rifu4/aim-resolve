@@ -1,10 +1,32 @@
+"""Kernel construction for fast-resolve PSF and noise operators."""
+
 import nifty8 as ift
 import numpy as np
 
 
 
 def build_psf_kernel(RNR_l):
-    '''Build the psf kernel for a padded RNR operator.'''
+    """Build the PSF convolution kernel from a padded RNR operator.
+
+    Evaluates the response to a delta function placed at the centre of
+    the spatial domain.
+
+    Parameters
+    ----------
+    RNR_l : Operator or list of Operator
+        Padded RNR operator(s). When a list is given the kernels are
+        concatenated along the leading axis.
+
+    Returns
+    -------
+    kernel : np.ndarray
+        PSF kernel array.
+
+    Raises
+    ------
+    ValueError
+        If any operator domain does not have exactly 3 dimensions.
+    """
     if isinstance(RNR_l, list):
         kernels = []
         for rnr_l in RNR_l:
@@ -28,7 +50,30 @@ def build_psf_kernel(RNR_l):
 
 
 def build_n_inv_kernel(RNR, relativ_min_val=1e-3):
-    '''Build the inverse noise kernel for the given RNR operator.'''
+    """Build the inverse-noise kernel from the RNR operator.
+
+    Estimates a positive-definite approximation to the RNR diagonal in
+    Fourier space using Newton-CG optimisation.
+
+    Parameters
+    ----------
+    RNR : Operator or list of Operator
+        RNR operator(s). When a list is given the kernels are concatenated
+        along the leading axis.
+    relativ_min_val : float, optional
+        Relative floor added to the eigenvalues to ensure positivity.
+        Default is 1e-3.
+
+    Returns
+    -------
+    n_inv_kernel : np.ndarray
+        Inverse-noise kernel array.
+
+    Raises
+    ------
+    ValueError
+        If any operator domain does not have exactly 3 dimensions.
+    """
     if isinstance(RNR, list):
         n_inv_kernels = []
         for rnr in RNR:

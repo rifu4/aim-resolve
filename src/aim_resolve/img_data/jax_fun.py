@@ -1,3 +1,5 @@
+"""JAX-compatible image transformation utilities."""
+
 import jax.numpy as jnp
 from jax import lax
 from jax.scipy.signal import correlate2d
@@ -6,21 +8,20 @@ from jax.typing import ArrayLike
 
 
 def gaussian_kernel2d(sigma, radius):
-    '''
-    Re-implementation of scipy.ndimage.gaussian_kernel2d
-    
+    """Create a 2-D Gaussian kernel.
+
     Parameters
     ----------
     sigma : float
-        standard deviation of the gaussian kernel
+        Standard deviation of the Gaussian.
     radius : int
-        radius of the kernel
+        Half-width of the kernel in pixels.
 
     Returns
     -------
-    y : ndarray
-        2D gaussian kernel
-    '''
+    jnp.ndarray
+        Kernel of shape ``(2*radius+1, 2*radius+1)``.
+    """
     x, y = jnp.meshgrid(jnp.arange(-radius, radius+1),
                         jnp.arange(-radius, radius+1))
     dst = jnp.sqrt(x**2+y**2)
@@ -30,25 +31,24 @@ def gaussian_kernel2d(sigma, radius):
 
 
 def gaussian_filter2d(x, sigma, radius=5, normalize=False):
-    '''
-    Re-implementation of scipy.ndimage.gaussian_filter2d
+    """Apply a 2-D Gaussian filter (JAX-compatible).
 
     Parameters
     ----------
-    x : ndarray
-        2D array to be filtered
+    x : jnp.ndarray
+        2-D input array.
     sigma : float
-        standard deviation of the gaussian kernel
-    radius : int
-        radius of the kernel. Should be something like `int(4*sigma + 0.5)`. Default is 5.
-    normalize : bool
-        if True, normalize the output by the maximum value. Default is False.
-    
+        Standard deviation of the Gaussian kernel.
+    radius : int, optional
+        Kernel half-width. Default is 5.
+    normalize : bool, optional
+        If True, normalise the output by its maximum. Default is False.
+
     Returns
     -------
-    y : ndarray
-        2D gaussian filter
-    '''
+    jnp.ndarray
+        Filtered array of the same shape as *x*.
+    """
     def true_branch(x, sigma):
         k = gaussian_kernel2d(sigma, radius)
         y = correlate2d(x, k, 'same')
@@ -68,18 +68,22 @@ def rotate_data(
         k : int = 1,
         axes: tuple[int, int] = (0, 1),
 ):
-    '''
-    Rotate a 2D array by k * 90 degrees
+    """Rotate a 2-D array by ``k * 90`` degrees (JAX-compatible).
 
     Parameters
     ----------
-    m : ndarray
-        2D array to be rotated
-    k : int
-        number of 90 degree rotations. Default is 1.
-    axes : tuple of int
-        axes to rotate. Default is (0, 1).
-    '''
+    m : array_like
+        2-D input array.
+    k : int, optional
+        Number of 90-degree counter-clockwise rotations. Default is 1.
+    axes : tuple of int, optional
+        Rotation plane. Default is ``(0, 1)``.
+
+    Returns
+    -------
+    jnp.ndarray
+        Rotated array.
+    """
     k = k % 4
     return lax.switch(
         k,
@@ -95,16 +99,21 @@ def flip_data(
         m : ArrayLike,
         axis: int = 0,
 ):
-    '''
-    Flip a 2D array along the given axis
+    """Flip a 2-D array along the given axis (JAX-compatible).
 
     Parameters
     ----------
-    m : ndarray
-        2D array to be flipped
-    axis : int
-        axis to flip. 0 for no axis, 1 for x-axis, 2 for y-axis, 3 for both axes. Default is 0.
-    '''
+    m : array_like
+        2-D input array.
+    axis : int, optional
+        Flip mode: 0 = no flip, 1 = rows, 2 = columns, 3 = both.
+        Default is 0.
+
+    Returns
+    -------
+    jnp.ndarray
+        Flipped array.
+    """
     axis = axis % 4
     return lax.switch(
         axis,

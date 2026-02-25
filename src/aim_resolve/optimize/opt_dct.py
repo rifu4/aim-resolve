@@ -1,3 +1,5 @@
+"""Dictionary-based optimization configuration utilities."""
+
 from .opt_config import get_reps
 from .util import get_it, clean_reps, is_or_contains_type, check_dict
 
@@ -9,6 +11,19 @@ OPT_OPTION = {'draw_linear_kwargs', 'nonlinearly_update_kwargs', 'kl_kwargs', 's
 
 
 def callable_optimize_dict(opt_dct):
+    """Validate and transform an optimization dictionary into callable form.
+
+    Parameters
+    ----------
+    opt_dct : dict
+        Raw optimization dictionary containing iteration settings
+        and keyword arguments.
+
+    Returns
+    -------
+    opt_dct : dict
+        Processed dictionary with callable values where applicable.
+    """
 
     opt_dct = check_dict(opt_dct, OPT_NEEDED, OPT_OPTION)
 
@@ -22,7 +37,7 @@ def callable_optimize_dict(opt_dct):
 
 
 def make_callable(val):
-    '''Make a list of values callable.'''
+    """Make a list of values callable."""
 
     def fun(it):
         return get_it(val, it)

@@ -1,3 +1,5 @@
+"""FFT-based convolution operators for fast-resolve likelihood evaluation."""
+
 import dataclasses
 import jax.numpy as jnp
 import numpy as np
@@ -17,7 +19,17 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class PSFConvolve(Model):
-    '''Convolution with the PSF kernel using FFTs. Use `build` function to create the model.'''
+    """Convolution with the PSF kernel using FFTs.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    sky : Model
+        Sky model providing the signal to convolve.
+    psf_kernel : np.ndarray
+        Pre-computed PSF kernel array.
+    """
 
     fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
 
@@ -40,20 +52,34 @@ class PSFConvolve(Model):
 
     @classmethod
     def build(cls, *, sky, RNR_l, psf_kernel_fn='', split={}):
-        '''
-        Build the convolution with the psf kernel.
+        """Build a PSF convolution operator.
+
+        Loads or creates the PSF kernel and optionally applies
+        kernel-splitting for a hybrid high/low-resolution scheme.
 
         Parameters
         ----------
-        model: jft.Model
-            The input model (RNRApproximation).
-        RNR_l : ift.Operator
-            The RNR operator acting on the padded model space.
-        psf_kernel_fn : str
-            The filename to load or save the psf kernel. Default is None.
-        split : dict
-            The parameters for kernel-splitting. Needs `size` and `factor`. Default is `{}` (no split).
-        '''
+        sky : Model
+            Sky model whose target shape defines the kernel grid.
+        RNR_l : Operator
+            Padded RNR operator used to compute the kernel (when no
+            cached file is available).
+        psf_kernel_fn : str, optional
+            Path to load/save the PSF kernel. Default is ``''``.
+        split : dict, optional
+            Kernel-splitting parameters (``size`` and ``factor``). An
+            empty dict disables splitting. Default is ``{}``.
+
+        Returns
+        -------
+        PSFConvolve or PSFSplitConvolve
+            The constructed convolution operator.
+
+        Raises
+        ------
+        ValueError
+            If the cached kernel shape does not match the expected shape.
+        """
         if os.path.isfile(psf_kernel_fn):
             psf_kernel = pickle.load(open(psf_kernel_fn, 'rb'))
         else:
@@ -73,7 +99,21 @@ class PSFConvolve(Model):
 
 
 class PSFSplitConvolve(Model):
-    '''Convolution with the PSF kernel using FFTs and kernel-splitting. Use `build` function of `PSFConvolve` to create the model.'''
+    """Hybrid high/low-resolution PSF convolution with kernel-splitting.
+
+    Created via ``PSFConvolve.build`` when *split* parameters are given.
+
+    Parameters
+    ----------
+    sky : Model
+        Sky model providing the signal to convolve.
+    psf_kernel : np.ndarray
+        Full PSF kernel (split internally).
+    size : int
+        High-resolution kernel crop size.
+    factor : int
+        Down-sampling factor for the low-resolution part.
+    """
 
     kernel_high: Any = dataclasses.field(metadata=dict(static=True))
     kernel_low: Any = dataclasses.field(metadata=dict(static=True))
@@ -104,7 +144,19 @@ class PSFSplitConvolve(Model):
 
 
 class NInvConvolve(Model):
-    '''Convolution with the inverse noise kernel using FFTs. Use `build` function to create the model.'''
+    """Convolution with the inverse-noise kernel using FFTs.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    psf_conv : PSFConvolve or PSFSplitConvolve
+        PSF convolution model.
+    n_inv_kernel : np.ndarray
+        Pre-computed inverse-noise kernel.
+    noise_model : NoiseModel
+        Learnable noise scaling model.
+    """
 
     fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
 
@@ -127,20 +179,33 @@ class NInvConvolve(Model):
 
     @classmethod
     def build(cls, *, psf_conv, RNR, n_inv_kernel_fn='', noise=None):
-        '''
-        Build the convolution with the inverse noise kernel.
+        """Build an inverse-noise convolution operator.
+
+        Loads or creates the inverse-noise kernel and wraps it together
+        with a ``NoiseModel``.
 
         Parameters
         ----------
-        psf_conv: jft.Model
-            The input model (PSFConvolve or PSFSplitConvolve).
-        RNR : ift.Operator
-            The RNR operator acting on the model space.
-        n_inv_kernel_fn : str
-            The filename to load or save the noise kernel. Default is None.
-        noise_model : ift.Operator
-            The noise model that should be used for the inference. Default is None.
-        '''
+        psf_conv : PSFConvolve or PSFSplitConvolve
+            PSF convolution model.
+        RNR : Operator
+            RNR operator for kernel construction (when no cached file
+            is available).
+        n_inv_kernel_fn : str, optional
+            Path to load/save the noise kernel. Default is ``''``.
+        noise : dict or None, optional
+            Noise configuration forwarded to ``NoiseModel.build``.
+
+        Returns
+        -------
+        NInvConvolve
+            The constructed noise convolution operator.
+
+        Raises
+        ------
+        ValueError
+            If the cached kernel shape does not match the expected shape.
+        """
         if os.path.isfile(n_inv_kernel_fn):
             n_inv_kernel = pickle.load(open(n_inv_kernel_fn, "rb"))
         else:
@@ -159,6 +224,20 @@ class NInvConvolve(Model):
 
 
 def downsample(array, factor):
+    """Down-sample the last two axes by averaging blocks of *factor*.
+
+    Parameters
+    ----------
+    array : np.ndarray or jnp.ndarray
+        Input array whose last two dimensions are divisible by *factor*.
+    factor : int
+        Down-sampling factor.
+
+    Returns
+    -------
+    np.ndarray or jnp.ndarray
+        Down-sampled array.
+    """
     h, w = array.shape[-2], array.shape[-1]
     assert h % factor == 0 and w % factor == 0, "Dims must be divisible by factor."
     shape = array.shape[:-2] + (h // factor, factor, w // factor, factor)
@@ -166,19 +245,57 @@ def downsample(array, factor):
     
 
 def upsample(array, factor):
+    """Up-sample the last two axes by repeating pixels.
+
+    Parameters
+    ----------
+    array : np.ndarray or jnp.ndarray
+        Input array.
+    factor : int
+        Up-sampling factor.
+
+    Returns
+    -------
+    np.ndarray or jnp.ndarray
+        Up-sampled array.
+    """
     return array.repeat(factor, axis=-2).repeat(factor, axis=-1)
 
 
 
 def fft_convolve_2d(x, kernel):
+    """Convolve a single 2-D image with a 2-D kernel via FFT."""
     return ifftn(kernel * fftn(x)).real
 
 
 def fft_convolve(x, kernel):
+    """Batch-convolve along the leading axis using ``fft_convolve_2d``."""
     return smap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
     
 
 def split_fft_convolve(x, kernel_high, kernel_low, padder_high, padder_low, slicer_high, slicer_low, factor):
+    """Perform a split high/low-resolution FFT convolution.
+
+    Parameters
+    ----------
+    x : jnp.ndarray
+        Input signal array.
+    kernel_high : jnp.ndarray
+        High-resolution FFT kernel.
+    kernel_low : jnp.ndarray
+        Low-resolution FFT kernel.
+    padder_high, padder_low : callable
+        Padding functions for each resolution.
+    slicer_high, slicer_low : callable
+        Slicing functions to crop the results.
+    factor : int
+        Down-sampling factor for the low-resolution branch.
+
+    Returns
+    -------
+    jnp.ndarray
+        Combined convolution result.
+    """
     if x.ndim == 2:
         x = x[None, :, :]
 
@@ -195,22 +312,47 @@ def split_fft_convolve(x, kernel_high, kernel_low, padder_high, padder_low, slic
 
 
 def build_fft_kernel(kernel, shape, dvol=1.):
+    """Build an FFT-space kernel from a spatial-domain kernel."""
     return jnp.fft.fftn(kernel, shape[-2:], axes=(-2, -1)) * dvol
 
 
 def build_padder(in_shape, out_shape):
+    """Return a zero-padding function from *in_shape* to *out_shape*."""
     p_h, p_w = (o - i for i, o in zip(in_shape[-2:], out_shape[-2:]))
     pad_width = [(0, 0)] * (len(in_shape) - 2) + [(0, p_h), (0, p_w)]
     return lambda x: jnp.pad(x, pad_width)
 
 
 def build_slicer(start_indices, out_shape):
+    """Return a slicing function that extracts *out_shape* from a padded array."""
     start_indices = (0,) * (len(out_shape) - 2) + start_indices[-2:]
     return lambda x: dynamic_slice(x, start_indices, out_shape)
 
 
 
 def build_split_kernel(kernel, shape, size, factor, dvol=1.):
+    """Split a PSF kernel into high- and low-resolution FFT kernels.
+
+    Parameters
+    ----------
+    kernel : np.ndarray
+        Full spatial-domain PSF kernel.
+    shape : tuple of int
+        Spatial shape of the sky model.
+    size : int
+        Crop size for the high-resolution kernel.
+    factor : int
+        Down-sampling factor for the low-resolution kernel.
+    dvol : float, optional
+        Volume element scaling. Default is 1.0.
+
+    Returns
+    -------
+    kernel_high : jnp.ndarray
+        FFT-space high-resolution kernel.
+    kernel_low : jnp.ndarray
+        FFT-space low-resolution kernel.
+    """
     kernel = kernel[None] if kernel.ndim == 2 else kernel
     n_freq = kernel.shape[0]
     slices = (slice(0, n_freq), )

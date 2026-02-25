@@ -1,3 +1,5 @@
+"""Extended-object generator model for synthetic sky images."""
+
 import os
 import jax.numpy as jnp
 import numpy as np
@@ -18,7 +20,23 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class ObjectGenerator(Model):
-    '''Generate a object model. Use `build` function to create the model.'''
+    """Generative model for extended objects using randomly rotated masks.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    grid : SignalGrid
+        Spatial grid of the output image.
+    i0 : Model
+        Prior model for the object intensity.
+    masks : array_like
+        Array of 2-D binary masks.
+    zoom : Model or None
+        Optional zoom-factor model.
+    func : callable or None
+        Point-wise activation function.
+    """
 
     def __init__(self, grid, i0, masks, zoom=None, func=jnp.exp):
         check_type(grid, SignalGrid)
@@ -63,23 +81,26 @@ class ObjectGenerator(Model):
 
     @classmethod
     def build(cls, *, grid, i0, masks, zoom=None, func='exp'):
-        '''
-        Build a object generator model.
-        
+        """Build an object generator from configuration dictionaries.
+
         Parameters
         ----------
         grid : dict
-            Dictionary containing the signal grid parameters (see SignalGrid)
+            Signal grid parameters (see ``SignalGrid``).
         i0 : dict
-            Dictionary containing the prior model parameters of the signal (see prior_model)
+            Prior model parameters for the intensity.
         masks : dict
-            Dictionary containing the parameters to build the mask array (see get_masks)
-        zoom : dict, optional
-            Dictionary containing the zoom model parameters (see uniform_model), by default None
-            -> multiply the signal with a zoom factor
-        func : str, optional
-            Function to apply to the signal, by default 'exp'
-        '''
+            Parameters for ``get_masks`` (``m_min``, ``m_max``).
+        zoom : dict or None, optional
+            Zoom-factor model parameters. Default is None.
+        func : str or None, optional
+            ``jax.numpy`` activation function name. Default is ``'exp'``.
+
+        Returns
+        -------
+        ObjectGenerator
+            The constructed object generator model.
+        """
         grid = SignalGrid.build(**grid)
 
         i0 = normal_model(
@@ -106,16 +127,21 @@ def get_masks(*,
         m_min = 0,
         m_max = 100, 
 ):
-    '''
-    Get the array containing 90 different 2D masks. Uses the `masks.npz` file.
+    """Load 2-D binary masks from the bundled ``masks.npz`` file.
 
     Parameters
     ----------
-    m_min : int
-        Minimum index of the mask array to use
-    m_max : int
-        Maximum index of the mask array to use. If m_max > 90, zero-valued masks are added to the array.
-    '''
+    m_min : int, optional
+        Start index of the mask slice. Default is 0.
+    m_max : int, optional
+        End index (inclusive). Zero-valued masks are appended when
+        *m_max* > 90. Default is 100.
+
+    Returns
+    -------
+    masks : np.ndarray
+        Array of shape ``(m_max - m_min + 1, 256, 256)``.
+    """
     dpath = os.path.dirname(__file__)
     fname = os.path.join(dpath, 'masks.npz')
     masks = np.load(fname)['val']

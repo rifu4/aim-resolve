@@ -1,3 +1,5 @@
+"""Extended plotting functions for model analysis and diagnostics."""
+
 import numpy as np
 
 from .arrays import plot_arrays
@@ -15,7 +17,25 @@ def plot_mean_and_std(
         freq = False,
         **kwargs,
 ):
-    '''Plot the mean and standard deviation of samples for a given model.'''
+    """
+    Plot the mean and standard deviation of samples for a given model.
+
+    Parameters
+    ----------
+    model : object or list of objects
+        The model or list of models to plot. Each model must have a
+        ``prefix`` and ``grid`` attribute.
+    samples : MySamples
+        The samples instance containing posterior samples.
+    mode : str, optional
+        The plotting mode. Can contain 'mean' and/or 'std'.
+        Default is 'mean_and_std'.
+    freq : bool, optional
+        Whether to plot all frequency slices. If False, only the
+        central slice is plotted. Default is False.
+    **kwargs
+        Additional keyword arguments passed to ``plot_arrays``.
+    """
     check_type(samples, MySamples)
 
     models = [model, ] if not isinstance(model, list) else model
@@ -69,7 +89,19 @@ def plot_samples(
         samples,
         **kwargs,
 ):
-    '''Plot samples for a given model.'''
+    """
+    Plot individual posterior samples for a given model.
+
+    Parameters
+    ----------
+    model : object
+        The model to evaluate and plot. Must be callable and have
+        ``prefix`` and ``grid`` attributes.
+    samples : MySamples
+        The samples instance containing posterior samples.
+    **kwargs
+        Additional keyword arguments passed to ``plot_arrays``.
+    """
     check_type(samples, MySamples)
 
     if len(samples) < 2:
@@ -108,7 +140,21 @@ def plot_agreement(
         data,
         **kwargs,
 ):
-    '''Plot the agreement between model predictions and data.'''
+    """
+    Plot the agreement between model predictions and data.
+
+    Parameters
+    ----------
+    model : object
+        The model to evaluate. Must have ``prefix`` and ``grid``
+        attributes.
+    samples : MySamples
+        The samples instance containing posterior samples.
+    data : ImageData
+        The observed image data to compare against.
+    **kwargs
+        Additional keyword arguments passed to ``plot_arrays``.
+    """
     check_type(samples, MySamples)
     
     if not isinstance(data, ImageData):
@@ -152,7 +198,21 @@ def plot_pullplot(
         data,
         **kwargs,
 ):
-    '''Plot a pullplot `(mean - truth)/std` for a given model, samples and ImageData.'''
+    """
+    Plot a pullplot ``(mean - truth) / std`` for a given model, samples and ImageData.
+
+    Parameters
+    ----------
+    model : object
+        The model to evaluate. Must have ``prefix`` and ``grid``
+        attributes.
+    samples : MySamples
+        The samples instance containing posterior samples.
+    data : ImageData
+        The observed image data to compare against.
+    **kwargs
+        Additional keyword arguments passed to ``plot_arrays``.
+    """
     check_type(samples, MySamples)
     
     if not isinstance(data, ImageData) or len(samples) < 2:

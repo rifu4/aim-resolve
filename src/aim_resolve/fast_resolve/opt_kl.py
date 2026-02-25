@@ -1,3 +1,5 @@
+"""Optimise-KL loop with major/minor cycles for fast-resolve."""
+
 import os
 import logging
 import pickle
@@ -21,6 +23,22 @@ from ..optimize.samples import MySamples, get_samples
 
 
 class SkyResidualModel(Model):
+    """Sky model that subtracts a previous reconstruction and residual.
+
+    Wraps a ``sky_response`` model so that the forward evaluation computes
+    the response to the difference between the current sky and an old
+    reconstruction, minus residual data.
+
+    Parameters
+    ----------
+    sky_response : Model
+        Response model (e.g. ``NInvConvolve``).
+    old_reconstruction : array_like
+        Previous sky reconstruction subtracted before convolution.
+    residual_data : array_like
+        Residual data subtracted after convolution.
+    """
+
     sky_response: Callable = dataclasses.field(metadata=dict(static=True))
     old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=True))
     residual_data: ArrayLike = dataclasses.field(metadata=dict(static=True))
@@ -37,7 +55,24 @@ class SkyResidualModel(Model):
 
 
 def my_lh(*, sky_response, old_reconstruction, residual_data, **kwargs):
-    '''fast-resolve likelihood function. It builds a likelihood at each iteration.'''
+    """Build the fast-resolve Gaussian likelihood for one minor cycle.
+
+    Parameters
+    ----------
+    sky_response : Model
+        Response model (e.g. ``NInvConvolve``).
+    old_reconstruction : array_like
+        Previous sky reconstruction.
+    residual_data : array_like
+        Residual (dirty-image minus predicted) data.
+    **kwargs
+        Ignored extra keyword arguments from the likelihood dictionary.
+
+    Returns
+    -------
+    lh : Gaussian
+        Gaussian likelihood amended with the residual response model.
+    """
 
     model = SkyResidualModel(sky_response, old_reconstruction, residual_data)
 
@@ -78,111 +113,72 @@ def fast_optimize_kl(
     kl_device_map='shard_map',
     residual_device_map='shard_map',
 ) -> tuple[MySamples, OptimizeVIState, int]:
-    '''
-    One-stop-shop for fast-resolve approximation with major and minor cycles.
+    """Run the fast-resolve optimise-KL loop with major/minor cycles.
 
     Parameters
     ----------
-    likelihood: dict or callable
-        Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
-        - data: array-like
-        - sky_model: Model
-        - sky_response: Model
-        - old_reconstruction: array-like
-        - residual_data: array-like
-        - RNR: callable
-    key : int or array-like
-        Random key. If an integer is passed, it is used to seed a random key.
+    likelihood : dict or callable
+        Likelihood dictionary (or callable returning one per major
+        iteration) with keys ``data``, ``sky_model``, ``sky_response``,
+        ``noise_model`` and ``RNR``.
+    key : int or array_like
+        JAX random key (or integer seed).
     n_major_iterations : int
-        Number of major iterations.
+        Number of major (residual-update) iterations.
     n_minor_iterations : int or callable
-        Number of minor iterations. Can be different for each major iteration.
+        Number of minor (KL) iterations per major cycle.
     n_samples : int, callable or None
-        Number of samples. 
-    position_or_samples: Samples or tree-like
-        Initial position for minimization. If `None`, draw new samples randomly. Default is None.
-    transitions : callable or None
-        Transition function that can be used if parts of the likelihood are 
-        replaced and thereby have a different domain.
-    constants: tree-like structure, tuple of str or callable
-        Pytree of same structure as likelihood input but with boolean
-        leaves indicating whether to keep these values constant during the
-        KL minimization. As a convenience method, for dict-like inputs, a
-        tuple of strings is also valid. From these the boolean indicator
-        pytree is automatically constructed.
-    point_estimates: tree-like structure, tuple of str or callable
-        Pytree of same structure as likelihood input but with boolean
-        leaves indicating whether to sample the value in the input or use
-        it as a point estimate. As a convenience method, for dict-like
-        inputs, a tuple of strings is also valid. From these the boolean
-        indicator pytree is automatically constructed.
-    kl_jit: bool or callable
-        Whether to jit the KL minimization.
-    residual_jit: bool or callable
-        Whether to jit the residual sampling functions.
-    kl_map: callable or str
-        Map function used for the KL minimization.
-    residual_map: callable or str
-        Map function used for the residual sampling functions.
-    kl_reduce: callable
-        Reduce function used for the KL minimization.
-    mirror_samples: bool
-        Whether to mirror the samples or not.
-    draw_linear_kwargs : dict or callable
-        Configuration for drawing linear samples
-    nonlinearly_update_kwargs : dict or callable
-        Configuration for nonlinearly updating samples
-    kl_kwargs : dict or callable
-        Keyword arguments for the KL minimizer.
-    sample_mode : str or callable
-        One in {"linear_sample", "linear_resample", "nonlinear_sample",
-        "nonlinear_resample", "nonlinear_update"}. The mode denotes the way
-        samples are drawn and/or updates, "linear" draws MGVI samples,
-        "nonlinear" draws MGVI samples which are then nonlinearly updated
-        with geoVI, the "_sample" versus "_resample" suffix denotes whether
-        the same stochasticity or new stochasticity is used for the drawing
-        of the samples, and "nonlinear_update" nonlinearly updates existing
-        samples using geoVI.
-    resume : str or bool
-        Resume partially run optimization. If `True`, the optimization is
-        resumed from the previos state in `odir` otherwise it is resumed from
-        the location toward which `resume` points
-        (stating the folder containing the `last.pkl` file is sufficient).
-    callback : callable or None
-        Function called after every global iteration taking the samples and the
-        optimization state.
-    odir : str or None
-        Path at which all output files are saved.
-    devices : list of devices or None
-        Devices over which the samples are mapped. If `None` only the
-        default device is used. To use all detected devices pass
-        jax.devices(). Generally the samples needs to be evenly
-        distributable over the devices. For details see the descriptions of
-        the `kl_device_map` and `residual_device_map` arguments.
-    kl_device_map : str
-        Map function used for mapping KL minimization over the devices
-        listed in `devices`. `kl_device_map` can be 'shard_map', 'pmap', or
-        'jit'. If set to 'pmap', 2*n_samples need to be equal to the number
-        of devices. For all other maps the samples needs to be equally
-        distributable over the devices.
-    residual_device_map : str
-        Map function used for mapping sampling over the devices listed in
-        `devices`. `residual_device_map` can be 'shard_map', 'pmap', or
-        'jit'. If set to 'pmap', 2*n_samples need to be equal to the number
-        of devices. If only linear samples are drawn ,'pmap' also works if
-        n_samples equals the number of devices. For the other maps it is
-        sufficient if 2*n_samples equals the number of devices, or
-        n_samples can be evenly divided by the number of devices.
+        Number of posterior samples.
+    position_or_samples : Samples or tree-like or None, optional
+        Initial position. Drawn randomly when None.
+    transitions : callable or None, optional
+        Transition function applied between iterations.
+    constants : tuple or tree-like, optional
+        Parameters held constant during KL minimisation.
+    point_estimates : tuple or tree-like, optional
+        Parameters treated as point estimates (not sampled).
+    kl_jit : bool, optional
+        JIT-compile the KL minimisation. Default is True.
+    residual_jit : bool, optional
+        JIT-compile the residual computation. Default is True.
+    kl_map : callable or str, optional
+        Map function for the KL minimisation.
+    residual_map : callable or str, optional
+        Map function for the residual computation.
+    kl_reduce : callable, optional
+        Reduce function for the KL minimisation.
+    mirror_samples : bool, optional
+        Whether to mirror samples. Default is True.
+    draw_linear_kwargs : dict, optional
+        Configuration for drawing linear samples.
+    nonlinearly_update_kwargs : dict, optional
+        Configuration for nonlinear sample updates.
+    kl_kwargs : dict, optional
+        Keyword arguments for the KL minimiser.
+    sample_mode : str or callable, optional
+        Sampling strategy. Default is ``'nonlinear_resample'``.
+    resume : str or bool, optional
+        Path or flag to resume a previous run. Default is False.
+    callback : callable or None, optional
+        Called after every minor iteration with ``(samples, state, mj)``.
+    odir : str or None, optional
+        Output directory for checkpoints and logs.
+    devices : list or None, optional
+        JAX devices for sample distribution.
+    kl_device_map : str, optional
+        Device-mapping strategy for KL minimisation.
+    residual_device_map : str, optional
+        Device-mapping strategy for residual computation.
 
     Returns
     -------
     samples : MySamples
         Posterior samples.
     opt_vi_st : OptimizeVIState
-        State of the optimization.
+        Final optimisation state.
     n_major_iterations : int
         Total number of major iterations performed.
-    '''
+    """
     LAST_FILENAME = 'last.pkl'
     MINISANITY_FILENAME = 'minisanity.txt'
     last_fn = os.path.join(odir, LAST_FILENAME) if odir is not None else None

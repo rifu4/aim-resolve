@@ -1,3 +1,5 @@
+"""Prior model selection and initialization for AIM-Resolve."""
+
 from nifty.re import CorrelatedFieldMaker, InvGammaPrior, UniformPrior, Model, VModel
 
 from .gaussian import gaussian_model
@@ -22,9 +24,9 @@ def prior_model(
         n_copies = 1,
         **i0_params,
 ):
-    '''
+    """
     Initialize one of the prior models based on the provided parameters.
-    
+
     Parameters
     ----------
     prefix : str
@@ -34,7 +36,7 @@ def prior_model(
     n_copies : int
         The number of copies for the model. Default is 1.
     i0_params : dict
-        The parameters for the model (see the specific model for details)
+        The parameters for the model (see the specific model for details).
 
     Returns
     -------
@@ -42,7 +44,7 @@ def prior_model(
         The initialized model.
     pspec : Callable
         The power spectrum of the correlated field model. Otherwise None.
-    '''
+    """
     from .grid import SignalGrid, PointGrid
 
     check_type(prefix, str)
@@ -117,25 +119,25 @@ def correlated_field_model(*,
         non_parametric_kind = 'power',
         n_copies = 1,
 ):
-    '''
+    """
     Initialize the correlated field model of nifty.re (correlation model).
-    
+
     Parameters
     ----------
     prefix : str
-        The prefix for the model
+        The prefix for the model.
     shape : tuple
-        The shape of the model
+        The shape of the model.
     distances : tuple
-        The distances for the model
+        The distances for the model.
     offset_mean : float
-        The offset mean parameter
+        The offset mean parameter.
     offset_std : tuple
-        The offset standard deviation parameter (nifty.re.LognormalPrior)
+        The offset standard deviation parameter (nifty.re.LognormalPrior).
     fluctuations : tuple
-        The fluctuations parameter (nifty.re.LognormalPrior)
+        The fluctuations parameter (nifty.re.LognormalPrior).
     loglogavgslope : float
-        The log-log average slope parameter (nifty.re.NormalPrior)
+        The log-log average slope parameter (nifty.re.NormalPrior).
     flexibility : float, optional
         The flexibility parameter (nifty.re.LognormalPrior). Default is None.
     asperity : float, optional
@@ -151,7 +153,7 @@ def correlated_field_model(*,
         The initialized model.
     power : Model
         The power spectrum of the model.
-    '''
+    """
     cfm = CorrelatedFieldMaker(prefix)
     cfm.set_amplitude_total_offset(offset_mean, offset_std)
     cfm.add_fluctuations(
@@ -182,15 +184,15 @@ def inverse_gamma_model(*,
         scale = None,
         n_copies = 1,
 ):
-    '''
+    """
     Initialize an inverse gamma distributed prior.
-    
+
     Parameters
     ----------
     prefix : str
-        The prefix for the model
+        The prefix for the model.
     shape : tuple
-        The shape of the model
+        The shape of the model.
     mean : float, optional
         The mean of the model. Default is None.
     mode : float, optional
@@ -202,11 +204,20 @@ def inverse_gamma_model(*,
     n_copies : int, optional
         The number of copies for the model. Default is 1.
 
-    The inverse gamma distribution usually is defined by the parameters `alpha` and `scale`.
-    However, one can also define it by its `mean` and `mode`, which are related to `alpha` and `scale` via:
+    Returns
+    -------
+    model : Model or VModel
+        The initialized inverse gamma prior model.
+
+    Notes
+    -----
+    The inverse gamma distribution usually is defined by the parameters
+    ``alpha`` and ``scale``. However, one can also define it by its ``mean``
+    and ``mode``, which are related to ``alpha`` and ``scale`` via::
+
         alpha = 2 / (mean / mode - 1) + 1
         scale = mode * (alpha + 1)
-    '''
+    """
     match (mean, mode, alpha, scale):
         case (me, mo, None, None) if isinstance(me, (int, float)) and isinstance(mo, (int, float)):
             alpha = 2 / (me / mo - 1) + 1
@@ -231,22 +242,27 @@ def uniform_model(*,
         u_max,
         n_copies = 1,
 ):
-    '''
+    """
     Initialize a uniform distributed prior.
-    
+
     Parameters
     ----------
     prefix : str
-        The prefix for the model
+        The prefix for the model.
     shape : tuple
-        The shape of the model
+        The shape of the model.
     u_min : float
-        The minimum value of the uniform distribution
+        The minimum value of the uniform distribution.
     u_max : float
-        The maximum value of the uniform distribution
+        The maximum value of the uniform distribution.
     n_copies : int, optional
         The number of copies for the model. Default is 1.
-    '''
+
+    Returns
+    -------
+    model : Model or VModel
+        The initialized uniform prior model.
+    """
     model = UniformPrior(u_min, u_max, shape=shape, name=prefix)
 
     if n_copies > 1:

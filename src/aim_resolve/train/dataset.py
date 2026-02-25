@@ -1,3 +1,5 @@
+"""Dataset handling for training source detection models."""
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -10,7 +12,17 @@ from ..model.util import check_type
 
 
 class Dataset():
-    '''Create datasets from the given image data. See `build` function to create the dataset.'''
+    """Create datasets from the given image data.
+
+    Use the `build` classmethod to construct a Dataset from raw image data.
+
+    Parameters
+    ----------
+    train : TensorDataset
+        The training dataset.
+    valid : dict or TensorDataset or None
+        The validation dataset(s).
+    """
 
     def __init__(self, train, valid = None):
         check_type(train, TensorDataset)
@@ -20,10 +32,34 @@ class Dataset():
         self.valid = valid
 
     def train_loader(self, **kwargs):
+        """Return a DataLoader for the training set.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to ``DataLoader``.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader wrapping the training data.
+        """
         train_loader = DataLoader(self.train, **kwargs)
         return train_loader
 
     def valid_loader(self, **kwargs):
+        """Return a dict of DataLoaders for the validation sets.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to ``DataLoader``.
+
+        Returns
+        -------
+        dict
+            Mapping from validation-set name to its DataLoader.
+        """
         valid_loader = {}
         for k, v in self.valid.items():
             valid_loader[k] = DataLoader(v, **kwargs)
@@ -31,20 +67,26 @@ class Dataset():
 
     @classmethod
     def build(cls, train, valid, transform, coordinates=True):
-        '''
-        Build train and validation datasets from generated ImageData.
-        
+        """Build train and validation datasets from generated ImageData.
+
         Parameters
         ----------
         train : dict
-            Dictionary containing training data (see ImageDataGenerator.load)
+            Dictionary containing training data (see ``ImageDataGenerator.load``).
         valid : dict of dicts
-            Dictionary of dictionaries containing validation data (see ImageDataGenerator.load)
+            Dictionary of dictionaries containing validation data
+            (see ``ImageDataGenerator.load``).
         transform : dict
-            Dictionary containing transformation parameters (see transform_data)
+            Dictionary containing transformation parameters
+            (see ``transform_data``).
         coordinates : bool, optional
-            Whether to add coordinates to the data, by default True
-        '''
+            Whether to add coordinates to the data, by default True.
+
+        Returns
+        -------
+        Dataset
+            A new Dataset instance with processed train and validation data.
+        """
         n_train = train.pop('size', False)
         image_data_train = ImageDataGenerator.load(**train)
         if n_train:
@@ -79,6 +121,14 @@ class Dataset():
 
 
 class TensorDataset(Dataset):
+    """A simple dataset wrapping input and target tensors.
+
+    Parameters
+    ----------
+    data : tuple of (array, array)
+        Tuple of ``(x, y)`` arrays.
+    """
+
     def __init__(self, data):
         x, y = data
         self.x = x
@@ -106,13 +156,12 @@ def transform_data(
         flip = True,
         batch_size = 1000,
         facet_size = None,
-):  
-    '''
-    Apply various transformations to the data.
+):
+    """Apply various transformations to the data.
 
     Parameters
     ----------
-    data : tuple of (images, labels)
+    data : tuple of (array, array)
         The input data containing images and labels.
     min_value : float, optional
         Sets the minimum value of the images, by default 0.
@@ -123,14 +172,26 @@ def transform_data(
     standardize : bool, optional
         Whether to standardize the images, by default False.
     rotate : bool, optional
-        Whether to apply random rotation to the images and labels, by default True.
+        Whether to apply random rotation to the images and labels,
+        by default True.
     flip : bool, optional
-        Whether to apply random flipping to the images and labels, by default True.
+        Whether to apply random flipping to the images and labels,
+        by default True.
     batch_size : int, optional
         The size of the batches to process the data, by default 1000.
     facet_size : int, optional
         The size of the facets, by default None.
-    '''
+
+    Returns
+    -------
+    tuple of (array, array)
+        The transformed images and labels.
+
+    Raises
+    ------
+    ValueError
+        If both *normalize* and *standardize* are True.
+    """
     if normalize and standardize:
         raise ValueError('normalize and standardize cannot both be True')
     
@@ -180,6 +241,22 @@ def rotate_array(
         n_rot: int = 1,
         axes: tuple[int, int] = (0, 1),
 ):
+    """Rotate an array by 90-degree increments.
+
+    Parameters
+    ----------
+    array : ArrayLike
+        The array to rotate.
+    n_rot : int, optional
+        Number of 90-degree rotations, by default 1.
+    axes : tuple of (int, int), optional
+        The two axes defining the plane of rotation, by default (0, 1).
+
+    Returns
+    -------
+    ArrayLike
+        The rotated array.
+    """
     n_rot = n_rot % 4
     return jax.lax.switch(
         n_rot,
@@ -195,6 +272,20 @@ def flip_array(
         array: ArrayLike,
         axis: int = 0,
 ):
+    """Flip an array along a given axis.
+
+    Parameters
+    ----------
+    array : ArrayLike
+        The array to flip.
+    axis : int, optional
+        The axis along which to flip (mod 3), by default 0.
+
+    Returns
+    -------
+    ArrayLike
+        The flipped array, or the original when ``axis % 3 == 0``.
+    """
     axis = axis % 3
     return jax.lax.switch(
         axis,
@@ -206,6 +297,25 @@ def flip_array(
 
 
 def build_facet_array(array, factor):
+    """Split an array into smaller facets.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        4-dimensional input array of shape ``(n, l, h, w)``.
+    factor : int
+        The factor by which to split the spatial dimensions.
+
+    Returns
+    -------
+    np.ndarray
+        Reshaped array with faceted spatial dimensions.
+
+    Raises
+    ------
+    ValueError
+        If the input array is not 4-dimensional.
+    """
     if array.ndim != 4:
         raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
     n, l, h, w = array.shape
@@ -217,6 +327,25 @@ def build_facet_array(array, factor):
 
 
 def merge_facet_array(array, factor):
+    """Merge a faceted array back into a single array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        4-dimensional faceted array of shape ``(n, l, h, w)``.
+    factor : int
+        The factor used when the array was split.
+
+    Returns
+    -------
+    np.ndarray
+        Merged array with original spatial dimensions restored.
+
+    Raises
+    ------
+    ValueError
+        If the input array is not 4-dimensional.
+    """
     if array.ndim != 4:
         raise ValueError(f'Input array must be 4-dimensional, but has shape {array.shape}')
     n, l, h, w = array.shape
@@ -231,6 +360,20 @@ def add_coordinates(
         data,
         coordinates,
 ):
+    """Concatenate coordinate channels to the image data.
+
+    Parameters
+    ----------
+    data : tuple of (array, array)
+        Tuple of ``(images, labels)``.
+    coordinates : sequence of array
+        Coordinate arrays to append as extra channels.
+
+    Returns
+    -------
+    tuple of (array, array)
+        Images with appended coordinate channels and unchanged labels.
+    """
     images, labels = data
 
     coordinates = np.concatenate([c[None] for c in coordinates], axis=0)
@@ -246,6 +389,22 @@ def split_data(
         data,
         split = 0.8,
 ):
+    """Randomly split data into training and validation subsets.
+
+    Parameters
+    ----------
+    data : tuple of arrays
+        Arrays sharing the same first-axis length.
+    split : float, optional
+        Fraction of data to use for training, by default 0.8.
+
+    Returns
+    -------
+    train_data : tuple of arrays
+        Training subset.
+    valid_data : tuple of arrays
+        Validation subset.
+    """
     dataset_size = data[0].shape[0]
     assert all(array.shape[0] == dataset_size for array in data)
 

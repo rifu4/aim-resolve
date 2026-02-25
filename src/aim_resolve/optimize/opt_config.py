@@ -1,3 +1,5 @@
+"""Configuration management for KL optimization runs."""
+
 import os
 import numpy as np
 from copy import deepcopy
@@ -11,10 +13,10 @@ from ..fast_resolve.opt_kl import fast_optimize_kl
 
 
 class OptimizeKLConfig:
-    '''Class to initialize a nifty optimization from a single or multiple yaml configuration files.'''
+    """Class to initialize a nifty optimization from a single or multiple yaml configuration files."""
 
     def __init__(self, sections, builders):
-        '''
+        """
         Initialize the OptimizeKLConfig class.
 
         Parameters
@@ -23,7 +25,7 @@ class OptimizeKLConfig:
             Configuration sections.
         builders : dict
             Dictionary of builder functions. 
-        '''
+        """
         self.sections = dict(sections)
         self.interpret_base()
         self.interpret_link()
@@ -35,7 +37,7 @@ class OptimizeKLConfig:
 
     @classmethod
     def from_file(cls, fname, builders):
-        '''
+        """
         Import a config file and instantiate the class.
 
         Parameters
@@ -44,21 +46,21 @@ class OptimizeKLConfig:
             File name of the config file that is imported.
         builders : dict
             Dictionary of functions that are used to instantiate e.g. operators.
-        '''
+        """
         sections = yaml_load(fname)
 
         return cls(sections, builders)
 
 
     def to_file(self, fname):
-        '''
+        """
         Write configuration in standardized form to file.
 
         Parameters
         ----------
         fname : str
             Path to which the config shall be written.
-        '''
+        """
         dct = clean_dict(self.sections)
         dct['opt.0'] = clean_reps(dct['opt.0'], simplify=True)
         dct_lst = split_its(dct)
@@ -69,14 +71,14 @@ class OptimizeKLConfig:
 
 
     def optimize_kl(self, **kwargs):
-        '''
+        """
         Do the inference and save the config file to the output directory.
 
         Parameters
         ----------
         kwargs : dict
             Additional parameters for the `optimize_kl` function (e.g. callback).
-        '''
+        """
         dct = dict(self)
 
         os.makedirs(dct['odir'], exist_ok=True)
@@ -89,7 +91,7 @@ class OptimizeKLConfig:
     
 
     def interpret_base(self):
-        '''Replace the `base` entries in all (sub)sections by the content of the section it points to.'''
+        """Replace the `base` entries in all (sub)sections by the content of the section it points to."""
         dct = self.sections
 
         for sec in dct:
@@ -99,7 +101,7 @@ class OptimizeKLConfig:
 
 
     def interpret_link(self):
-        '''Replace the `->` entries in all (sub)sections by the content (string) of the section key it points to.'''
+        """Replace the `->` entries in all (sub)sections by the content (string) of the section key it points to."""
         dct = self.sections
         
         for sec in dct:
@@ -109,7 +111,7 @@ class OptimizeKLConfig:
 
 
     def interpret_mode(self):
-        '''Check and get the mode of the likelihood and set the optimization parameters accordingly.'''
+        """Check and get the mode of the likelihood and set the optimization parameters accordingly."""
         dct = self.sections
 
         dct = fun2mode(dct)
@@ -147,7 +149,7 @@ class OptimizeKLConfig:
 
 
     def interpret_reps(self):
-        '''Expand the repetitions of all sections starting with `opt.`. Check if all necessary keys are present.'''
+        """Expand the repetitions of all sections starting with `opt.`. Check if all necessary keys are present."""
         dct = self.sections
 
         for opt_key in filter(lambda x: x[:4] == 'opt.', dct.keys()):
@@ -172,12 +174,12 @@ class OptimizeKLConfig:
 
 
     def join_opt_stages(self):
-        '''
+        """
         Join the repetitions for all sections starting with `opt.` to a single section called `opt.0`.
 
         Sort the sections in ascending order, add their leaves and clean up the `opt.` section.
         Remove the old `opt.` sections.
-        '''
+        """
         dct = self.sections
 
         opt_keys = sorted(
@@ -194,10 +196,10 @@ class OptimizeKLConfig:
     
 
     def make_callable(self, sec, key=None):
-        '''
+        """
         Turn the section repetition lists into callable functions of the iteration number.
         Instantiate all references indicated by `=` using the builders dictionary.
-        '''
+        """
         def fun(it):
             val = get_it(sec, it)
             if key in ['constants', 'point_estimates']:
@@ -214,10 +216,10 @@ class OptimizeKLConfig:
 
 
     def instantiate_sec(self, sec):
-        '''
+        """
         Instantiate an object that is described by a section in the config file by looking up 
         the section key in the `self._builders` dictionary and call the respective function.
-        '''
+        """
         dct = deepcopy(self.sections[sec])
 
         # Instantiate all references (also in subsections)
@@ -233,11 +235,11 @@ class OptimizeKLConfig:
 
 
     def get_constants_or_point_estimates(self, cpe, it):
-        '''
+        """
         Get both the constants and point estimates for the current iteration. Given a model section name,
         it adds all parameter keys of that model component. For a `~` in front of the name, it includes
         all likelihood parameter keys except the ones of the model component.
-        '''
+        """
         match cpe:
             case None | [None,] | (None,) | [] | ():
                 return None
@@ -278,7 +280,7 @@ class OptimizeKLConfig:
 
 
     def __iter__(self):
-        '''Enable conversion to `dict` to pass everyting to the `optimize_kl` function.'''
+        """Enable conversion to `dict` to pass everyting to the `optimize_kl` function."""
         # static
         sopt = self.sections['opt']
         for key in self.opt_params['static']:
@@ -296,6 +298,7 @@ class OptimizeKLConfig:
 
         
     def __str__(self):
+        """Return a human-readable string representation of all configuration sections."""
         s = []
         for key, val in self.sections.items():
             s += [key]
@@ -305,6 +308,7 @@ class OptimizeKLConfig:
     
 
     def __eq__(self, other):
+        """Check equality based on sections and builders."""
         for a in 'sections', 'builders':
             if getattr(self, a) != getattr(other, a):
                 return False
@@ -313,7 +317,7 @@ class OptimizeKLConfig:
 
 
 def get_base(sec_dct, dct, key_lst=[]):
-    '''Recursively replace the `base` entries in all (sub)sections by the content of the section it points to.'''
+    """Recursively replace the `base` entries in all (sub)sections by the content of the section it points to."""
     for (key,val) in sec_dct.items():
         if len(key_lst) != len(set(key_lst)):
             raise RuntimeError(f'You are trying a base-loop. Please do not do that :(')
@@ -341,7 +345,7 @@ def get_base(sec_dct, dct, key_lst=[]):
 
 
 def get_link(sec_dct, dct):
-    '''Recursively replace the `->` entries in all (sub)sections by the content (string) of the section key it points to.'''
+    """Recursively replace the `->` entries in all (sub)sections by the content (string) of the section key it points to."""
     for (key,val) in sec_dct.items():
         if isinstance(val, dict):
             sec_dct[key] = merge_dicts([sec_dct[key], get_link(val, dct)])
@@ -376,7 +380,7 @@ def get_link(sec_dct, dct):
 
 
 def get_reps(sec_dct, total_it, minor_it=None):
-    '''Recursively expand the repetitions of all sections starting with `opt.`.'''
+    """Recursively expand the repetitions of all sections starting with `opt.`."""
     for (key,val) in sec_dct.items():
         if isinstance(val, dict):
             sec_dct[key] = get_reps(val, total_it, minor_it)

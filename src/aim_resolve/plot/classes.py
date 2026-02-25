@@ -1,3 +1,5 @@
+"""Segmentation class visualization utilities."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,7 +24,7 @@ def plot_classes(
         dpi = 100,
         **kwargs,
 ):
-    '''
+    """
     Plot the classes of a segmentation maps.
 
     Parameters
@@ -53,7 +55,7 @@ def plot_classes(
         The dpi of the figure. Default is 100.
     **kwargs : dict, optional
         Additional keyword arguments for `plt.imshow` plotting. Not used in this function.
-    '''
+    """
     match (points_map, object_maps):
         case (np.ndarray(), np.ndarray()):
             if points_map.shape[-2:] != object_maps.shape[-2:]:

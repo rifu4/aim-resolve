@@ -1,3 +1,5 @@
+"""Likelihood construction utilities for image and radio data."""
+
 import jax.numpy as jnp
 import numpy as np
 from functools import reduce
@@ -16,16 +18,25 @@ def likelihood_func(
         mode,
         **kwargs,
 ):
-    '''
-    Versatile likelihood function -> uses the likelihood specified in the 'mode' parameter
-    
-    Parameters:
-    -----------
-    mode : str
-        Likelihood mode. Available modes are 'image', `fast`, `radio`, `sum`.
-    kwargs : dict
-        Additional keyword arguments passed to the likelihood functions (see below).
-    '''
+    """Create a likelihood dictionary using the mode-specific builder.
+
+    Parameters
+    ----------
+    mode : {'image', 'fast', 'radio', 'sum'}
+        Likelihood mode.
+    **kwargs
+        Additional keyword arguments forwarded to the selected builder.
+
+    Returns
+    -------
+    lh_dct : dict
+        Likelihood dictionary consumed by the optimizer.
+
+    Raises
+    ------
+    TypeError
+        If *mode* is not recognised.
+    """
     if 'image' in mode:
         return image_likelihood(**kwargs)
     elif 'fast' in mode:
@@ -44,18 +55,26 @@ def image_likelihood(*,
         data,
         noise = dict(max_std=0.001, parameters=dict()),
 ):    
-    '''
-    Generate a likelihood function for the image data.
-    
+    """Build a likelihood dictionary for image data.
+
     Parameters
     ----------
     sky : Model
-        The sky model input to the likelihood function.
+        Sky model whose output grid is set to match *data*.
     data : ImageData
-        The image data to be reconstructed.
-    noise : dict
-        Dictionary containing the noise parameters (see NoiseModel).
-    '''
+        Image data to reconstruct.
+    noise : dict, optional
+        Noise configuration forwarded to ``NoiseModel.build``.
+        Must contain ``max_std`` and ``parameters``. Default uses
+        ``max_std=0.001``.
+
+    Returns
+    -------
+    lh_dct : dict
+        Likelihood dictionary with keys ``data``, ``sky_model``,
+        ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
+        ``noise_model``.
+    """
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
     noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
 
@@ -79,20 +98,27 @@ def radio_likelihood(*,
         noise = dict(wgt_fac=1., parameters=dict()),
         wgridding = False,
 ):  
-    '''
-    Generate a likelihood function for the radio data.
+    """Build a likelihood dictionary for radio visibility data.
 
     Parameters
     ----------
     sky : Model
-        The sky model input to the likelihood function.
+        Sky model used as the signal model.
     data : Observation
-        The radio data to be reconstructed.
-    noise : dict
-        Dictionary containing the noise parameters (see NoiseModel).
-    wgridding : bool
-        Whether to use wgridding or not.
-    '''
+        Radio observation to reconstruct.
+    noise : dict, optional
+        Noise configuration. The ``wgt_fac`` key scales the visibility
+        weights. Default uses ``wgt_fac=1.0``.
+    wgridding : bool, optional
+        Whether to use w-gridding for the sky response. Default is False.
+
+    Returns
+    -------
+    lh_dct : dict
+        Likelihood dictionary with keys ``data``, ``sky_model``,
+        ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
+        ``noise_model``.
+    """
     wgt_fac = noise['wgt_fac'] if 'wgt_fac' in noise else 1.
     noise_model = NoiseModel.build(shape=data.vis.shape, **noise)
 
@@ -116,24 +142,35 @@ def fast_likelihood(*,
         noise = dict(parameters=dict()),
         split = {},
 ):
-    '''
-    Generate a fast likelihood function for the radio data (fast-resolve).
+    """Build a fast-resolve likelihood dictionary for radio data.
+
+    Uses pre-computed PSF and noise-inverse convolution kernels for an
+    efficient approximation of the full radio likelihood.
 
     Parameters
     ----------
     sky : Model
-        The sky model input to the likelihood function.
+        Sky model used as the signal model.
     data : Observation
-        The radio data to be reconstructed.
-    psf_kernel_fn : callable
-        The psf kernel filename. Create a new kernel if not specified.
-    n_inv_kernel_fn : callable
-        The noise kernel filename. Create a new kernel if not specified.
-    noise : dict
-        Dictionary containing the noise parameters (see NoiseModel).
-    split : dict
-        The parameters for kernel-splitting. Needs `size` and `factor`. Default is `{}` (no split).
-    ''' 
+        Radio observation to reconstruct.
+    psf_kernel_fn : str, optional
+        Path to a cached PSF kernel file. A new kernel is created when
+        empty. Default is ``''``.
+    n_inv_kernel_fn : str, optional
+        Path to a cached noise-inverse kernel file. A new kernel is
+        created when empty. Default is ``''``.
+    noise : dict, optional
+        Noise configuration forwarded to ``NoiseModel.build``.
+    split : dict, optional
+        Kernel-splitting parameters (``size`` and ``factor``). Default is
+        ``{}`` (no splitting).
+
+    Returns
+    -------
+    lh_dct : dict
+        Likelihood dictionary with keys ``data``, ``sky_model``,
+        ``sky_response``, ``noise_model`` and ``RNR``.
+    """ 
     if isinstance(data, Observation):
         data = data.to_resolve_obs()
     obs = data.to_double_precision()
@@ -174,12 +211,16 @@ def fast_likelihood(*,
 def likelihood_sum(
         **lhs,
 ):
-    '''
-    Generate a likelihood function that is the sum of multiple likelihood functions.
+    """Sum multiple likelihood objects into a single composite likelihood.
 
     Parameters
     ----------
-    lhs : dict
-        Dictionary containing the likelihood functions to sum.
-    '''
+    **lhs
+        Named likelihood objects to be summed.
+
+    Returns
+    -------
+    likelihood
+        The combined likelihood (sum of all inputs).
+    """
     return reduce(add, lhs.values())

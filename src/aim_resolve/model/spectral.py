@@ -1,3 +1,5 @@
+"""Spectral modeling utilities for multi-frequency reconstruction."""
+
 import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
@@ -26,9 +28,9 @@ def spectral_model(
         n_copies = 1,
         **params,
 ):
-    '''
+    """
     Initialize one of the spectral models based on the provided parameters.
-    
+
     Parameters
     ----------
     prefix : str
@@ -36,19 +38,19 @@ def spectral_model(
     grid : SignalGrid or PointGrid
         The grid for the model.
     freq : np.ndarray
-        The freq of the model.
+        The frequencies of the model.
     nonlinearity : str, optional
         The nonlinearity function to apply to the model. Default is None.
     n_copies : int
         The number of copies for the model. Default is 1.
     params : dict
-        The parameters for the model (see the specific model for details)
-    
+        The parameters for the model (see the specific model for details).
+
     Returns
     -------
     model : Model
         The initialized model.
-    '''
+    """
     check_type(prefix, str)
     check_type(grid, (SignalGrid, PointGrid))
     check_type(freq, np.ndarray)
@@ -97,7 +99,39 @@ def spectral_ubik_model(*,
         ref_freq_index = None,
         n_copies = 1,
     ):
-    '''Function to create a diffuse signal model on a specific grid using the ubik spectral sky model.'''
+    """
+    Create a diffuse signal model using the ubik spectral sky model.
+
+    Parameters
+    ----------
+    prefix : str
+        The prefix for the model.
+    grid : SignalGrid
+        The signal grid for the model.
+    freq : np.ndarray
+        The frequencies of the model (must have at least two entries).
+    zero_mode : dict
+        Zero-mode configuration for the spectral sky.
+    spatial_amplitude : dict
+        Spatial amplitude configuration.
+    spectral_index : dict
+        Spectral index configuration.
+    spectral_amplitude : dict, optional
+        Spectral amplitude configuration. Default is None.
+    deviations : dict, optional
+        Deviations configuration. Default is None.
+    nonlinearity : callable, optional
+        Nonlinearity function. Default is ``jnp.exp``.
+    ref_freq_index : int, optional
+        Reference frequency index. Default is None (uses midpoint).
+    n_copies : int, optional
+        The number of copies for the model. Default is 1.
+
+    Returns
+    -------
+    model : Model or VModel
+        The initialized ubik spectral model.
+    """
     if freq.size == 1:
         raise ValueError('Need at least two frequencies for spectral ubik model.')
     
@@ -136,7 +170,35 @@ def spectral_prior_model(*,
         ref_freq_index = None,
         n_copies = 1,
 ):
-    '''Function to create a single- or multi-frequency diffuse or point signal model on a specific grid.'''
+    """
+    Create a single- or multi-frequency signal model on a specific grid.
+
+    Parameters
+    ----------
+    prefix : str
+        The prefix for the model.
+    grid : SignalGrid or PointGrid
+        The grid for the model.
+    freq : np.ndarray, optional
+        The frequencies of the model. Default is ``np.ones((1,))``.
+    i0 : dict
+        Prior model parameters for the reference frequency distribution.
+    alpha : dict, optional
+        Prior model parameters for the spectral index. Default is None.
+    deviations : dict, optional
+        Spectral deviations configuration. Default is None.
+    nonlinearity : callable, optional
+        Nonlinearity function. Default is ``jnp.exp``.
+    ref_freq_index : int, optional
+        Reference frequency index. Default is None (uses midpoint).
+    n_copies : int, optional
+        The number of copies for the model. Default is 1.
+
+    Returns
+    -------
+    model : Model or VModel
+        The initialized spectral prior model.
+    """
     i0, _ = prior_model(f'{prefix}i0 ', grid, **i0)
 
     if freq.size == 1:
@@ -171,6 +233,21 @@ def spectral_prior_model(*,
 
 
 class MultiFrequencyModel(Model):
+    """Model combining reference frequency, spectral index, and deviations.
+
+    Parameters
+    ----------
+    i0 : Model or None, optional
+        Reference frequency distribution model. Default is None.
+    log_freq : np.ndarray or None, optional
+        Log-frequencies array. Default is None.
+    alpha : Model or None, optional
+        Spectral index model. Default is None.
+    deviations : Model or None, optional
+        Spectral deviations model. Default is None.
+    nonlinearity : callable or None, optional
+        Nonlinearity applied after summation. Default is ``jnp.exp``.
+    """
     def __init__(self, i0=None, log_freq=None, alpha=None, deviations=None, nonlinearity=jnp.exp):
         check_type(i0, (Model, type(None)))
         check_type(log_freq, (np.ndarray, type(None)))
@@ -190,6 +267,18 @@ class MultiFrequencyModel(Model):
         ) 
 
     def __call__(self, x):
+        """Evaluate the multi-frequency model.
+
+        Parameters
+        ----------
+        x : dict
+            Latent parameter dictionary.
+
+        Returns
+        -------
+        res : jnp.ndarray
+            The evaluated multi-frequency signal.
+        """
         res = jnp.zeros(self.shape)
         if self.i0:
             res += self.i0(x)

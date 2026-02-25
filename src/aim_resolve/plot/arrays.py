@@ -1,3 +1,5 @@
+"""Multi-array plotting utilities for images and power spectra."""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
@@ -37,7 +39,7 @@ def plot_arrays(
         grid_kwargs = {},
         **kwargs,
 ):
-    '''
+    """
     Plot arrays or lists containing multiple 2D images or power spectra.
     
     Parameters
@@ -74,7 +76,7 @@ def plot_arrays(
     marker : dict or dict containing subdicts, optional
         The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
-    contour : dict, optional:
+    contour : dict, optional
         The contours to plot. Keywords are passed to plt.contour. Default is {}.
     square : bool, optional
         Whether to fillup non-square images with zeros. Default is False.
@@ -95,7 +97,7 @@ def plot_arrays(
         The keyword arguments to pass to the GridSpec. Default is {}.
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
-    '''
+    """
     arrays, nums = to_shape(array, None, rows, cols, 0., transpose, return_nums=True)
     shape = arrays.shape[:2]
     rows, cols = shape

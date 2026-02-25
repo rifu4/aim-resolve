@@ -1,3 +1,5 @@
+"""Composite component generator combining background, points, tiles and objects."""
+
 import jax.numpy as jnp
 from jax import random
 from nifty.re import Model, Vector
@@ -13,7 +15,23 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class ComponentGenerator(Model):
-    '''Generate a component model. Use `build` function to create the model.'''
+    """Generative model combining background, point, tile and object components.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    grid : SignalGrid
+        Spatial grid shared by all components.
+    background : BackgroundGenerator
+        Background component model.
+    points : PointGenerator or None
+        Optional point-source component model.
+    tiles : TileGenerator or None
+        Optional tile component model.
+    objects : ObjectGenerator or None
+        Optional extended-object component model.
+    """
 
     def __init__(self, grid, background, points=None, tiles=None, objects=None):
         check_type(grid, SignalGrid)
@@ -50,24 +68,29 @@ class ComponentGenerator(Model):
     
     @classmethod
     def build(cls, *, grid, background, points=None, tiles=None, objects=None, func='exp'):
-        '''
-        Build a component generator model.
+        """Build a composite component generator from configuration.
 
         Parameters
         ----------
         grid : dict
-            Dictionary containing the grid parameters (see SignalGrid)
+            Signal grid parameters (see ``SignalGrid``).
         background : dict
-            Dictionary containing the background model parameters (see BackgroundGenerator)
-        points : dict, optional 
-            Dictionary containing the point model parameters (see PointGenerator), by default None
-        tiles : dict, optional
-            Dictionary containing the tile model parameters (see TileGenerator), by default None
-        objects : dict, optional
-            Dictionary containing the object model parameters (see ObjectGenerator), by default None
-        func : str, optional
-            Function to apply to the signal, by default 'exp'
-        '''
+            Background model parameters (see ``BackgroundGenerator``).
+        points : dict or None, optional
+            Point-source model parameters. Default is None.
+        tiles : dict or None, optional
+            Tile model parameters. Default is None.
+        objects : dict or None, optional
+            Extended-object model parameters. Default is None.
+        func : str or None, optional
+            Name of a ``jax.numpy`` activation function applied to all
+            sub-models. Default is ``'exp'``.
+
+        Returns
+        -------
+        ComponentGenerator
+            The constructed composite component generator.
+        """
         background = BackgroundGenerator.build(grid=grid, func=func, **background)
 
         if points:

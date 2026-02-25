@@ -1,3 +1,5 @@
+"""Exact interferometric response builders for fast-resolve."""
+
 import nifty8 as ift
 import numpy as np
 
@@ -8,18 +10,31 @@ def build_exact_responses(
         grid,
         freq = np.ones((1,)),
 ):
-    '''
-    Build the exact `RNR` responses for fast-resolve.
+    """Build exact RNR response operators for fast-resolve.
+
+    Constructs both the normal and padded (2x) interferometric response
+    operators together with their corresponding RNR products.
 
     Parameters
     ----------
-    observation : rve.Observation
-        The radio observation data.
+    observation : Observation
+        Radio observation data.
     grid : SignalGrid
-        The grid of the sky model.
-    freq : np.ndarray
-        The frequencies of the sky model.
-    ''' 
+        Spatial grid of the sky model.
+    freq : np.ndarray, optional
+        Frequency array. Default is ``np.ones((1,))``.
+
+    Returns
+    -------
+    R : Operator
+        Normal-grid interferometric response.
+    R_l : Operator
+        Padded (2x) interferometric response.
+    RNR : Operator
+        Normal-grid RNR product.
+    RNR_l : Operator
+        Padded RNR product.
+    """ 
     import resolve as rve
 
     sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)
@@ -52,7 +67,28 @@ def build_exact_responses(
 
 
 def apply_exact_response(RNR, val):
-    '''Apply the exact `RNR` response for fast-resolve.'''
+    """Apply the exact RNR response to a sky array.
+
+    Handles both single and list-of-operator cases by splitting the
+    value along the leading axis.
+
+    Parameters
+    ----------
+    RNR : Operator or list of Operator
+        RNR operator(s).
+    val : np.ndarray
+        Sky value array.
+
+    Returns
+    -------
+    np.ndarray
+        Response-applied array.
+
+    Raises
+    ------
+    ValueError
+        If any operator domain does not have exactly 3 dimensions.
+    """
     results, idx = [], 0
     if isinstance(RNR, list):
         for rnr in RNR:

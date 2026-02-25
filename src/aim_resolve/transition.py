@@ -1,3 +1,10 @@
+"""Transition utilities for multi-iteration optimisation workflows.
+
+Provides functions to transfer model parameters between successive
+optimisation iterations, including random initialisation, frequency
+extension, component addition and zoom refinement.
+"""
+
 import os
 import pickle
 import numpy as np
@@ -25,16 +32,26 @@ def transition_func(
         mode,
         **kwargs,
 ):
-    '''
-    Versatile transition function -> performs the wanted transition specified in the 'mode' parameter
-    
-    Parameters:
-    -----------
-    mode : str
-        Transition mode. Can be `anew`, `copy`, `addt` or `zoom`. Default is `addt`.
-    kwargs : dict
-        Additional keyword arguments passed to the transition functions (see transition functions).
-    '''
+    """Return a partially applied transition function for the given mode.
+
+    Parameters
+    ----------
+    mode : {'anew', 'freq', 'addt', 'zoom'}
+        Transition mode.
+    **kwargs
+        Additional keyword arguments forwarded to the selected transition
+        function.
+
+    Returns
+    -------
+    func : callable
+        Partially applied transition function.
+
+    Raises
+    ------
+    TypeError
+        If *mode* is not recognised.
+    """
     if mode == 'anew':
         return partial(transition_anew, **kwargs)
     elif mode == 'freq':
@@ -54,16 +71,25 @@ def transition_anew(
         lh_new,
         **kwargs,
 ):
-    '''
-    Gnerate new position from random for all parameters
+    """Generate a new random position for all model parameters.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     key : jax.random.PRNGKey
-        Random key for the JAX random number generator.
-    lh_new : nifty.re.Likelihood
-        Likelihood model for the new optimiztion iteration
-    '''
+        Random key for JAX random number generation.
+    lh_new : dict
+        Likelihood dictionary for the new optimisation iteration.
+
+    Returns
+    -------
+    pos_new : MySamples
+        Randomly initialised position.
+
+    Raises
+    ------
+    ValueError
+        If no model domains are found in *lh_new*.
+    """
     models = [v for v in lh_new.values() if isinstance(v, Model)]
     if domain_keys(models) == set():
         raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty.re.Model`')
@@ -88,20 +114,27 @@ def transition_freq(
         lh_new,
         **kwargs,
 ):
-    '''
-    Generate new position from random for all parameters
+    """Transfer parameters from a single-frequency to a multi-frequency model.
 
-    Parameters:
-    -----------
+    Copies matching model components and noise scaling from the previous
+    iteration and randomly initialises any remaining parameters.
+
+    Parameters
+    ----------
     key : jax.random.PRNGKey
-        Random key for the JAX random number generator.
-    samples : nifty.re.Samples
+        Random key for JAX random number generation.
+    samples : MySamples
         Samples from the previous iteration.
-    lh_old : nifty.re.Likelihood
-        Likelihood model for the previous optimiztion iteration.
-    lh_new : nifty.re.Likelihood
-        Likelihood model for the new optimiztion iteration.
-    '''
+    lh_old : dict
+        Likelihood dictionary for the previous iteration.
+    lh_new : dict
+        Likelihood dictionary for the new iteration.
+
+    Returns
+    -------
+    samples_new : MySamples
+        Samples initialised for the new multi-frequency iteration.
+    """
     sky_old = lh_old['sky_model']
     sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
@@ -149,24 +182,32 @@ def transition_util(
         odir = None,
         **kwargs,
 ):
-        '''
-        Check if a transition file exists and loads it. If not, performs the transition and saves the result.
+        """Cache-aware wrapper around a transition function.
 
-        Parameters:
-        -----------
-        func : function
-            Transition function to be called if no transition file exists.
+        Loads a previously saved transition result if available.
+        Otherwise, calls *func* and persists the result for future reuse.
+
+        Parameters
+        ----------
         key : jax.random.PRNGKey
-            Random key for the JAX random number generator.
-        samples : nifty.re.Samples
+            Random key for JAX random number generation.
+        samples : MySamples
             Samples from the previous iteration.
         it : int
-            Current iteration number of the optimization.
-        lh_new : nifty.re.Likelihood
-            Likelihood model for the new optimiztion iteration.
-        odir : str
-            Output directory for plots and a transition pickle file.
-        '''
+            Current optimisation iteration number.
+        func : callable
+            Transition function to call when no cache exists.
+        lh_new : dict
+            Likelihood dictionary for the new iteration.
+        odir : str or None, optional
+            Output directory for the cached transition file. Default is
+            None.
+
+        Returns
+        -------
+        samples : MySamples
+            Samples initialised for the new iteration.
+        """
         pos_fn = f'{odir}/{it}_trans.pkl' if odir else ''
 
         if odir:
@@ -202,34 +243,47 @@ def transition_addt(
         plot_dct = dict(norm='log'),
         **kwargs,
 ):
-    '''
-    Optimizes the new tile model on the previous reconstruction and separates tile components and point sources from the background.
+    """Add components by fitting them to the previous reconstruction.
 
-    Parameters:
-    -----------
+    Optimises the new background, point, object and tile models on the
+    corresponding masked regions of the old reconstruction and assembles
+    the initial parameter tree for the next optimisation iteration.
+
+    Parameters
+    ----------
     key : jax.random.PRNGKey
-        Random key for the JAX random number generator.
-    samples : nifty.re.Samples
+        Random key for JAX random number generation.
+    samples : MySamples
         Samples from the previous iteration.
     it : int
-        Current iteration number of the optimization.
-    lh_old : nifty.re.Likelihood
-        Likelihood model for the previous optimiztion iteration.
-    lh_new : nifty.re.Likelihood
-        Likelihood model for the new optimiztion iteration.
-    offsets : bool
-        If True, sets the offsets of the signal components depending on the background reconstruction and returns a dict containing the offsets.
+        Current optimisation iteration number.
+    lh_old : dict
+        Likelihood dictionary for the previous iteration.
+    lh_new : dict
+        Likelihood dictionary for the new iteration.
     opt_dct : dict
-        Dictionary containing the optimization parameters.
-    odir : str
-        Output directory for the plotting.
-    mask : str
-        Path to the mask file. If None, a new mask is created.
-    noise : dict
-        Dictionary containing the noise parameters.
-    plot_dct : dict
-        Dictionary containing the plotting parameters.
-    '''
+        Optimisation parameters for the component fits.
+    offsets : bool, optional
+        If True, compute and return per-component offsets. Default is
+        False.
+    odir : str or None, optional
+        Output directory for diagnostic plots. Default is None.
+    mask : str or None, optional
+        Path to a ``.npz`` mask file. A new mask is created when None.
+        Default is None.
+    noise : dict, optional
+        Noise configuration for the sub-optimisations. Default uses
+        ``max_std=1e-5``.
+    plot_dct : dict, optional
+        Plotting parameters. Default is ``{'norm': 'log'}``.
+
+    Returns
+    -------
+    samples_new : MySamples
+        Samples initialised for the new iteration.
+    ofs_dct : dict
+        Per-component offset dictionary (empty when *offsets* is False).
+    """
     sky_old = lh_old['sky_model']
     sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
@@ -337,30 +391,40 @@ def transition_zoom(
         plot_dct = dict(norm='log'),
         **kwargs,
 ):
-    '''
-    Optimizes the new tile model on the previous reconstruction and separates tile components and point sources from the background.
+    """Transfer parameters to a higher-resolution (zoomed) grid.
 
-    Parameters:
-    -----------
+    Re-optimises each component on the zoomed grid using the
+    reprojected reconstruction from the previous iteration.
+
+    Parameters
+    ----------
     key : jax.random.PRNGKey
-        Random key for the JAX random number generator.
-    samples : nifty.re.Samples
+        Random key for JAX random number generation.
+    samples : MySamples
         Samples from the previous iteration.
     it : int
-        Current iteration number of the optimization.
-    lh_old : nifty.re.Likelihood
-        Likelihood model for the previous optimiztion iteration.
-    lh_new : nifty.re.Likelihood
-        Likelihood model for the new optimiztion iteration.
+        Current optimisation iteration number.
+    lh_old : dict
+        Likelihood dictionary for the previous iteration.
+    lh_new : dict
+        Likelihood dictionary for the new iteration.
     opt_dct : dict
-        Dictionary containing the optimization parameters.
-    odir : str
-        Output directory for the plotting.
-    noise : dict
-        Dictionary containing the noise parameters.
-    plot_dct : dict
-        Dictionary containing the plotting parameters.
-    '''
+        Optimisation parameters for the component fits.
+    odir : str or None, optional
+        Output directory for diagnostic plots. Default is None.
+    noise : dict, optional
+        Noise configuration for the sub-optimisations. Default uses
+        ``max_std=1e-5``.
+    plot_dct : dict, optional
+        Plotting parameters. Default is ``{'norm': 'log'}``.
+
+    Returns
+    -------
+    samples_new : MySamples
+        Samples initialised for the zoomed iteration.
+    None
+        Placeholder for consistency with ``transition_addt``.
+    """
     sky_old = lh_old['sky_model']
     sky_new = lh_new['sky_model']
     check_type(samples, MySamples)
@@ -425,7 +489,34 @@ def optimize_and_plot(
         noise = dict(max_std=1e-5, parameters=dict()),
         plot_dct = dict(odir=None, name=None),
 ):
-    '''Optimizes a sky model on the given data with the given optimization parameters and/or plots the results.'''
+    """Optimise a sky model on given data and optionally plot the result.
+
+    When *opt_dct* is provided the model is fitted to *data* with added
+    noise.  Diagnostic plots are written when ``plot_dct['odir']`` is
+    set.
+
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Random key for JAX random number generation.
+    sky : Model
+        Sky model to optimise.
+    data : np.ndarray
+        Target data array.
+    pos : Vector or None, optional
+        Initial parameter position. Default is None.
+    opt_dct : dict or None, optional
+        Optimisation configuration. Skips fitting when None.
+    noise : dict, optional
+        Noise configuration for the fit. Default uses ``max_std=1e-5``.
+    plot_dct : dict, optional
+        Plotting parameters including ``odir`` and ``name``.
+
+    Returns
+    -------
+    pos : Vector
+        Fitted (or initial) parameter position.
+    """
     if opt_dct:
         max_std = noise['max_std'] if 'max_std' in noise else 1e-5
         noise_model = NoiseModel.build(shape=data.shape, **noise)

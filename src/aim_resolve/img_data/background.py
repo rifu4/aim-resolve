@@ -1,3 +1,5 @@
+"""Background generator model for synthetic sky images."""
+
 import jax.numpy as jnp
 from nifty.re import Model, Vector
 from typing import Callable
@@ -10,7 +12,21 @@ from ..optimize.samples import domain_tree, model_init
 
 
 class BackgroundGenerator(Model):
-    '''Generate a background model. Use `build` function to create the model.'''
+    """Generative model for a smooth sky background.
+
+    Use the ``build`` class method to create an instance.
+
+    Parameters
+    ----------
+    grid : SignalGrid
+        Spatial grid of the background.
+    i0 : Model
+        Prior model for the log-intensity field.
+    gaussian : Model or None
+        Optional Gaussian envelope multiplied with the signal.
+    func : callable or None
+        Point-wise activation function (e.g. ``jnp.exp``).
+    """
 
     def __init__(self, grid, i0, gaussian=None, func=jnp.exp):
         check_type(grid, SignalGrid)
@@ -41,21 +57,25 @@ class BackgroundGenerator(Model):
     
     @classmethod
     def build(cls, *, grid, i0, gaussian=None, func='exp'):
-        '''
-        Build a background generator model.
-        
+        """Build a background generator from configuration dictionaries.
+
         Parameters
         ----------
         grid : dict
-            Dictionary containing the signal grid parameters (see SignalGrid)
+            Signal grid parameters (see ``SignalGrid``).
         i0 : dict
-            Dictionary containing the prior model parameters of the signal (see prior_model)
-        gaussian : dict, optional
-            Dictionary containing the gaussian model parameters (see gaussian_model), by default None
-            -> multiply the signal with a gaussian
-        func : str, optional
-            Function to apply to the signal, by default 'exp'
-        '''
+            Prior model parameters for the intensity field.
+        gaussian : dict or None, optional
+            Gaussian envelope parameters. Default is None.
+        func : str or None, optional
+            Name of a ``jax.numpy`` activation function. Default is
+            ``'exp'``.
+
+        Returns
+        -------
+        BackgroundGenerator
+            The constructed background generator model.
+        """
         grid = SignalGrid.build(**grid)
 
         i0, _ = prior_model('bg i0 ', grid, **i0)

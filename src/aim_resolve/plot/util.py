@@ -1,3 +1,5 @@
+"""Plotting utility functions for axes, colorbars, ticks, and layout."""
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,7 +14,18 @@ def plot_figure(
         odir = None,
         name = None,
 ):
-    '''Plot a figure using plt.show() or save it to a file.'''
+    """
+    Plot a figure using plt.show() or save it to a file.
+
+    Parameters
+    ----------
+    figure : plt.Figure
+        The matplotlib figure to display or save.
+    odir : str, optional
+        The output directory to save the plot. Default is None.
+    name : str, optional
+        The filename for the saved plot. Default is None.
+    """
     if not isinstance(figure, plt.Figure):
         raise TypeError('`fig` has to be of Type `matplotlib.figure.Figure`')
 
@@ -38,7 +51,30 @@ def set_cbar(
         labelpad=3, 
         labelloc='center'
 ):
-    '''Set the colorbar for a given axes.'''
+    """
+    Set the colorbar for a given axes.
+
+    Parameters
+    ----------
+    axes : plt.Axes
+        The axes to attach the colorbar to.
+    image : plt.cm.ScalarMappable
+        The image or mappable for the colorbar.
+    cbar : bool, optional
+        Whether to show the colorbar. Default is True.
+    loc : str, optional
+        The location of the colorbar. Default is 'right'.
+    size : str, optional
+        The size of the colorbar axes. Default is '2.5%'.
+    pad : str, optional
+        The padding between the image and colorbar. Default is '2.5%'.
+    label : str, optional
+        The label for the colorbar. Default is None.
+    labelpad : int, optional
+        The padding for the colorbar label. Default is 3.
+    labelloc : str, optional
+        The location of the colorbar label. Default is 'center'.
+    """
     div = make_axes_locatable(axes)
     cax_bottom = div.append_axes('bottom', size=size, pad=pad)
     cax_right = div.append_axes('right', size=size, pad=pad)
@@ -75,7 +111,21 @@ def set_ticks(
         ticks = 5,
         plot_grid = True,
 ):
-    '''Set the ticks of the axes.'''
+    """
+    Set the ticks of the axes.
+
+    Parameters
+    ----------
+    axes : plt.Axes
+        The axes to set ticks for.
+    grid : SignalGrid, optional
+        The grid used to compute tick positions and labels. Default is None.
+    ticks : int, optional
+        The number of ticks to use. Default is 5. If set to 0, the axes
+        will be turned off.
+    plot_grid : bool, optional
+        Whether to use the grid for tick labels. Default is True.
+    """
     if ticks > 0:
         if plot_grid and isinstance(grid, SignalGrid):
             axes.set_xticks(
@@ -96,7 +146,25 @@ def rows_and_cols(
         rows = None,
         cols = None,
 ):
-    '''Calculate the number of rows and columns for a grid of subplots.'''
+    """
+    Calculate the number of rows and columns for a grid of subplots.
+
+    Parameters
+    ----------
+    nums : int
+        The total number of subplots.
+    rows : int, optional
+        The desired number of rows. Default is None.
+    cols : int, optional
+        The desired number of columns. Default is None.
+
+    Returns
+    -------
+    rows : int
+        The computed number of rows.
+    cols : int
+        The computed number of columns.
+    """
     match (rows, cols):
         case (None, None):
             rows = int(np.ceil(np.sqrt(nums)))
@@ -121,7 +189,36 @@ def to_shape(
         dtype = None,
         return_nums = False,
 ):
-    '''Convert an input to a specific shape or number of rows and columns.'''
+    """
+    Convert an input to a specific shape or number of rows and columns.
+
+    Parameters
+    ----------
+    input : array_like
+        The input data to reshape.
+    shape : tuple, optional
+        The target shape. Default is None.
+    rows : int, optional
+        The desired number of rows. Default is None.
+    cols : int, optional
+        The desired number of columns. Default is None.
+    default : scalar, optional
+        The default fill value for padding. Default is -1.
+    transpose : bool, optional
+        Whether to transpose the result. Default is False.
+    dtype : str or np.dtype, optional
+        The desired data type. Default is None.
+    return_nums : bool, optional
+        Whether to also return the original number of elements.
+        Default is False.
+
+    Returns
+    -------
+    array : np.ndarray
+        The reshaped array.
+    nums : int
+        The original number of elements (only if ``return_nums`` is True).
+    """
     array = np.array(input, dtype=object)
 
     match array.ndim:

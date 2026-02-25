@@ -1,3 +1,5 @@
+"""Gaussian spatial model for AIM-Resolve."""
+
 import jax.numpy as jnp
 import numpy as np
 from collections.abc import Mapping
@@ -17,11 +19,15 @@ def gaussian_model(*,
         theta: Union[tuple, float] = 0.,
         n_copies: int = 1,
 ) -> Model:
-    '''
-    Define a gaussian model with the given parameters.
+    """
+    Define a Gaussian model with the given parameters.
 
-    Parameters:
-    -----------
+    For all shape parameters (cov_x, cov_y, scale, theta): if a tuple is
+    given, a normal prior is defined with ``(mean, std)``; if a float is
+    given, the parameter is set to a constant.
+
+    Parameters
+    ----------
     prefix : str
         The prefix for the model.
     shape : tuple
@@ -32,17 +38,19 @@ def gaussian_model(*,
         The covariance in x-direction.
     cov_y : tuple or float
         The covariance in y-direction.
-    scale : tuple or float
-        The scale of the field.
-    theta : tuple or float
-        The angle of the field.
-    n_copies : int
+    scale : tuple or float, optional
+        The scale of the field. Default is 1.
+    theta : tuple or float, optional
+        The angle of the field. Default is 0.
+    n_copies : int, optional
         The number of copies of the model. Default is 1.
 
-    For all parameters (cov_x, cov_y, sclae, theta): 
-        If a tuple is given, a normal prior is definded with `(mean, std)`.
-        If a float is given, the parameter is set to a constant.
-    '''
+    Returns
+    -------
+    Model
+        A NIFTy Model (or VModel if n_copies > 1) representing the
+        Gaussian spatial profile.
+    """
     ptree = {}
     cov_x = prior_or_const(cov_x, ptree, prefix+'cov_x', normal_prior)
     cov_y = prior_or_const(cov_y, ptree, prefix+'cov_y', normal_prior)
@@ -77,7 +85,25 @@ def gaussian_model(*,
 
 
 def prior_or_const(value, ptree, name, prior=lognormal_prior):
-    '''Generates a prior or a constant value depending on the input type.'''
+    """Generate a prior or a constant value depending on the input type.
+
+    Parameters
+    ----------
+    value : tuple, list, int, or float
+        If a two-element tuple/list, a prior is created with
+        ``prior(value[0], value[1])``; otherwise used as a constant.
+    ptree : dict
+        Parameter tree to update with the new prior domain.
+    name : str
+        Name key for the wrapped prior.
+    prior : callable, optional
+        Prior constructor, by default ``lognormal_prior``.
+
+    Returns
+    -------
+    WrappedCall or scalar
+        A callable prior or the unchanged constant value.
+    """
     if isinstance(value, (tuple, list)) and len(value) == 2:
         value = prior(*value)
         value = WrappedCall(value, name=name)
@@ -88,7 +114,22 @@ def prior_or_const(value, ptree, name, prior=lognormal_prior):
 
 
 def centered_coos(shp, dis):
-    '''Generates coordinates for a given shape and distances with zcenter at (0,0).'''
+    """Generate centred coordinates for a given shape and pixel distances.
+
+    The coordinate origin is placed at the centre of the grid.
+
+    Parameters
+    ----------
+    shp : array_like
+        Spatial shape of the grid (2-element).
+    dis : array_like
+        Pixel distances for each spatial dimension.
+
+    Returns
+    -------
+    jnp.ndarray
+        Array of shape ``(2, *shp)`` with centred x and y coordinates.
+    """
     coos = jnp.indices(shp).astype(float)
     coos_T = coos.T.reshape(-1, 2)
     coos_T -= 0.5 * (shp - 1)

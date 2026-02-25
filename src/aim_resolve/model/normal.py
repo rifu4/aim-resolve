@@ -1,3 +1,5 @@
+"""Normal (Gaussian) prior model for AIM-Resolve."""
+
 from functools import partial
 from jax import vmap
 from typing import Union
@@ -14,11 +16,10 @@ def normal_model(*,
         std: Union[tuple, float, int],
         n_copies: int = 1,
 ) -> Model:
-    '''
-    Define a normal model with the given parameters.
+    """Define a normal model with the given parameters.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     prefix : str
         The prefix for the model.
     shape : tuple
@@ -28,10 +29,16 @@ def normal_model(*,
     std : tuple or float
         The standard deviation of the model.
     n_copies : int
-        The number of copies of the model. The copies can have diffeerent means and stds.
+        The number of copies of the model. The copies can have different
+        means and stds.
         If 0: every entry of the model gets its own mean and std.
-        If 1: The NormalPrior of nifty.re is used.    
-    '''
+        If 1: The ``NormalPrior`` of ``nifty.re`` is used.
+
+    Returns
+    -------
+    Model
+        The constructed normal model.
+    """
     if n_copies == 0:
         mean = to_shape(mean, shape, 'float64')
         std = to_shape(std, shape, 'float64')

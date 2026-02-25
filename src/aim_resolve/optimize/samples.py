@@ -1,3 +1,5 @@
+"""Sample management and initialization utilities for variational inference."""
+
 import jax.numpy as jnp
 from collections.abc import Iterable
 from jax import random
@@ -8,24 +10,24 @@ from typing import Union
 
 
 class MySamples(Samples):
-    '''Extension of nifty.re.Samples to handle components and utility lh_functions for mean and std'''
+    """Extension of nifty.re.Samples to handle components and utility lh_functions for mean and std."""
 
     def mean(self, model = lambda x: x):
-        '''
+        """
         Calculate the mean of the samples using the model. Returns the `samples.pos` for MAP estimates.
         
         Parameters
         ----------
         model : callable
             Function to apply to the samples. Default is identity function.
-        '''
+        """
         if len(self) == 0:
             return model(self.pos)
         else:
             return mean(tuple(model(s) for s in self))
         
     def mean_and_std(self, model = lambda x: x):
-        '''
+        """
         Calculate the mean and standard deviation of the samples using the model.
         Returns `None` for the standard deviation if there are less than 2 samples.
 
@@ -33,7 +35,7 @@ class MySamples(Samples):
         ----------
         model : callable
             Function to apply to the samples. Default is identity function.
-        '''
+        """
         if len(self) < 2:
             mean = self.mean(model)
             return mean, jnp.zeros_like(mean)
@@ -43,7 +45,7 @@ class MySamples(Samples):
 
 
 def get_samples(key, samples, position_or_samples, lh_dict, transition=None, it=None) -> MySamples:
-    '''
+    """
     Get the samples for the `optimize_kl` function and check if they are compatible with the sky model.
 
     Parameters
@@ -67,7 +69,7 @@ def get_samples(key, samples, position_or_samples, lh_dict, transition=None, it=
         Pass random key for the optimization.
     samples : MySamples
         Samples that shall be updated during the optimization.
-    '''
+    """
     models = [v for v in lh_dict.values() if isinstance(v, Model)]
     if domain_keys(models) == set():
         raise ValueError('Check that sky and noise models in the `lh_dict` are of type `nifty.re.Model`')
@@ -114,7 +116,7 @@ def get_samples(key, samples, position_or_samples, lh_dict, transition=None, it=
 
 
 def domain_tree(model: Union[Model, Samples, Vector, dict, Iterable[Model, Samples, Vector, dict]], error=True) -> dict:
-    '''
+    """
     Get the parameter tree of a `nifty.re` model or an iterable of those.
     
     Parameters
@@ -123,7 +125,7 @@ def domain_tree(model: Union[Model, Samples, Vector, dict, Iterable[Model, Sampl
         Model, vector, dict or samples object or a iterable of those.
     error : bool, optional
         If True, raise an error if the model is not of the expected type. Otherwise return an empty dict. Default is True.
-    '''
+    """
     match model:
         case None | False: 
             return {}
@@ -149,13 +151,13 @@ def domain_tree(model: Union[Model, Samples, Vector, dict, Iterable[Model, Sampl
 
 
 def domain_keys(model: Union[Model, Samples, Vector, dict], error=True) -> set[str]:
-    '''Get the keys of the parameter tree (see `domain_tree` function).'''
+    """Get the keys of the parameter tree (see `domain_tree` function)."""
     return set(domain_tree(model, error).keys())
 
 
 
 def model_init(model: Union[Model, Iterable[Model]], error=True) -> Initializer:
-    '''
+    """
     Get the initializer of a `nifty.re` model or a iterable of those.
     
     Parameters
@@ -164,7 +166,7 @@ def model_init(model: Union[Model, Iterable[Model]], error=True) -> Initializer:
         Model or iterable of models.
     error : bool, optional
         If True, raise an error if the model is not of the expected type. Otherwise return an empty Initializer. Default is True.
-    '''
+    """
     match model:
         case None | False: 
             return Initializer({})
@@ -184,7 +186,7 @@ def model_init(model: Union[Model, Iterable[Model]], error=True) -> Initializer:
 
 
 def random_init(key, model: Union[Iterable[Model], Model], pos: Union[Samples, Vector, dict] = {}, factor=0.01) -> Vector:
-    '''
+    """
     Randomly initialize a model using the jax random key. Provide a position vector if some parameters are set already.
 
     Parameters
@@ -197,7 +199,7 @@ def random_init(key, model: Union[Iterable[Model], Model], pos: Union[Samples, V
         Position vector or dictionary to set some parameters by hand. Default is {}.
     factor : float, optional
         Factor to scale the random initialization. Default is 0.01.
-    '''
+    """
     mdl_tree = domain_tree(model)
     pos_tree = {k:v for k,v in domain_tree(pos).items() if k in mdl_tree}
     mdl_init = model_init(model)

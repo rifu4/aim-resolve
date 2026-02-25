@@ -1,3 +1,5 @@
+"""Model subpackage for AIM-Resolve signal and component models."""
+
 from .components import ComponentModel
 from .gaussian import gaussian_model
 from .integer import IntegerPrior, integer_model

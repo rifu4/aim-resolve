@@ -1,3 +1,5 @@
+"""Noise model for AIM-Resolve observations."""
+
 from nifty.re import Initializer, Model
 
 from .prior import inverse_gamma_model
@@ -6,7 +8,10 @@ from .util import check_type
 
 
 class NoiseModel(Model):
-    '''Noise model for the signal. Use `build` function to create the model.'''
+    """Noise model for the signal.
+
+    Use the ``build`` class method to create the model.
+    """
 
     def __init__(self, model, prefix='nm', scaling=False, varcov=False):
         check_type(model, Model)
@@ -30,24 +35,31 @@ class NoiseModel(Model):
 
     @classmethod
     def build(cls, *, shape, parameters={}, prefix='nm', scaling=False, varcov=False, **kwargs):
-        '''
-        Build an inverse noise model from the given parameters.
+        """Build an inverse noise model from the given parameters.
 
         Parameters
         ----------
         shape : tuple
-            Shape of the model (usually the shape of the data)
+            Shape of the model (usually the shape of the data).
         parameters : dict
-            Parameters for model (see inverse gamma model). Default is `{}`
+            Parameters for model (see inverse gamma model). Default is ``{}``.
         prefix : str
-            Prefix for the model. Default is `nm`
+            Prefix for the model. Default is ``'nm'``.
         scaling : bool
-            If true, mulitplies the noise with the scaling function in the likelihood. Default is `False`
+            If true, multiplies the noise with the scaling function in the
+            likelihood. Default is ``False``.
         varcov : bool
-            If true, uses the `VariableCovarianceLikelihood`. Default is `False`
+            If true, uses the ``VariableCovarianceLikelihood``. Default is
+            ``False``.
         kwargs : keyword arguments
-            Additional parameters for the noise (max_std, wgt_fac, ...) that do not belong to the noise model
-        '''
+            Additional parameters for the noise (max_std, wgt_fac, ...) that
+            do not belong to the noise model.
+
+        Returns
+        -------
+        NoiseModel or LazyNoise
+            The constructed noise model.
+        """
         if parameters and (scaling or varcov):
             model = inverse_gamma_model(
                 prefix=None,
@@ -61,7 +73,12 @@ class NoiseModel(Model):
 
 
 class LazyNoise():
-    '''LazyNoise, assume constant noise without any model'''
+    """Lazy noise model assuming constant noise without any model.
+
+    Parameters
+    ----------
+    None
+    """
     def __init__(self):
         self.model = None
         self.prefix = None

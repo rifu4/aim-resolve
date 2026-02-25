@@ -1,3 +1,5 @@
+"""Single image plotting utilities."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,7 +31,7 @@ def plot_image(
         plot_label = True,
         **kwargs,
 ):
-    '''
+    """
     Plot a single 2D image using plt.imshow.
     
     Parameters
@@ -65,7 +67,7 @@ def plot_image(
     marker : dict or dict containing subdicts, optional
         The markers to plot. For one marker it should look like {'x': [...], 'y': [...], ...}. 
         For multiple markers {'m0': {...}, 'm1': {...}, ...}. Default is {}.
-    contour : dict, optional:
+    contour : dict, optional
         The contours to plot. Keywords are passed to plt.contour. Default is {}.
     square : bool, optional
         Whether to plot the image in a square format. Default is False.
@@ -75,7 +77,7 @@ def plot_image(
         Whether to plot the label of the array. Default is True.
     kwargs : additional keyword arguments
         Additional keyword arguments to pass to plt.imshow.
-    '''
+    """
     plot_now = False
     if axes is None:
         figure = plt.figure(figsize=(5,5))

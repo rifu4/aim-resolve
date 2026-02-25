@@ -1,3 +1,10 @@
+"""AIM-Resolve: Astronomical Image Modeling and Reconstruction.
+
+Provides tools for Bayesian image reconstruction of astronomical data,
+including sky modeling, likelihood evaluation, optimization, and
+transition utilities for multi-resolution and multi-frequency workflows.
+"""
+
 from . import enforce_float64
 
 from .fast_resolve import *

@@ -1,3 +1,5 @@
+"""Resolve subpackage for radio interferometric observation and response modeling."""
+
 from .constants import str2rad
 from .model import SignalResponse, PointResponse, TileResponse, ComponentResponse
 from .observation import Observation
