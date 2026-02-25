@@ -14,6 +14,7 @@ def main(base, config, cuda_device, plot_range):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_device)
         os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 
+    import jax
     import aim_resolve as aim
     import numpy as np
 
@@ -54,7 +55,12 @@ def main(base, config, cuda_device, plot_range):
                      aim.plot_arrays(np.where(sky_ref > sky_min, alpha, np.nan), name=f'{nit}_{sky.prefix}_alpha', odir=odir, contour=contours)
 
     # Run the optimization
-    samples, *_ = cfg.optimize_kl(callback=callback)
+    visible_devices = jax.devices()
+
+    samples, *_ = cfg.optimize_kl(
+        callback=callback,
+        devices=visible_devices if len(visible_devices) > 1 else None,
+    )
 
 
 if __name__ == "__main__":
