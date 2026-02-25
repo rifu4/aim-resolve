@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .opt_kl import optimize_kl
 from .samples import domain_keys
-from .util import clean_dict, merge_dicts, split_its, add_dicts, clean_reps, get_it, is_or_contains_type, extend_reps, eval_string, eval_list
+from .util import clean_dict, merge_dicts, split_its, add_dicts, clean_reps, get_it, is_or_contains_type, extend_reps, eval_string, eval_list, fun2mode
 from .yml import yaml_load, yaml_save
 from ..fast_resolve.opt_kl import fast_optimize_kl
 
@@ -13,7 +13,7 @@ from ..fast_resolve.opt_kl import fast_optimize_kl
 class OptimizeKLConfig:
     '''Class to initialize a nifty optimization from a single or multiple yaml configuration files.'''
 
-    def __init__(self, sections, builders, mode='total'):
+    def __init__(self, sections, builders):
         '''
         Initialize the OptimizeKLConfig class.
 
@@ -24,30 +24,17 @@ class OptimizeKLConfig:
         builders : dict
             Dictionary of builder functions. 
         '''
-        match mode:
-            case 'total':
-                self.total = True
-            case 'major' | 'minor':
-                self.total = False
-            case _:
-                raise ValueError('mode has to be either `total`, `major` | `minor`')
-        n_dyn = ['likelihood', 'n_samples', 'draw_linear_kwargs', 'nonlinearly_update_kwargs', 'kl_kwargs', 'sample_mode']
-        self.optkeys = dict(
-            n_iter = ['n_total_iterations'] if self.total else ['n_major_iterations'],
-            static = ['odir', 'position_or_samples', 'key', 'resume'],
-            needed_dyn = n_dyn if self.total else n_dyn + ['n_minor_iterations'],
-            option_dyn = ['constants', 'point_estimates', 'transitions'],
-        )
         self.sections = dict(sections)
         self.interpret_base()
         self.interpret_link()
+        self.interpret_mode()
         self.interpret_reps()
         self.join_opt_stages()
         self.builders = builders(self.sections) if callable(builders) else dict(builders)
 
 
     @classmethod
-    def from_file(cls, fname, builders, mode='total'):
+    def from_file(cls, fname, builders):
         '''
         Import a config file and instantiate the class.
 
@@ -60,7 +47,7 @@ class OptimizeKLConfig:
         '''
         sections = yaml_load(fname)
 
-        return cls(sections, builders, mode)
+        return cls(sections, builders)
 
 
     def to_file(self, fname):
@@ -78,6 +65,8 @@ class OptimizeKLConfig:
 
         yaml_save(dct_lst, fname)
 
+        return
+
 
     def optimize_kl(self, **kwargs):
         '''
@@ -93,10 +82,10 @@ class OptimizeKLConfig:
         os.makedirs(dct['odir'], exist_ok=True)
         self.to_file(os.path.join(dct['odir'], 'opt.yml'))
 
-        if self.total:
-            return optimize_kl(**dct, **kwargs)
-        else:
+        if self.mode == 'fast':
             return fast_optimize_kl(**dct, **kwargs)
+        else:
+            return optimize_kl(**dct, **kwargs)
     
 
     def interpret_base(self):
@@ -106,6 +95,8 @@ class OptimizeKLConfig:
         for sec in dct:
             dct[sec] = get_base(dct[sec], dct)
 
+        return
+
 
     def interpret_link(self):
         '''Replace the `->` entries in all (sub)sections by the content (string) of the section key it points to.'''
@@ -114,28 +105,70 @@ class OptimizeKLConfig:
         for sec in dct:
             dct[sec] = get_link(dct[sec], dct)
 
+        return
+
+
+    def interpret_mode(self):
+        '''Check and get the mode of the likelihood and set the optimization parameters accordingly.'''
+        dct = self.sections
+
+        dct = fun2mode(dct)
+
+        self.opt_params = dict(
+            n_iter = ['n_total_iterations'],
+            static = ['odir', 'position_or_samples', 'key', 'resume'],
+            needed_dyn = ['likelihood', 'n_samples', 'draw_linear_kwargs', 'nonlinearly_update_kwargs', 'kl_kwargs', 'sample_mode'],
+            option_dyn = ['constants', 'point_estimates', 'transitions'],
+        )
+
+        modes = set()
+        for opt_key in filter(lambda x: x[:4] == 'opt.', dct.keys()):
+            lh_key = dct[opt_key].get('likelihood', None)
+            if lh_key is None:
+                raise KeyError(f'key `likelihood` is missing in opt-section `{opt_key}`')
+            if isinstance(lh_key, list):
+                lh_key = lh_key[0]
+            if not lh_key[1:] in dct:
+                raise KeyError(f'section `{lh_key[1:]}` is missing in `self.sections`')
+            mode = dct[lh_key[1:]].get('mode')
+            if mode is None:
+                raise KeyError(f'key `mode` is missing in likelihood section `{lh_key[1:]}`')
+            modes.add(mode)
+        
+        if len(modes) != 1:
+            raise RuntimeError(f'All likelihood modes have to be the same, but got modes `{modes}`.')
+        
+        self.mode = modes.pop()
+        if self.mode == 'fast':
+            self.opt_params['n_iter'] = ['n_major_iterations']
+            self.opt_params['needed_dyn'] += ['n_minor_iterations']
+        
+        return
+
 
     def interpret_reps(self):
         '''Expand the repetitions of all sections starting with `opt.`. Check if all necessary keys are present.'''
         dct = self.sections
 
-        for optsec in filter(lambda x: x[:4] == 'opt.', dct.keys()):
-            for key in self.optkeys['n_iter'] + self.optkeys['needed_dyn']:
-                if key not in dct[optsec]:
-                    raise KeyError(f'key `{key}` is missing in opt section `{optsec}`')
-            for key in self.optkeys['option_dyn']:
-                if key not in dct[optsec]:
-                    dct[optsec][key] = None
+        for opt_key in filter(lambda x: x[:4] == 'opt.', dct.keys()):
+            for key in self.opt_params['n_iter'] + self.opt_params['needed_dyn']:
+                if key not in dct[opt_key]:
+                    raise KeyError(f'key `{key}` is missing in opt section `{opt_key}`')
+            for key in self.opt_params['option_dyn']:
+                if key not in dct[opt_key]:
+                    dct[opt_key][key] = None
 
-            if self.total:
-                [dct[optsec].pop(key) for key in ['n_major_iterations', 'n_minor_iterations'] if key in dct[optsec]]
-                dct[optsec] = get_reps(dct[optsec], dct[optsec]['n_total_iterations'])
-            else:
-                [dct[optsec].pop(key) for key in ['n_total_iterations'] if key in dct[optsec]]
-                n_major = dct[optsec]['n_major_iterations']
+            if self.mode == 'fast':
+                [dct[opt_key].pop(key) for key in ['n_total_iterations'] if key in dct[opt_key]]
+                n_major = dct[opt_key]['n_major_iterations']
                 minor_key = 'n_minor_iterations'
-                n_minor = get_reps({minor_key: dct[optsec][minor_key]}, n_major)[minor_key]
-                dct[optsec] = get_reps(dct[optsec], n_major, n_minor)
+                n_minor = get_reps({minor_key: dct[opt_key][minor_key]}, n_major)[minor_key]
+                dct[opt_key] = get_reps(dct[opt_key], n_major, n_minor)
+            else:
+                [dct[opt_key].pop(key) for key in ['n_major_iterations', 'n_minor_iterations'] if key in dct[opt_key]]
+                dct[opt_key] = get_reps(dct[opt_key], dct[opt_key]['n_total_iterations'])
+
+        return
 
 
     def join_opt_stages(self):
@@ -156,6 +189,8 @@ class OptimizeKLConfig:
 
         for k in filter(lambda k: k != 'opt.0', opt_keys):
             del dct[k]
+        
+        return
     
 
     def make_callable(self, sec, key=None):
@@ -219,7 +254,7 @@ class OptimizeKLConfig:
             case (False, True):
                 raise ValueError(f'Negation `~` has to be used for all or none of the constants/point_estimates')
 
-        if not self.total:
+        if self.mode == 'fast':
             minor_cs = np.cumsum(self.sections['opt.0']['n_minor_iterations'])
             it = np.searchsorted(minor_cs, it, side='right')
 
@@ -246,16 +281,16 @@ class OptimizeKLConfig:
         '''Enable conversion to `dict` to pass everyting to the `optimize_kl` function.'''
         # static
         sopt = self.sections['opt']
-        for key in self.optkeys['static']:
+        for key in self.opt_params['static']:
             if key in sopt:
                 yield key, sopt[key]
 
         # dynamic
         sdyn = self.sections['opt.0']
-        for key in self.optkeys['n_iter']:
+        for key in self.opt_params['n_iter']:
             if key in sdyn:
                 yield key, sdyn[key]
-        for key in self.optkeys['needed_dyn'] + self.optkeys['option_dyn']:
+        for key in self.opt_params['needed_dyn'] + self.opt_params['option_dyn']:
             if key in sdyn:
                 yield key, self.make_callable(sdyn[key], key)
 
@@ -277,72 +312,80 @@ class OptimizeKLConfig:
 
 
 
-def get_base(sub, dct, key_lst=[]):
+def get_base(sec_dct, dct, key_lst=[]):
     '''Recursively replace the `base` entries in all (sub)sections by the content of the section it points to.'''
-    for (key,val) in sub.items():
+    for (key,val) in sec_dct.items():
         if len(key_lst) != len(set(key_lst)):
             raise RuntimeError(f'You are trying a base-loop. Please do not do that :(')
         
         if isinstance(val, dict):
-            sub[key] = merge_dicts([sub[key], get_base(val, dct, key_lst+[key])])
+            sec_dct[key] = merge_dicts([sec_dct[key], get_base(val, dct, key_lst+[key])])
         
         elif key.startswith('base'):
-            sec = dct.copy()
-            sec_keys = []
+            sub_dct = dct.copy()
+            sub_keys = ['self.sections']
             while '/' in val:
-                pre, val = val.split('/', 2)
-                if pre not in sec:
-                    raise RuntimeError(f'the referred section `{pre}` does not exist in `{sec}`')
-                sec = sec[pre]
-                sec_keys += [pre]
-            if val not in sec:
-                raise RuntimeError(f'the referred section `{val}` does not exist in `{sec}')
-            sub = merge_dicts([get_base(sec[val], dct, key_lst+sec_keys+[val]), sub])
+                sub, val = val.split('/', 2)
+                if sub not in sub_dct:
+                    err_sub = f'section `{sub_keys[-1]}`' if len(sub_keys) > 1 else f'`{sub_keys[-1]}`'
+                    raise RuntimeError(f'the referred section `{sub}` does not exist in {err_sub}')
+                sub_dct = sub_dct[sub]
+                sub_keys += [sub]
+            if val not in sub_dct:
+                err_sub = f'section `{sub_keys[-1]}`' if len(sub_keys) > 1 else f'`{sub_keys[-1]}`'
+                raise RuntimeError(f'the referred section `{val}` does not exist in {err_sub}')
+            sec_dct = merge_dicts([get_base(sub_dct[val], dct, key_lst+sub_keys[1:]+[val]), sec_dct])
         
-    return sub
+    return sec_dct
 
 
 
-def get_link(sub, dct):
+def get_link(sec_dct, dct):
     '''Recursively replace the `->` entries in all (sub)sections by the content (string) of the section key it points to.'''
-    for (key,val) in sub.items():
+    for (key,val) in sec_dct.items():
         if isinstance(val, dict):
-            sub[key] = merge_dicts([sub[key], get_link(val, dct)])
+            sec_dct[key] = merge_dicts([sec_dct[key], get_link(val, dct)])
         
         elif isinstance(val, str) and '->' in val:
-            oldval = map(lambda x: x.strip(), val.split('+'))
-            newval = ''
-            for ov in oldval:
-                if ov.startswith('->'):
-                    ov = ov[2:].strip()
-                    ov_dct = deepcopy(dct)
-                    while '/' in ov:
-                        pre, ov = ov.split('/', 2)
-                        if pre not in ov_dct:
-                            raise RuntimeError(f'the referred section `{pre}` does not exist in `{ov_dct}`')
-                        ov_dct = ov_dct[pre]
-                    ov = ov_dct[ov]
-                    if not isinstance(ov, str):
-                        raise ValueError(f'the referred section value `{ov}` has to be a string.')
-                    elif '->' in ov:
+            val = map(lambda x: x.strip(), val.split('+'))
+            new_val = ''
+            for v in val:
+                if v.startswith('->'):
+                    v = v[2:].strip()
+                    sub_dct = deepcopy(dct)
+                    sub_keys = ['self.sections']
+                    while '/' in v:
+                        sub, v = v.split('/', 2)
+                        if sub not in sub_dct:
+                            err_sub = f'section `{sub_keys[-1]}`' if len(sub_keys) > 1 else f'`{sub_keys[-1]}`'
+                            raise RuntimeError(f'the referred section `{sub}` does not exist in {err_sub}')
+                        sub_dct = sub_dct[sub]
+                    if v not in sub_dct:
+                        err_sub = f'section `{sub_keys[-1]}`' if len(sub_keys) > 1 else f'`{sub_keys[-1]}`'
+                        raise RuntimeError(f'the referred section `{v}` does not exist in {err_sub}')
+                    v = sub_dct[v]
+                    if not isinstance(v, str):
+                        raise ValueError(f'the referred section value `{v}` has to be a string.')
+                    elif '->' in v:
                         raise ValueError('recursive links not allowed for now')
-                newval = os.path.join(newval, ov.strip('/'))
-            sub[key] = newval
-    return sub
+                new_val = os.path.join(new_val, v.strip('/'))
+            sec_dct[key] = new_val
+
+    return sec_dct
 
 
 
-def get_reps(sub, total_it, minor_it=None):
+def get_reps(sec_dct, total_it, minor_it=None):
     '''Recursively expand the repetitions of all sections starting with `opt.`.'''
-    for (key,val) in sub.items():
+    for (key,val) in sec_dct.items():
         if isinstance(val, dict):
-            sub[key] = get_reps(val, total_it, minor_it)
+            sec_dct[key] = get_reps(val, total_it, minor_it)
             continue
             
         elif key in ['n_total_iterations', 'n_major_iterations']:
             if not isinstance(val, int) or val < 1:
                 raise TypeError(f'`{key}` has to be of type `int` and larger than 0')
-            sub[key] = val
+            sec_dct[key] = val
             continue
 
         elif isinstance(val, str):
@@ -365,6 +408,6 @@ def get_reps(sub, total_it, minor_it=None):
                         vi = [vi]
                     val[i] = extend_reps(vi, mi)
     
-            sub[key] = val
+            sec_dct[key] = val
 
-    return sub
+    return sec_dct

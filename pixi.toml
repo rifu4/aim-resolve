@@ -1,0 +1,76 @@
+[workspace]
+channels = ["conda-forge"]
+name = "aim-resolve"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.11,<3.13"
+pytest = ">=8.4.2,<9"
+pip = ">=25.2,<26"
+cuda-version = "12.6.*"
+numpy = ">=2.3.2,<3"
+scipy = ">=1.15,<2"
+matplotlib = ">=3.8,<4"
+pyyaml = ">=6.0,<7"
+ipython = ">=8.0,<9"
+jupyter = "*"
+ipykernel = "*"
+ducc0 = "*"
+h5py = "*"
+pandas = "*"
+scikit-learn = "*"
+wandb = "*"
+
+[pypi-dependencies]
+jax = { version = ">=0.4.30,!=0.6", extras = ["cuda12"] }
+jaxlib = ">=0.4.30"
+jaxbind = "*"
+jax-finufft = "*"
+jax-tqdm = "*"
+torch = ">=2.0"
+lightning = ">=2.0"
+neuraloperator = "*"
+segmentation-models-pytorch = "*"
+snakemake = "*"
+nifty8 = { version = ">=8.0.0,<9", extras = ["re"] }
+nifty = { version = ">=9.1.0,<10", extras = ["re"] }
+
+[feature.cpu.dependencies]
+python = ">=3.11,<3.13"
+pytest = ">=8.4.2,<9"
+pip = ">=25.2,<26"
+numpy = ">=2.3.2,<3"
+scipy = ">=1.15,<2"
+matplotlib = ">=3.8,<4"
+pyyaml = ">=6.0,<7"
+ipython = ">=8.0,<9"
+jupyter = "*"
+ipykernel = "*"
+ducc0 = "*"
+h5py = "*"
+pandas = "*"
+scikit-learn = "*"
+wandb = "*"
+
+[feature.cpu.pypi-dependencies]
+jax = ">=0.4.30,!=0.6"
+jaxlib = ">=0.4.30"
+jaxbind = "*"
+jax-finufft = "*"
+jax-tqdm = "*"
+torch = ">=2.0"
+lightning = ">=2.0"
+neuraloperator = "*"
+segmentation-models-pytorch = "*"
+snakemake = "*"
+nifty8 = { version = ">=8.0.0,<9", extras = ["re"] }
+nifty = { version = ">=9.1.0,<10", extras = ["re"] }
+
+[system-requirements]
+cuda = "12.9"
+
+[environments]
+cpu = { features = ["cpu"], no-default-feature = true }

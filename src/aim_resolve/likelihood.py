@@ -12,11 +12,37 @@ from .resolve.observation import Observation
 
 
 
+def likelihood_func(
+        mode,
+        **kwargs,
+):
+    '''
+    Versatile likelihood function -> uses the likelihood specified in the 'mode' parameter
+    
+    Parameters:
+    -----------
+    mode : str
+        Likelihood mode. Available modes are 'image', `fast`, `radio`, `sum`.
+    kwargs : dict
+        Additional keyword arguments passed to the likelihood functions (see below).
+    '''
+    if 'image' in mode:
+        return image_likelihood(**kwargs)
+    elif 'fast' in mode:
+        return fast_likelihood(**kwargs)
+    elif 'radio' in mode:
+        return radio_likelihood(**kwargs)
+    elif 'sum' in mode:
+        return likelihood_sum(**kwargs)
+    else:
+        raise TypeError(f'Unknown likelihood mode. Available modes are `image`, `fast`, `radio`, and `sum`, but got mode `{mode}`.')
+
+
+
 def image_likelihood(*,
         sky,
         data,
         noise = dict(max_std=0.001, parameters=dict()),
-        fun = 'exp',
 ):    
     '''
     Generate a likelihood function for the image data.
@@ -26,12 +52,9 @@ def image_likelihood(*,
     sky : Model
         The sky model input to the likelihood function.
     data : ImageData
-        The data model input to the likelihood function.
+        The image data to be reconstructed.
     noise : dict
         Dictionary containing the noise parameters (see NoiseModel).
-    fun : str, optional
-        Used to differentiate between the different likelihood functions.
-
     '''
     max_std = noise['max_std'] if 'max_std' in noise else 0.001
     noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
@@ -40,7 +63,8 @@ def image_likelihood(*,
 
     lh_dct = dict(
         data = data.noisy_val,
-        model = sky,
+        sky_model = sky,
+        sky_response = sky,
         noise_cov_inv = None,
         noise_std_inv = (max_std * np.max(data.val))**-1,
         noise_model = noise_model,
@@ -54,7 +78,6 @@ def radio_likelihood(*,
         data,
         noise = dict(wgt_fac=1., parameters=dict()),
         wgridding = False,
-        fun = 'radio',
 ):  
     '''
     Generate a likelihood function for the radio data.
@@ -64,20 +87,19 @@ def radio_likelihood(*,
     sky : Model
         The sky model input to the likelihood function.
     data : Observation
-        The data model input to the likelihood function.
+        The radio data to be reconstructed.
     noise : dict
         Dictionary containing the noise parameters (see NoiseModel).
     wgridding : bool
         Whether to use wgridding or not.
-    fun : str, optional
-        Used to differentiate between the different likelihood functions.
     '''
     wgt_fac = noise['wgt_fac'] if 'wgt_fac' in noise else 1.
     noise_model = NoiseModel.build(shape=data.vis.shape, **noise)
 
     lh_dct = dict(
         data = data.vis,
-        model = ComponentResponse(sky, data, wgridding),
+        sky_model = sky,
+        sky_response = ComponentResponse(sky, data, wgridding),
         noise_cov_inv = lambda x: wgt_fac * data.weight * x,
         noise_std_inv = None,
         noise_model = noise_model,
@@ -92,9 +114,7 @@ def fast_likelihood(*,
         psf_kernel_fn = '',
         n_inv_kernel_fn = '',
         noise = dict(parameters=dict()),
-        split = 0,
-        fun = 'fast_radio',
-        **kwargs,
+        split = {},
 ):
     '''
     Generate a fast likelihood function for the radio data (fast-resolve).
@@ -104,65 +124,54 @@ def fast_likelihood(*,
     sky : Model
         The sky model input to the likelihood function.
     data : Observation
-        The data model input to the likelihood function.
-    psf_pixels : int
-        The maximal number of pixels in the PSF.
-    response_kernel : callable
-        The response kernel file. Create a new kernel if not specified.
-    noise_kernel : callable
-        The noise kernel file. Create a new kernel if not specified.
+        The radio data to be reconstructed.
+    psf_kernel_fn : callable
+        The psf kernel filename. Create a new kernel if not specified.
+    n_inv_kernel_fn : callable
+        The noise kernel filename. Create a new kernel if not specified.
     noise : dict
         Dictionary containing the noise parameters (see NoiseModel).
-    fun : str, optional
-        Used to differentiate between the different likelihood functions.
+    split : dict
+        The parameters for kernel-splitting. Needs `size` and `factor`. Default is `{}` (no split).
     ''' 
-    observations = [data, ]
-    for k,v in filter(lambda item: 'data' in item[0], kwargs.items()):
-        observations.append(v)
+    if isinstance(data, Observation):
+        data = data.to_resolve_obs()
+    obs = data.to_double_precision()
 
-    RNRs, RNR_ls, data = [], [], []
-    for i,obs in enumerate(observations):
-        if isinstance(obs, Observation):
-            obs = obs.to_resolve_obs()
-        obs = obs.to_double_precision()
+    print('sky model shape:', sky.target.shape)
 
-        R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
-        RNRs.append(RNR)
-        RNR_ls.append(RNR_l)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
 
-        N_inv = makeOp(obs.weight)
-        data.append(R.adjoint(N_inv(obs.vis)).val)
+    N_inv = makeOp(obs.weight)
+    data = R.adjoint(N_inv(obs.vis)).val
+    print('dirty image shape:', data.shape)
 
     psf_conv = PSFConvolve.build(
         sky = sky,
-        RNR_l = RNR_ls[0] if len(RNR_ls) == 1 else RNR_ls,
+        RNR_l = RNR_l,
         psf_kernel_fn = psf_kernel_fn,
         split = split,
     )
 
     sky_response = NInvConvolve.build(
         psf_conv = psf_conv,
-        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        RNR = RNR,
         n_inv_kernel_fn = n_inv_kernel_fn,
         noise = noise,
     )
 
-    data = np.concatenate(data, axis=0)
-    print('dirty image shape:', data.shape)
-
     lh_dct = dict(
         data = jnp.array(data),
-        sky = sky,
-        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        sky_model = sky,
         sky_response = sky_response,
         noise_model = sky_response.noise_model,
+        RNR = RNR,
     )
     return lh_dct
 
 
 
-def likelihood_sum(*,
-        fun = 'sum',
+def likelihood_sum(
         **lhs,
 ):
     '''
@@ -170,8 +179,6 @@ def likelihood_sum(*,
 
     Parameters
     ----------
-    fun : str
-        Used to differentiate between the different likelihood functions.
     lhs : dict
         Dictionary containing the likelihood functions to sum.
     '''

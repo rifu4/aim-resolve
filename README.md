@@ -12,7 +12,7 @@ Initialized with a single background model capturing the whole field of view in 
 
 - **(b) Modeling**: This step creates a model configuration file for the subsequent reconstruction iteration by adding the new components to the background model.
 
-- **(c) Pre-fit and Separation**: The new model is first fitted to the previous reconstructed image. By masking the background, this step efficiently separates the point sources and extended objects from the background.
+- **(c) Separation and Pre-fit**: The new model is first fitted to the previous reconstructed image. By masking the background, this step efficiently separates the point sources and extended objects from the background.
 
 - **(d) Reconstruction**: The pre-fitted model is further optimized on the data. The individual components can be added together to compose a full sky image, allowing for object detection in the next iteration.
 
@@ -23,16 +23,23 @@ These individual steps are implemented as rules in the [snakefile](steering/snak
 ## Installation
 
 Clone the repository and install aim-resolve via
-```console
+```
 git clone https://github.com/rifu4/aim-resolve.git
 cd aim-resolve
-pip install -e .
+pip install .
 ```
 
 To apply the method to radio interferometric data, [resolve](http://ift.pages.mpcdf.de/resolve/) needs to be installed via
-```console
+```
 git clone --recursive https://gitlab.mpcdf.mpg.de/ift/resolve
 cd resolve
+pip install .
+```
+
+To use multi-frequency models, [UBIK](https://github.com/NIFTy-PPL/J-UBIK) needs to be installed via
+```
+git clone https://github.com/NIFTy-PPL/J-UBIK
+cd j-ubik
 pip install .
 ```
 
@@ -43,44 +50,56 @@ pip install .
 
 There are 3 different modes the pipeline can be used with:
 
-- **exp**: lognormal model and image data
+- `image`: lognormal model and image data (unit response)
 
-- **radio**: lognormal model and radio interferometric data
+- `radio`: lognormal model and radio interferometric data (radio response)
 
-- **fast-radio**: same as radio, but using the fast-resolve algorithm
+- `fast`: same as radio, but using the fast-resolve algorithm for inference
 
-The mode needs to be specified along with the to be reconstructed data in the snakemake [config](steering/config/snake.yml) file. Moreover, one can set the resolution and field of view of the model, the output directory, the predicting U-net, the total number of iterations, and various other modelling and optimization parameters.
+The mode needs to be specified at the beginning of the snakemake [config](steering/config/snake.yml) file along with the output directory, the jax random key and the total number of pipelne iterations. Moreover, the config file sets the resolution and field of view of the background model as well as the to be reconstructed data, and various other modeling and optimization parameters.
 
 To run the snakemake pipeline, change directory to the `steering` folder and run
 ```
 snakemake --cores 1
 ```
-
-
-### Generate image data
-
-To generate image data, specify the desired data parameters in the data [config](steering/data/config/data.yml) file. Then, change directory to the `steering/data` folder and run
+Moreover, it is possible to specify a different configuration file and to run on a GPU via 
 ```
-python3 data_gen.py --config config/data.yml
+snakemake --cores 1 --config file=<cfg-file> --cuda_device=0
 ```
 
 
-### Train the U-Net on image data
+### Extend aim-resolve results
 
-To train the U-Net on generated image data, specify the desired data and training parameters in the train [config](steering/train/config/unet.yml) file. Then, change directory to the `steering/train` folder and run
+After the end of an aim-resolve pipeline run, it possible to extend the final multi-component model e.g. to multiple frequencies or to increase the resolution of the detected components. To do so, use a extension config file (e.g. the [zoom](steering/nifty/config/zoom_ext.yml) extension file) to specify the desired extension mode (`freq` or `zoom`) and parameters, the output directory of the pipeline run, and the model configuration file to start from. Inside the `steering` folder run
 ```
-python3 train_model.py --config config/unet.yml
+python3 nifty/extend_rec.py --config <ext-file> --cuda_device 0
 ```
 
 
 ### Optimize multi-component models using NIFTy
 
-To run a NIFTy optimization with a pre-defined multi-component model, specify the model and optimization parameters in the desired NIFTy config file, e.g. the [CygnusA](steering/nifty/config/cyg.yml) config file. Then, change directory to the `steering/nifty` folder and run
+In general, it is possible to run a NIFTy optimization with a pre-defined multi-component model. Tod do so, specify the model and optimization parameters in the desired NIFTy config file (e.g. the [CygnusA](steering/nifty/config/cyg.yml) config file). Inside the `steering` folder run
 ```
-python3 nifty_rec.py --config config/cyg.yml --mode total
+python3 nifty/nifty_rec.py --config <cfg-file> --cuda_device 0
 ```
-where `--mode` has to be set to total or major for the mode (exp, radio) and fast-radio, respectively.
+
+
+### Generate image data
+
+To generate image data, specify the desired data parameters in the data [config](steering/data/config/data.yml) file. Inside the `steering` folder run
+```
+python3 data/data_gen.py --config <data-file>
+```
+
+
+### Train the U-Net on image data
+
+To train the U-Net on generated image data, specify the desired data and training parameters in the train [config](steering/train/config/unet.yml) file. Inside the `steering` folder run
+```
+python3 train/train_model.py --config <train-file>
+```
+
 
 ## References
 
-papers
+The method is further explained in the [aim-resolve](https://arxiv.org/abs/2512.04840) paper.

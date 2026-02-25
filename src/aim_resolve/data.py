@@ -3,13 +3,35 @@ from .resolve.observation import Observation
 
 
 
+def data_func(
+        mode,
+        **kwargs,
+):
+    '''
+    Versatile data function -> uses the data specified in the 'mode' parameter
+    
+    Parameters:
+    -----------
+    mode : str
+        Data mode. Available modes are 'image' and `radio`.
+    kwargs : dict
+        Additional keyword arguments passed to the data functions (see below).
+    '''
+    if 'image' in mode:
+        return image_data(**kwargs)
+    elif 'radio' in mode:
+        return radio_data(**kwargs)
+    else:
+        raise TypeError(f'Unknown data mode. Available modes are `image` and `radio`, but got mode `{mode}`.')
+
+
+
 def image_data(*,
         fname,
         odir = '',
         idx = None,
         key = 42,
         max_std = 0.001,
-        fun = 'exp',
 ):
     '''
     Load image data from a file and add noise to it.
@@ -27,8 +49,6 @@ def image_data(*,
         The random seed to use for generating noise, by default 42
     max_std : float, optional
         The maximum standard deviation of the noise to add, by default 0.001
-    fun : str, optional
-        Used to differentiate between the different data functions.
     '''
     try:
         img_data = ImageDataGenerator.load(fname, odir, dtype='float64')
@@ -47,7 +67,6 @@ def radio_data(*,
         freq = None,
         nrow = None,
         prec = 'double',
-        fun = 'radio',
 ):
     '''
     Load a radio observation from a file. Uses the Observation class to load the data.
@@ -62,8 +81,6 @@ def radio_data(*,
         Use only a subset of rows, by default None
     prec : str, optional
         The precision of the data, by default 'double'
-    fun : str, optional
-        Used to differentiate between the different data functions.
     '''
     obs = Observation.load(fname)
 

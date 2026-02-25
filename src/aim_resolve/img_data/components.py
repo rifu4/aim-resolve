@@ -68,18 +68,17 @@ class ComponentGenerator(Model):
         func : str, optional
             Function to apply to the signal, by default 'exp'
         '''
-        grid = SignalGrid.build(**grid)
-        space = dict(shape=grid.shape, fov=grid.fov)
-
-        background = BackgroundGenerator.build(space=space, func=func, **background)
+        background = BackgroundGenerator.build(grid=grid, func=func, **background)
 
         if points:
-            points = PointGenerator.build(space=space, func=func, **points)
+            points = PointGenerator.build(grid=grid, func=func, **points)
 
         if tiles:
-            tiles = TileGenerator.build(space=space, func=func, **tiles)
+            tiles = TileGenerator.build(grid=grid, func=func, **tiles)
         
         if objects:
-            objects = ObjectGenerator.build(space=space, func=func, **objects)
+            objects = ObjectGenerator.build(grid=grid, func=func, **objects)
+
+        grid = SignalGrid.build(**grid)
 
         return cls(grid, background, points, tiles, objects)

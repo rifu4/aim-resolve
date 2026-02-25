@@ -4,12 +4,12 @@ from functools import partial
 from jax import vmap
 
 from .observation import Observation
-from ..img_data.space import SignalSpace
+from ..model.grid import SignalGrid
 from ..model.util import check_type
 
 
 
-def point_response(x, in_coos, in_space, observation):
+def point_response(x, in_coos, in_grid, observation):
     '''
     Map one or more point sources from their coordinates to the UV-space.
 
@@ -21,17 +21,17 @@ def point_response(x, in_coos, in_space, observation):
         The coordinates of the points
     obs : Observation
         The radio observation
-    space : SignalSpace
-        The SignalSpace the point sources are defined in
+    grid : SignalGrid
+        The SignalGrid the point sources are defined in
     '''
-    check_type(in_space, SignalSpace)
+    check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
 
     if x.ndim == 2:
-        return one_point_response(x, in_coos, in_space.dis, observation)
+        return one_point_response(x, in_coos, in_grid.dis, observation)
     else:
         vmap_one_point = vmap(one_point_response, in_axes=(0, 0, None, None))
-        res = vmap_one_point(x, in_coos, in_space.dis, observation)
+        res = vmap_one_point(x, in_coos, in_grid.dis, observation)
         return jnp.sum(res, axis=0)
     
 
@@ -56,13 +56,13 @@ def one_point_response(
 
 
 
-def signal_response(in_space, observation, wgridding=False, epsilon=1e-9):
+def signal_response(in_grid, observation, wgridding=False, epsilon=1e-9):
     '''
     Apply the signal response to one or more signals
     
     Parameters
     ----------
-    in_space : SignalSpace
+    in_grid : SignalGrid
         The input space of the signal
     observation : Observation
         The radio observation
@@ -71,23 +71,23 @@ def signal_response(in_space, observation, wgridding=False, epsilon=1e-9):
     epsilon : float, optional
         The tolerance for the response function, by default 1e-9
     '''
-    check_type(in_space, SignalSpace)
+    check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
 
     if wgridding:
-        return ducc_response(in_space, observation, wgridding, epsilon)
+        return ducc_response(in_grid, observation, wgridding, epsilon)
     else:
-        return finu_response(in_space, observation, epsilon)
+        return finu_response(in_grid, observation, epsilon)
     
 
 
-def ducc_response(in_space, observation, wgridding=True, epsilon=1e-9):
+def ducc_response(in_grid, observation, wgridding=True, epsilon=1e-9):
     '''
     Apply the ducc response to one signal. Does not work with multiple signals.
     
     Parameters
     ----------
-    in_space : SignalSpace
+    in_grid : SignalGrid
         The input space of the signal
     observation : Observation
         The radio observation
@@ -97,25 +97,22 @@ def ducc_response(in_space, observation, wgridding=True, epsilon=1e-9):
         The tolerance for the ducc response, by default 1e-9
     '''
     from jaxbind.contrib import jaxducc0
-    check_type(in_space, SignalSpace)
+    check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
-    if in_space.n_copies > 1:
+    if in_grid.n_copies > 1:
         raise ValueError('ducc response cannot vmap over multiple signals')
 
     freq = observation.freq
     uvw = observation.uvw
-    uvw[:,:2] = rotate(uvw[:,:2], in_space.rot)
-    cen = in_space.cen * np.array([1,-1])
-    cen = rotate(cen, in_space.rot)
-    vol = in_space.dis.prod()
+    vol = in_grid.dis.prod()
 
     wg = jaxducc0.get_wgridder(
-        pixsize_x = in_space.dis[0],
-        pixsize_y = in_space.dis[1],
-        npix_x = in_space.shape[0],
-        npix_y = in_space.shape[1],
-        center_x = cen[0],
-        center_y = cen[1],
+        pixsize_x = in_grid.dis[0],
+        pixsize_y = in_grid.dis[1],
+        npix_x = in_grid.shape[0],
+        npix_y = in_grid.shape[1],
+        center_x = in_grid.cen[0],
+        center_y = - in_grid.cen[1],
         do_wgridding = wgridding,
         epsilon = epsilon,
         nthreads = 1,
@@ -132,13 +129,13 @@ def ducc_response(in_space, observation, wgridding=True, epsilon=1e-9):
 
 
 
-def finu_response(in_space, observation, epsilon=1e-9):
+def finu_response(in_grid, observation, epsilon=1e-9):
     '''
     Apply the finufft response to one or more signals
     
     Parameters
     ----------
-    in_space : SignalSpace
+    in_grid : SignalGrid
         The input space of the signal
     observation : Observation
         The radio observation
@@ -146,21 +143,19 @@ def finu_response(in_space, observation, epsilon=1e-9):
         The tolerance for the finufft response, by default 1e-9
     '''
     from jax_finufft import nufft2
-    check_type(in_space, SignalSpace)
+    check_type(in_grid, SignalGrid)
     check_type(observation, Observation)
-    if in_space.n_copies > 1:
+    if in_grid.n_copies > 1:
         raise ValueError('finu response cannot vmap over multiple signals yet')
 
     speedoflight = 299792458.0
     freq = observation.freq
     uvw = observation.uvw
-    uvw[:,:2] = rotate(uvw[:,:2], in_space.rot)
-    cen = in_space.cen * np.array([1,-1])
-    cen = rotate(cen, in_space.rot)
-    vol = in_space.dis.prod()
+    cen = in_grid.cen * np.array([1,-1])
+    vol = in_grid.dis.prod()
 
     uvw = np.transpose((uvw[..., None] * freq / speedoflight), (0, 2, 1)).reshape(-1, 3)
-    uv = (2 * np.pi * uvw[:, :2] * in_space.dis * np.array([1, -1])) % (2 * np.pi)
+    uv = (2 * np.pi * uvw[:, :2] * in_grid.dis * np.array([1, -1])) % (2 * np.pi)
     u, v = uv.T
 
     def apply_finu(x):

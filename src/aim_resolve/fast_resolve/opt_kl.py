@@ -1,6 +1,7 @@
 import os
 import logging
 import pickle
+import dataclasses
 from os import makedirs
 from typing import Callable, Optional, Union
 
@@ -19,10 +20,26 @@ from ..optimize.samples import MySamples, get_samples
 
 
 
+class SkyResidualModel(Model):
+    sky_response: Callable = dataclasses.field(metadata=dict(static=True))
+    old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=True))
+    residual_data: ArrayLike = dataclasses.field(metadata=dict(static=True))
+
+    def __init__(self, sky_response, old_reconstruction, residual_data):
+        self.sky_response = sky_response
+        self.old_reconstruction = old_reconstruction
+        self.residual_data = residual_data
+        super().__init__(domain=sky_response.domain, init=sky_response.init)
+
+    def __call__(self, x):
+        return self.sky_response(x, self.old_reconstruction, self.residual_data)
+
+
+
 def my_lh(*, sky_response, old_reconstruction, residual_data, **kwargs):
     '''fast-resolve likelihood function. It builds a likelihood at each iteration.'''
 
-    model = Model(lambda x: sky_response(x, old_reconstruction, residual_data), domain=sky_response.domain, init=sky_response.init)
+    model = SkyResidualModel(sky_response, old_reconstruction, residual_data)
 
     logger.setLevel(logging.ERROR)
     lh = Gaussian(jnp.broadcast_to(0.0, residual_data.shape)).amend(model)
@@ -57,6 +74,9 @@ def fast_optimize_kl(
     resume: Union[str, bool] = False,
     callback: Optional[Callable[[Samples, OptimizeVIState], None]] = None,
     odir: Optional[str] = None,
+    devices: Optional[list] = None,
+    kl_device_map='shard_map',
+    residual_device_map='shard_map',
 ) -> tuple[MySamples, OptimizeVIState, int]:
     '''
     One-stop-shop for fast-resolve approximation with major and minor cycles.
@@ -66,11 +86,11 @@ def fast_optimize_kl(
     likelihood: dict or callable
         Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
         - data: array-like
-        - sky: Model
-        - RNR: callable
-        - sky_response: callable
+        - sky_model: Model
+        - sky_response: Model
         - old_reconstruction: array-like
         - residual_data: array-like
+        - RNR: callable
     key : int or array-like
         Random key. If an integer is passed, it is used to seed a random key.
     n_major_iterations : int
@@ -133,6 +153,26 @@ def fast_optimize_kl(
         optimization state.
     odir : str or None
         Path at which all output files are saved.
+    devices : list of devices or None
+        Devices over which the samples are mapped. If `None` only the
+        default device is used. To use all detected devices pass
+        jax.devices(). Generally the samples needs to be evenly
+        distributable over the devices. For details see the descriptions of
+        the `kl_device_map` and `residual_device_map` arguments.
+    kl_device_map : str
+        Map function used for mapping KL minimization over the devices
+        listed in `devices`. `kl_device_map` can be 'shard_map', 'pmap', or
+        'jit'. If set to 'pmap', 2*n_samples need to be equal to the number
+        of devices. For all other maps the samples needs to be equally
+        distributable over the devices.
+    residual_device_map : str
+        Map function used for mapping sampling over the devices listed in
+        `devices`. `residual_device_map` can be 'shard_map', 'pmap', or
+        'jit'. If set to 'pmap', 2*n_samples need to be equal to the number
+        of devices. If only linear samples are drawn ,'pmap' also works if
+        n_samples equals the number of devices. For the other maps it is
+        sufficient if 2*n_samples equals the number of devices, or
+        n_samples can be evenly divided by the number of devices.
 
     Returns
     -------
@@ -169,7 +209,6 @@ def fast_optimize_kl(
             f.write(msg)
 
     key = random.PRNGKey(key) if isinstance(key, int) else key
-    jax.clear_caches()
 
     opt_vi = MyOptimizeVI(
         lh_fun=my_lh,
@@ -179,6 +218,9 @@ def fast_optimize_kl(
         residual_map=residual_map,
         kl_reduce=kl_reduce,
         mirror_samples=mirror_samples,
+        devices=devices,
+        kl_device_map=kl_device_map,
+        residual_device_map=residual_device_map,
     )
 
     if opt_vi_st is None or len(opt_vi_st.config) == 0:
@@ -211,11 +253,13 @@ def fast_optimize_kl(
         key, samples = get_samples(key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit)
 
         if opt_vi_st.nit > 0:
-            sub_val = samples.mean(lh_i['sky'])
+            sub_val = samples.mean(lh_i['sky_model'])
             residual_data = lh_i['data'] - apply_exact_response(lh_i['RNR'], sub_val)
 
         lh_i['old_reconstruction'] = sub_val
         lh_i['residual_data'] = residual_data
+
+        jax.clear_caches()
 
         last_mn = opt_vi_st.nit - sum(get_at_nit(n_minor_iterations, mj) for mj in range(i_mj))
     
@@ -230,9 +274,7 @@ def fast_optimize_kl(
                     pickle.dump((samples, opt_vi_st._replace(config={}), i_mj+1), f)
                 with open(sanity_fn, 'a') as f:
                     f.write(mj_msg + kl_msg)
-            if not callback == None:
+            if callback is not None:
                 callback(samples, opt_vi_st, i_mj+1)
-
-        jax.clear_caches()
 
     return samples, opt_vi_st, n_major_iterations

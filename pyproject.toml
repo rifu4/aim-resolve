@@ -30,6 +30,7 @@ dependencies = [
     "lightning",
     "matplotlib",
     "neuraloperator",
+    "nifty[re]",
     "nifty8[re]",
     "pandas",
     "PyYAML",

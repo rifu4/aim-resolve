@@ -44,16 +44,15 @@ def prior_model(
         The power spectrum of the correlated field model. Otherwise None.
     '''
     from .grid import SignalGrid, PointGrid
-    from ..img_data.space import SignalSpace, PointSpace
 
     check_type(prefix, str)
-    check_type(grid, (SignalGrid, PointGrid, SignalSpace, PointSpace))
+    check_type(grid, (SignalGrid, PointGrid))
     check_type(n_copies, int)
 
     pspec = None
     match set(i0_params.keys()):
         case k if k.issubset(CFM_KEYS):
-            check_type(grid, (SignalGrid, SignalSpace))
+            check_type(grid, SignalGrid)
             model, pspec = correlated_field_model(
                 prefix=prefix,
                 shape=grid.shape,
@@ -76,7 +75,7 @@ def prior_model(
                 **i0_params
             )
         case k if k.issubset(GSM_KEYS):
-            check_type(grid, (SignalGrid, SignalSpace))
+            check_type(grid, SignalGrid)
             model = gaussian_model(
                 prefix=prefix,
                 shape=grid.shape,

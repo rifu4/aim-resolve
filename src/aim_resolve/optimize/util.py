@@ -306,3 +306,16 @@ def check_dict(dct, needed, optional=[]):
             if key not in dct:
                 raise ValueError(f'key `{key}` is missing in dictionary')
     return dct
+
+
+
+def fun2mode(dct):
+    for sec in dct:
+        if 'fun' in dct[sec]:
+            fun = dct[sec].pop('fun')
+            if 'lh' in sec:
+                fun = 'fast' if 'fast' in fun else 'radio' if 'radio' in fun else 'image'
+            if 'data' in sec:
+                fun = 'radio' if 'radio' in fun else 'image'
+            dct[sec]['mode'] = fun
+    return dct

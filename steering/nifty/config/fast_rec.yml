@@ -1,0 +1,154 @@
+opt:
+  odir: nifty/runs/fast_rec
+  key: 4
+
+---
+
+opt.0:
+  base: base_opt.0
+  likelihood: =lh.0
+  n_major_iterations: 3
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 9
+      maxiter: 10
+  
+lh.0:
+  sky: =sky.0
+  data: =data.0
+  psf_kernel_fn: runs/kernels/pk_radio512_1deg.pkl
+  n_inv_kernel_fn: runs/kernels/nk_radio512_1deg.pkl
+  noise:
+    prefix: nm.0
+    parameters:
+      mean: 1.1
+      mode: 1.0
+    scaling: True
+  mode: fast
+
+data.0:
+  fname: data/runs/files/radio512_1deg.pkl
+  mode: radio
+
+grid_bg:
+  space: [512, 512]
+  fov: [1deg, 1deg]
+
+sky.0:
+  prefix: sky.0
+  background: =sky_bg.0
+
+sky_bg.0:
+  prefix: bg.0
+  grid:
+    base: grid_bg
+  params:
+    base: params_sf
+  offset: 12
+
+---
+
+opt.1:
+  base: base_opt.0
+  likelihood: =lh.1
+  transitions: =trans.1
+  n_major_iterations: 3
+  n_minor_iterations: 1
+  n_samples: 0
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-06
+      cg_kwargs:
+        name: null
+      miniter: 9
+      maxiter: 10
+
+lh.1:
+  sky: =sky.1
+  data: =data.0
+  psf_kernel_fn: runs/kernels/pk_radio512_1deg.pkl
+  n_inv_kernel_fn: runs/kernels/nk_radio512_1deg.pkl
+  noise:
+    prefix: nm.1
+    parameters:
+      mean: 1.1
+      mode: 1.0
+    scaling: True
+  mode: fast
+
+sky.1:
+  prefix: sky.1
+  background: =sky_bg.1
+  p0.1: =sky_p0.1
+  o0.1: =sky_o0.1
+  o1.1: =sky_o1.1
+  t0.1: =sky_t0.1
+
+sky_bg.1:
+  prefix: bg.1
+  grid:
+    base: grid_bg
+  params:
+    base: params_sf
+  offset: 12
+
+sky_p0.1:
+  prefix: p0.1
+  point_grid:
+    coordinates: [[-241.5, -144.5], [-231.5, -144.5], [-207.5, -35.5], [-173.5, -79.5],
+      [-139.5, -37.5], [-134.5, -99.5], [-109.5, -125.5], [-82.5, 237.5], [-45.5,
+        225.5], [5.5, 202.5], [26.5, 210.5], [102.5, 57.5], [165.5, -69.5], [215.5,
+        -244.5], [236.5, -38.5]]
+    n_copies: 15
+  grid:
+    space: [512, 512]
+  freq: [1]
+  params:
+    base: params_ps
+  offset: [9.5, 10.0, 7.3, 8.8, 9.7, 10.3, 11.7, 3.0, 3.0, 3.0, 8.0, 9.5, 13.2, 3.0,
+    8.7]
+
+sky_o0.1:
+  prefix: o0.1
+  grid:
+    space: [176, 124]
+    center: [-32, -16]
+  freq: [1]
+  params:
+    base: params_sf
+  offset: 13.8
+
+sky_o1.1:
+  prefix: o1.1
+  grid:
+    space: [40, 30]
+    center: [100, -80]
+  freq: [1]
+  params:
+    base: params_sf
+  offset: 16.2
+
+sky_t0.1:
+  prefix: t0.1
+  tile_grid:
+    space: [32, 32]
+    center: [[150, -79], [-39, -128], [239, -30], [-43, 21]]
+    n_copies: 4
+  grid:
+    space: [512, 512]
+  freq: [1]
+  params:
+    base: params_sf
+  offset: [15.3, 14.6, 6.7, 8.4]
+
+trans.1:
+  lh_old: =lh.0
+  lh_new: =lh.1
+  mode: anew

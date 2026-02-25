@@ -2,12 +2,11 @@ import os
 import click
 
 @click.command()
-@click.option('--base', default='config/base.yml', help='Path to the base YAML config file')
 @click.option('--config', required=True, help='Path to the YAML config file')
-@click.option('--mode', required=True, help='Mode for NIFTy optimization, "exp", "radio" or "fast-radio"')
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
+@click.option('--plot_range', default=1e4, help='Brigthness range for plotting the sky models')
 
-def main(base, config, mode, cuda_device):
+def main(config, cuda_device, plot_range):
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:
@@ -18,10 +17,16 @@ def main(base, config, mode, cuda_device):
     import aim_resolve as aim
     import numpy as np
 
-    jax.config.update("jax_enable_x64", True)
+    # load the config file
+    cfg_dct = aim.yaml_load(config)
+    odir = cfg_dct['odir']
+
+    # Create the new config file to perform the extension
+    base, ext_file = aim.extension_func(**cfg_dct)
+    # exit()
 
     # Instantiate the optimize-config class
-    cfg = aim.OptimizeKLConfig.from_file((base, config), aim.get_builders, mode)
+    cfg = aim.OptimizeKLConfig.from_file((base, ext_file), aim.get_builders)
     odir = cfg.sections['opt']['odir'] + '/plots'
 
     # Initialize all signal models for each iteration
@@ -45,7 +50,7 @@ def main(base, config, mode, cuda_device):
         for sky in sky_models:
             if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
                 sky_val = samples.mean(sky)
-                sky_min = sky_val.max()/5e3
+                sky_min = sky_val.max()/plot_range
                 aim.plot_arrays(sky_val, name=f'{nit}_{sky.prefix}', odir=odir, norm='log', rows=1, vmin=sky_min)
                 if sky.freq.size > 1:
                      sky_ref = samples.mean(sky.ref_freq_model)
@@ -57,7 +62,12 @@ def main(base, config, mode, cuda_device):
                      aim.plot_arrays(np.where(sky_ref > sky_min, alpha, np.nan), name=f'{nit}_{sky.prefix}_alpha', odir=odir, contour=contours)
 
     # Run the optimization
-    samples, *_ = cfg.optimize_kl(callback=callback)
+    visible_devices = jax.devices()
+
+    samples, *_ = cfg.optimize_kl(
+        callback=callback,
+        devices=visible_devices if len(visible_devices) > 1 else None,
+    )
 
 
 if __name__ == "__main__":

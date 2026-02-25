@@ -1,10 +1,10 @@
 ---
 
-name: zoom512_10
-odir: runs/files
+name: test512_10
+odir: data/runs/files
 dtype: float32
 
-seed: 11
+seed: 14
 n_copies: 10
 batch_size: 100
 
@@ -13,9 +13,8 @@ batch_size: 100
 parameters:
 
   grid:
-    space: [256, 256]
+    space: [512, 512]
     fov: [2, 2]
-    factor: 2
 
   background:
     i0:
@@ -58,19 +57,19 @@ parameters:
     masks:
       m_min: 20
       m_max: 100
-    zoom:
-      u_min: 0.5
-      u_max: 1
+    # zoom:
+    #   u_min: 0.5
+    #   u_max: 1
 
   func: exp
 
 ---
 
 plot:
-  odir: runs/plots
+  odir: data/runs/plots
   n_copies: 10
-  grid: True
-  label: True
+  grid: False
+  label: False
   cmap: inferno
   norm: [log, linear, linear]
   vmin: [~, 0, 0]

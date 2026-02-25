@@ -7,10 +7,10 @@ from nifty.re import Model, Vector
 from typing import Callable
 
 from .jax_fun import rotate_data, flip_data
-from .map import map_tiles
-from ..model.prior import uniform_model
+from ..model.grid import SignalGrid
+from ..model.map import map_array
 from ..model.normal import normal_model
-from .space import SignalSpace
+from ..model.prior import uniform_model
 from ..model.util import check_type
 from ..optimize.samples import domain_tree, model_init
 
@@ -20,14 +20,14 @@ from ..optimize.samples import domain_tree, model_init
 class ObjectGenerator(Model):
     '''Generate a object model. Use `build` function to create the model.'''
 
-    def __init__(self, space, i0, masks, zoom=None, func=jnp.exp):
-        check_type(space, SignalSpace)
+    def __init__(self, grid, i0, masks, zoom=None, func=jnp.exp):
+        check_type(grid, SignalGrid)
         check_type(i0, Model)
         check_type(masks, ArrayLike)
         check_type(zoom, (Model, type(None)))
         check_type(func, (Callable, type(None)))
 
-        self.space = space
+        self.grid = grid
         self.i0 = i0
         self.masks = masks
         self.zoom = zoom
@@ -43,10 +43,14 @@ class ObjectGenerator(Model):
         mk_val = rotate_data(mk_val, random.randint(key, (), 0, 4))
         mk_val = flip_data(mk_val, random.randint(key, (), 0, 4))
 
-        mk_dis = self.space.fov / mk_val.shape
+        zoom = self.grid.shape[0] / mk_val.shape[0]
         if self.zoom:
-            mk_dis *= self.zoom(x)
-        mk_val = map_tiles(mk_val, mk_dis, jnp.zeros((2,)), jnp.zeros(()), self.space)
+            raise NotImplementedError("Zoom not implemented yet.")
+        
+        in_shape = out_shape = tuple(int(v*zoom) for v in mk_val.shape) if zoom < 1 else mk_val.shape
+        in_start = out_start = jnp.array([0, 0])
+
+        mk_val = map_array(mk_val, 1, 1, in_shape, out_shape, in_start, out_start, zoom)
 
         i0_val = self.i0(x)
         if self.func:
@@ -58,14 +62,14 @@ class ObjectGenerator(Model):
         return jnp.stack((x_val, jnp.zeros(x_val.shape), y_val), axis=0)
 
     @classmethod
-    def build(cls, *, space, i0, masks, zoom=None, func='exp'):
+    def build(cls, *, grid, i0, masks, zoom=None, func='exp'):
         '''
         Build a object generator model.
         
         Parameters
         ----------
-        space : dict
-            Dictionary containing the signal space parameters (see SignalSpace)
+        grid : dict
+            Dictionary containing the signal grid parameters (see SignalGrid)
         i0 : dict
             Dictionary containing the prior model parameters of the signal (see prior_model)
         masks : dict
@@ -76,7 +80,7 @@ class ObjectGenerator(Model):
         func : str, optional
             Function to apply to the signal, by default 'exp'
         '''
-        space = SignalSpace.build(**space)
+        grid = SignalGrid.build(**grid)
 
         i0 = normal_model(
             prefix = 'og i0',
@@ -94,7 +98,7 @@ class ObjectGenerator(Model):
         if func:
             func = getattr(jnp, func, None)
 
-        return cls(space, i0, masks, zoom, func)
+        return cls(grid, i0, masks, zoom, func)
 
 
 

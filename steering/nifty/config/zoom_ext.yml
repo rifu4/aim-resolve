@@ -1,0 +1,17 @@
+---
+
+odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
+base: base.yml
+file: 4_pre.yml
+
+---
+
+mode: zoom
+zoom: 4
+
+---
+
+lh.5:
+  split:
+    size: 512
+    factor: 4
