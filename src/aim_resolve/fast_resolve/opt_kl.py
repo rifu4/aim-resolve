@@ -19,10 +19,26 @@ from ..optimize.samples import MySamples, get_samples
 
 
 
+class SkyResidualModel(Model):
+    sky_response: Callable = dataclasses.field(metadata=dict(static=True))
+    old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=True))
+    residual_data: ArrayLike = dataclasses.field(metadata=dict(static=True))
+
+    def __init__(self, sky_response, old_reconstruction, residual_data):
+        self.sky_response = sky_response
+        self.old_reconstruction = old_reconstruction
+        self.residual_data = residual_data
+        super().__init__(domain=sky_response.domain, init=sky_response.init)
+
+    def __call__(self, x):
+        return self.sky_response(x, self.old_reconstruction, self.residual_data)
+
+
+
 def my_lh(*, sky_response, old_reconstruction, residual_data, **kwargs):
     '''fast-resolve likelihood function. It builds a likelihood at each iteration.'''
 
-    model = Model(lambda x: sky_response(x, old_reconstruction, residual_data), domain=sky_response.domain, init=sky_response.init)
+    model = SkyResidualModel(sky_response, old_reconstruction, residual_data)
 
     logger.setLevel(logging.ERROR)
     lh = Gaussian(jnp.broadcast_to(0.0, residual_data.shape)).amend(model)
