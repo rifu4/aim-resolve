@@ -1,3 +1,4 @@
+"""Script for performing pre-fit transitions between reconstruction iterations."""
 import os
 import jax
 import pickle
@@ -9,6 +10,7 @@ jax.config.update('jax_enable_x64', True)
 
 
 def main():
+    """Run the additive transition from old to new sky model and update component offsets."""
     print(jax.devices())
     _, files = sys.argv[0], sys.argv[1:]
     mdl_yml, rec_pkl, base_yml, it = files

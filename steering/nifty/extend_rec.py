@@ -1,3 +1,4 @@
+"""CLI script for extending an existing reconstruction with additional components."""
 import os
 import click
 
@@ -7,6 +8,17 @@ import click
 @click.option('--plot_range', default=1e4, help='Brigthness range for plotting the sky models')
 
 def main(config, cuda_device, plot_range):
+    """Extend an existing reconstruction run with new components.
+
+    Parameters
+    ----------
+    config : str
+        Path to the YAML configuration file describing the extension.
+    cuda_device : str
+        CUDA device identifier, empty string for CPU.
+    plot_range : float
+        Brightness range for plotting the sky models.
+    """
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:

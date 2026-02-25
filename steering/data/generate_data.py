@@ -1,3 +1,4 @@
+"""CLI script for generating or loading synthetic image data."""
 import os
 import click
 
@@ -6,6 +7,15 @@ import click
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
 
 def main(config, cuda_device):
+    """Generate or load synthetic image data from a YAML configuration file.
+
+    Parameters
+    ----------
+    config : str
+        Path to the YAML configuration file.
+    cuda_device : str
+        CUDA device identifier, empty string for CPU.
+    """
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:

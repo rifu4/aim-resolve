@@ -1,3 +1,4 @@
+"""Script for building the sky model from detected sources between reconstruction iterations."""
 import sys
 import numpy as np
 from aim_resolve import ImageData, SetupKLConfig, yaml_load, map_signal, masks_from_maps, plot_arrays, draw_boxes, model_background, model_points, model_objects, model_tiles, remove_freq_axis
@@ -5,6 +6,7 @@ from aim_resolve import ImageData, SetupKLConfig, yaml_load, map_signal, masks_f
 
 
 def main():
+    """Build sky model components from detection maps and update the configuration for the next iteration."""
     _, files = sys.argv[0], sys.argv[1:]
     mdl_yml, opt_pkl, det_npz, base_yml, it = files
     

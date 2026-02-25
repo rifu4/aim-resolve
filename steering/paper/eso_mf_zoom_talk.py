@@ -1,3 +1,4 @@
+"""Multi-frequency zoom-in talk plots for ESO reconstructions."""
 #%%
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '2'
@@ -13,6 +14,24 @@ jax.config.update("jax_enable_x64", True)
 
 #%%
 def box_markers(cfg, ps_map, grid, it):
+    """Create marker dictionaries for point sources and object bounding boxes.
+
+    Parameters
+    ----------
+    cfg : SetupKLConfig
+        Configuration object containing sky model sections.
+    ps_map : np.ndarray
+        Point source detection map.
+    grid : SignalGrid
+        Signal grid for coordinate mapping.
+    it : int
+        Current iteration number.
+
+    Returns
+    -------
+    dict
+        Dictionary with 'ps_mrk' and 'oj_mrk' marker dictionaries.
+    """
     import numpy as np
     from aim_resolve import draw_boxes
 

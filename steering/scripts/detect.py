@@ -1,3 +1,4 @@
+"""Script for detecting point sources and extended objects in reconstructed images."""
 import os
 import sys
 import numpy as np
@@ -6,6 +7,7 @@ from aim_resolve import ImageData, yaml_load, model_predict, dbscan_clustering, 
 
 
 def main():
+    """Run source detection on a reconstructed image using a U-Net model and DBSCAN clustering."""
     _, files = sys.argv[0], sys.argv[1:]
     opt_pkl, base_yml, it = files
     

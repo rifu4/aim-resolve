@@ -1,3 +1,4 @@
+"""CLI script for training a segmentation model for source detection."""
 import os
 import click
 
@@ -6,6 +7,15 @@ import click
 @click.option('--cuda_device', default='', help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU')
 
 def main(config, cuda_device):
+    """Train or resume training a segmentation model from a YAML configuration.
+
+    Parameters
+    ----------
+    config : str
+        Path to the YAML configuration file.
+    cuda_device : str
+        CUDA device identifier, empty string for CPU.
+    """
     if str(cuda_device) == '':
         device = 'cpu'
     else:

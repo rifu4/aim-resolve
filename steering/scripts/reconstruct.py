@@ -1,3 +1,4 @@
+"""Script for running variational inference reconstruction and plotting results."""
 import os
 import jax
 import pickle
@@ -9,6 +10,7 @@ jax.config.update('jax_enable_x64', True)
 
 
 def main():
+    """Run the KL optimization for sky model reconstruction and generate diagnostic plots."""
     print(jax.devices())
     _, files = sys.argv[0], sys.argv[1:]
     mdl_yml, tra_pkl, base_yml, it = files

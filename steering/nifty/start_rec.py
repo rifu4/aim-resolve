@@ -1,3 +1,4 @@
+"""CLI script for starting a new reconstruction run with AIM-Resolve."""
 import os
 import click
 
@@ -8,6 +9,19 @@ import click
 @click.option('--plot_range', default=None, help='Brigthness range for plotting the sky models')
 
 def main(base, config, cuda_device, plot_range):
+    """Start a reconstruction run from base and config YAML files.
+
+    Parameters
+    ----------
+    base : str
+        Path to the base YAML configuration file.
+    config : str
+        Path to the run-specific YAML configuration file.
+    cuda_device : str
+        CUDA device identifier, empty string for CPU.
+    plot_range : float or None
+        Brightness range for plotting the sky models.
+    """
     if str(cuda_device) == '':
         os.environ['JAX_PLATFORM_NAME'] = 'cpu'
     else:

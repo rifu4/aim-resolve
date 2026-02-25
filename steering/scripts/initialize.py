@@ -1,3 +1,4 @@
+"""Script for initializing a reconstruction pipeline from YAML configuration files."""
 import os
 import sys
 import numpy as np
@@ -6,6 +7,7 @@ from aim_resolve import SetupKLConfig, yaml_load, yaml_save, merge_dicts, radio_
 
 
 def main():
+    """Initialize a reconstruction run by setting up directories, config files, and model sections."""
     _, files = sys.argv[0], sys.argv[1:]
     mdl_yml, base_yml, pipe_yml = files
 

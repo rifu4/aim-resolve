@@ -1,3 +1,4 @@
+"""Single-frequency talk plots for ESO reconstructions."""
 #%%
 import os
 # os.environ['JAX_PLATFORM_NAME'] = 'cpu'
@@ -19,6 +20,18 @@ CONV_FACTOR = 1000 * AS2RAD**2
 
 
 def latest_model_file(directory):
+    """Find the latest pre-fit YAML model file in a run directory.
+
+    Parameters
+    ----------
+    directory : str
+        Path to the run directory.
+
+    Returns
+    -------
+    str
+        Full path to the latest model YAML file.
+    """
     import os
     import re
 
@@ -37,6 +50,24 @@ def latest_model_file(directory):
 
 
 def box_markers(cfg, ps_map, grid, it):
+    """Create marker dictionaries for point sources and object bounding boxes.
+
+    Parameters
+    ----------
+    cfg : SetupKLConfig
+        Configuration object containing sky model sections.
+    ps_map : np.ndarray
+        Point source detection map.
+    grid : SignalGrid
+        Signal grid for coordinate mapping.
+    it : int
+        Current iteration number.
+
+    Returns
+    -------
+    dict
+        Dictionary with 'ps_mrk' and 'oj_mrk' marker dictionaries.
+    """
     import numpy as np
     from aim_resolve import draw_boxes
 
