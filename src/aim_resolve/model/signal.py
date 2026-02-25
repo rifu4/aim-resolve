@@ -92,7 +92,7 @@ class SignalModel(Model):
         cls,
         *,
         grid,
-        freq=[1.0],
+        freq=None,
         params,
         prefix="sm",
         offset=0,
@@ -123,6 +123,8 @@ class SignalModel(Model):
             (see gaussian_model). Multiplies the signal with a gaussian.
             Default is None.
         """
+        if freq is None:
+            freq = [1.0]
         from ..resolve.observation import Observation
 
         if "coordinates" in grid:

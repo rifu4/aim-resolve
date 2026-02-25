@@ -133,6 +133,7 @@ class Observation:
         for a, k in zip(
             [dct[f"antpos{i}"] for i in range(4)],
             [["u", "v", "w"], ["ant1"], ["ant2"], ["time"]],
+            strict=False,
         ):
             dfs.append(pd.DataFrame(a, columns=[k]))
         df_antpos = pd.concat(dfs, axis=1)
@@ -248,7 +249,7 @@ class Observation:
 
     @property
     def baselines(self):
-        return set((a1, a2) for a1, a2 in zip(self.ant1, self.ant2))
+        return set((a1, a2) for a1, a2 in zip(self.ant1, self.ant2, strict=False))
 
     @property
     def nbaselines(self):
@@ -263,7 +264,7 @@ class Observation:
         else:
             raise ValueError("unknown precision")
 
-    def dirty_image(self, grid, freq=np.ones((1,))):
+    def dirty_image(self, grid, freq=None):
         """Compute the dirty image of the observation.
 
         Parameters
@@ -278,6 +279,8 @@ class Observation:
         np.ndarray
             The dirty image.
         """
+        if freq is None:
+            freq = np.ones((1,))
         from ..fast_resolve.response import build_exact_responses
 
         obs = self.to_resolve_obs()

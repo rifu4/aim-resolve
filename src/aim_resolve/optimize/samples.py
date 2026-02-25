@@ -207,7 +207,10 @@ def model_init(model: Model | Iterable[Model], error=True) -> Initializer:
 
 
 def random_init(
-    key, model: Iterable[Model] | Model, pos: Samples | Vector | dict = {}, factor=0.01
+    key,
+    model: Iterable[Model] | Model,
+    pos: Samples | Vector | dict | None = None,
+    factor=0.01,
 ) -> Vector:
     """
     Randomly initialize a model using the jax random key. Provide a position vector if some parameters are set already.
@@ -223,6 +226,8 @@ def random_init(
     factor : float, optional
         Factor to scale the random initialization. Default is 0.01.
     """
+    if pos is None:
+        pos = {}
     mdl_tree = domain_tree(model)
     pos_tree = {k: v for k, v in domain_tree(pos).items() if k in mdl_tree}
     mdl_init = model_init(model)

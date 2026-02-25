@@ -94,8 +94,11 @@ class TestMySamples:
     def test_mean_and_std_single(self):
         pos = Vector({"x": jnp.array([1.0, 2.0])})
         s = MySamples(pos=pos, samples=None, keys=None)
+
         # With < 2 samples and identity model returning a Vector,
         # jnp.zeros_like can't handle Vector — use a model that extracts an array
-        model = lambda x: x["x"]
+        def model(x):
+            return x["x"]
+
         m, std = s.mean_and_std(model)
         assert jnp.all(std == 0.0)

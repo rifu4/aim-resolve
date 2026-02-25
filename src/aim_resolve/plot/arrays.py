@@ -24,11 +24,11 @@ def plot_arrays(
     vmin=None,
     vmax=None,
     cbar=True,
-    cbar_kwargs={},
+    cbar_kwargs=None,
     ticks=5,
     origin="lower",
-    marker={},
-    contour={},
+    marker=None,
+    contour=None,
     square=False,
     transpose=False,
     plot_grid=True,
@@ -36,7 +36,7 @@ def plot_arrays(
     figsize=(5, 5),
     dpi=100,
     callback=None,
-    grid_kwargs={},
+    grid_kwargs=None,
     **kwargs,
 ):
     """
@@ -98,6 +98,15 @@ def plot_arrays(
     kwargs : optional
         Additional keyword arguments to pass to the plotting functions.
     """
+    if cbar_kwargs is None:
+        cbar_kwargs = {}
+    if marker is None:
+        marker = {}
+    if contour is None:
+        contour = {}
+    if grid_kwargs is None:
+        grid_kwargs = {}
+
     arrays, nums = to_shape(array, None, rows, cols, 0.0, transpose, return_nums=True)
     shape = arrays.shape[:2]
     rows, cols = shape

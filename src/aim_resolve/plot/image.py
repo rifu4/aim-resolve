@@ -20,11 +20,11 @@ def plot_image(
     vmin=None,
     vmax=None,
     cbar=True,
-    cbar_kwargs={},
+    cbar_kwargs=None,
     ticks=5,
     origin="lower",
-    marker={},
-    contour={},
+    marker=None,
+    contour=None,
     square=False,
     plot_grid=True,
     plot_label=True,
@@ -77,6 +77,13 @@ def plot_image(
     kwargs : additional keyword arguments
         Additional keyword arguments to pass to plt.imshow.
     """
+    if cbar_kwargs is None:
+        cbar_kwargs = {}
+    if marker is None:
+        marker = {}
+    if contour is None:
+        contour = {}
+
     plot_now = False
     if axes is None:
         figure = plt.figure(figsize=(5, 5))

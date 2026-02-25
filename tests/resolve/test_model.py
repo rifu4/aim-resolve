@@ -122,8 +122,8 @@ class TestSignalResponseBuild:
     def test_stores_model_and_obs(self):
         # Verify the class constructor code path before super().__init__
         # by checking that it at least stores the attributes
-        obs = _make_obs()
-        mdl = SignalModel.build(
+        _obs = _make_obs()
+        _mdl = SignalModel.build(
             grid=dict(space=(16, 16)),
             params=dict(i0=dict(mean=0.0, std=1.0)),
         )

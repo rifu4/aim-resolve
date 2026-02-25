@@ -75,7 +75,7 @@ class TileModel(Model):
         *,
         grid,
         tile_grid,
-        freq=[1.0],
+        freq=None,
         params,
         prefix="tm",
         offset=0,
@@ -107,6 +107,8 @@ class TileModel(Model):
             Dictionary containing the gaussian model parameters
             (see gaussian_model).
         """
+        if freq is None:
+            freq = [1.0]
         from ..resolve.observation import Observation
 
         tile_grid = SignalGrid.build(**tile_grid)

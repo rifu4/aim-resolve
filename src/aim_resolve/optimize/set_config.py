@@ -51,7 +51,7 @@ class SetupKLConfig:
         keys = sorted([k for k in filter(lambda x: "lh" in x, self.sections)])
         self.it = int(keys[-1].split(".")[1])
 
-    def add_it(self, fix_keys=[], del_comp=True, it=None):
+    def add_it(self, fix_keys=None, del_comp=True, it=None):
         """
         Add a new iteration to the configuration file.
 
@@ -68,6 +68,8 @@ class SetupKLConfig:
         it = int(it) if it is not None else self.it
         _it = f".{it}"
 
+        if fix_keys is None:
+            fix_keys = []
         fix_keys = set(k.split(".")[0] if "." in k else k for k in list(fix_keys))
         fix_keys |= {"trans"}
 

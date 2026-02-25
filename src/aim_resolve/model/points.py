@@ -62,7 +62,7 @@ class PointModel(Model):
         *,
         grid,
         point_grid,
-        freq=[1.0],
+        freq=None,
         params,
         prefix="pm",
         offset=0,
@@ -91,6 +91,8 @@ class PointModel(Model):
         nonlinearity : str, optional
             Function to apply to the signal. Default is ``'exp'``.
         """
+        if freq is None:
+            freq = [1.0]
         from ..resolve.observation import Observation
 
         point_grid = PointGrid.build(**point_grid)

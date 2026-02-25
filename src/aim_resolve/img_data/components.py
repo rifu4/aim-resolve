@@ -56,7 +56,9 @@ class ComponentGenerator(Model):
             ),
         )
 
-    def __call__(self, x, *, key=random.PRNGKey(0)):
+    def __call__(self, x, *, key=None):
+        if key is None:
+            key = random.PRNGKey(0)
         val = self.background(x)
 
         if self.points:

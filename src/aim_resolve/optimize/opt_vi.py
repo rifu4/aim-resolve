@@ -50,27 +50,21 @@ class MyOptimizeVI(OptimizeVI):
         return samples, opt_vi_st
 
 
-jax.jit
-
-
+@jax.jit
 def my_kl_vg(primals, primals_samples, *, lh_fun, lh_dict, **kwargs):
     """Compute KL divergence value and gradient for given primals and samples."""
     lh = lh_fun(**lh_dict)
     return _kl_vg(lh, primals, primals_samples, **kwargs)
 
 
-jax.jit
-
-
+@jax.jit
 def my_kl_metric(primals, tangents, primals_samples, *, lh_fun, lh_dict, **kwargs):
     """Compute the KL divergence metric for given primals and tangents."""
     lh = lh_fun(**lh_dict)
     return _kl_met(lh, primals, tangents, primals_samples, **kwargs)
 
 
-jax.jit
-
-
+@jax.jit
 def my_draw_linear_residual(pos, key, *, lh_fun, lh_dict, **kwargs):
     """Draw a linear residual sample from the approximate posterior."""
     lh = lh_fun(**lh_dict)

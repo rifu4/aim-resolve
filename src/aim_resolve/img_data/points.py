@@ -60,7 +60,9 @@ class PointGenerator(Model):
             init=model_init((self.i0, self.coordinates, self.n_copies), error=False),
         )
 
-    def __call__(self, x, *, key=random.PRNGKey(0)):
+    def __call__(self, x, *, key=None):
+        if key is None:
+            key = random.PRNGKey(0)
         i0_val = self.i0(x)
         nc_mask = (jnp.arange(i0_val.shape[0]) < self.n_copies(x)[0]).reshape(-1, 1, 1)
 

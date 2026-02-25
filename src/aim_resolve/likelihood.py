@@ -55,7 +55,7 @@ def image_likelihood(
     *,
     sky,
     data,
-    noise=dict(max_std=0.001, parameters=dict()),
+    noise=None,
 ):
     """Build a likelihood dictionary for image data.
 
@@ -77,7 +77,9 @@ def image_likelihood(
         ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
         ``noise_model``.
     """
-    max_std = noise["max_std"] if "max_std" in noise else 0.001
+    if noise is None:
+        noise = {"max_std": 0.001, "parameters": {}}
+    max_std = noise.get("max_std", 0.001)
     noise_model = NoiseModel.build(shape=data.grid.shape, **noise)
 
     sky.set_out_grid(data.grid)
@@ -97,7 +99,7 @@ def radio_likelihood(
     *,
     sky,
     data,
-    noise=dict(wgt_fac=1.0, parameters=dict()),
+    noise=None,
     wgridding=False,
 ):
     """Build a likelihood dictionary for radio visibility data.
@@ -121,7 +123,9 @@ def radio_likelihood(
         ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
         ``noise_model``.
     """
-    wgt_fac = noise["wgt_fac"] if "wgt_fac" in noise else 1.0
+    if noise is None:
+        noise = {"wgt_fac": 1.0, "parameters": {}}
+    wgt_fac = noise.get("wgt_fac", 1.0)
     noise_model = NoiseModel.build(shape=data.vis.shape, **noise)
 
     lh_dct = dict(
@@ -141,8 +145,8 @@ def fast_likelihood(
     data,
     psf_kernel_fn="",
     n_inv_kernel_fn="",
-    noise=dict(parameters=dict()),
-    split={},
+    noise=None,
+    split=None,
 ):
     """Build a fast-resolve likelihood dictionary for radio data.
 
@@ -173,6 +177,10 @@ def fast_likelihood(
         Likelihood dictionary with keys ``data``, ``sky_model``,
         ``sky_response``, ``noise_model`` and ``RNR``.
     """
+    if noise is None:
+        noise = {"parameters": {}}
+    if split is None:
+        split = {}
     if isinstance(data, Observation):
         data = data.to_resolve_obs()
     obs = data.to_double_precision()

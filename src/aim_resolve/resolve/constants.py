@@ -43,5 +43,5 @@ def str2rad(s):
             return float(s[: -len(k)]) * c[k]
     try:
         return float(s)
-    except:
-        raise RuntimeError("Unit not understood")
+    except ValueError as err:
+        raise RuntimeError("Unit not understood") from err

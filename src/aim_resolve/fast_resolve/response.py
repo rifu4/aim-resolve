@@ -7,7 +7,7 @@ import numpy as np
 def build_exact_responses(
     observation,
     grid,
-    freq=np.ones((1,)),
+    freq=None,
 ):
     """Build exact RNR response operators for fast-resolve.
 
@@ -34,6 +34,8 @@ def build_exact_responses(
     RNR_l : Operator
         Padded RNR product.
     """
+    if freq is None:
+        freq = np.ones((1,))
     import resolve as rve
 
     sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)

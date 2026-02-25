@@ -235,11 +235,11 @@ def to_shape(
     try:
         array = np.broadcast_to(array, shape + array.shape[1:])
 
-    except:
+    except Exception:
         if nums < size:
             default = array[-1] if default == -1 else default
             if array.ndim == 1:
-                for i in range(size - nums):
+                for _i in range(size - nums):
                     array = np.append(array, default)
             else:
                 array = np.append(

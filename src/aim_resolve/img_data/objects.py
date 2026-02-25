@@ -54,7 +54,9 @@ class ObjectGenerator(Model):
             init=model_init((self.i0, self.zoom), error=False),
         )
 
-    def __call__(self, x, *, key=random.PRNGKey(0)):
+    def __call__(self, x, *, key=None):
+        if key is None:
+            key = random.PRNGKey(0)
         mk_val = random.permutation(key, self.masks, axis=0)[0]
 
         mk_val = rotate_data(mk_val, random.randint(key, (), 0, 4))

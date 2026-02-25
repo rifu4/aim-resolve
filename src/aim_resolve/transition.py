@@ -147,7 +147,7 @@ def transition_freq(
     ptree = {}
 
     # copy over matching model components
-    for sky_oi, sky_ni in zip(sky_old.models, sky_new.models):
+    for sky_oi, sky_ni in zip(sky_old.models, sky_new.models, strict=False):
         if sky_ni.grid != sky_oi.grid:
             raise ValueError("Old and new sky model components have to match.")
         for key_oi in domain_keys(sky_oi):
@@ -219,7 +219,8 @@ def transition_util(
         os.makedirs(odir, exist_ok=True)
 
     if os.path.isfile(pos_fn):
-        samples = pickle.load(open(pos_fn, "rb"))
+        with open(pos_fn, "rb") as f:
+            samples = pickle.load(f)
         models = [v for v in lh_new.values() if isinstance(v, Model)]
         if domain_keys(samples) == domain_keys(models):
             return samples
@@ -227,7 +228,8 @@ def transition_util(
     samples, *_ = func(key, samples, it, lh_new=lh_new, odir=odir, **kwargs)
 
     if pos_fn:
-        pickle.dump(samples, open(pos_fn, "wb"))
+        with open(pos_fn, "wb") as f:
+            pickle.dump(samples, f)
 
     return samples
 
@@ -243,8 +245,8 @@ def transition_addt(
     offsets=False,
     odir=None,
     mask=None,
-    noise=dict(max_std=1e-5, parameters=dict()),
-    plot_dct=dict(norm="log"),
+    noise=None,
+    plot_dct=None,
     **kwargs,
 ):
     """Add components by fitting them to the previous reconstruction.
@@ -288,6 +290,11 @@ def transition_addt(
     ofs_dct : dict
         Per-component offset dictionary (empty when *offsets* is False).
     """
+    if noise is None:
+        noise = dict(max_std=1e-5, parameters=dict())
+    if plot_dct is None:
+        plot_dct = dict(norm="log")
+
     sky_old = lh_old["sky_model"]
     sky_new = lh_new["sky_model"]
     check_type(samples, MySamples)
@@ -345,7 +352,7 @@ def transition_addt(
         if offsets:
             ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci, sky_ci.freq)
             sky_ci.set_offset(ofs_dct[sky_ci.prefix])
-        if isinstance(sky_ci, (PointModel, TileModel)):
+        if isinstance(sky_ci, PointModel | TileModel):
             msk_ci = msk_ci.sum(axis=0).clip(0, 1)
         pos_ci = optimize_and_plot(
             key=keys.pop(),
@@ -396,8 +403,8 @@ def transition_zoom(
     lh_new,
     opt_dct,
     odir=None,
-    noise=dict(max_std=1e-5, parameters=dict()),
-    plot_dct=dict(norm="log"),
+    noise=None,
+    plot_dct=None,
     **kwargs,
 ):
     """Transfer parameters to a higher-resolution (zoomed) grid.
@@ -434,6 +441,11 @@ def transition_zoom(
     None
         Placeholder for consistency with ``transition_addt``.
     """
+    if noise is None:
+        noise = dict(max_std=1e-5, parameters=dict())
+    if plot_dct is None:
+        plot_dct = dict(norm="log")
+
     sky_old = lh_old["sky_model"]
     sky_new = lh_new["sky_model"]
     check_type(samples, MySamples)
@@ -446,7 +458,7 @@ def transition_zoom(
     keys = list(random.split(key, len(sky_new.models) + 1))
 
     # copy over matching model components
-    for sky_oi, sky_ni in zip(sky_old.models, sky_new.models):
+    for sky_oi, sky_ni in zip(sky_old.models, sky_new.models, strict=False):
         if sky_ni.grid not in sky_oi.grid and sky_oi.grid in sky_ni.grid:
             raise ValueError("Old and new sky model components have to match.")
         rec_oi = map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
@@ -496,8 +508,8 @@ def optimize_and_plot(
     data,
     pos=None,
     opt_dct=None,
-    noise=dict(max_std=1e-5, parameters=dict()),
-    plot_dct=dict(odir=None, name=None),
+    noise=None,
+    plot_dct=None,
 ):
     """Optimise a sky model on given data and optionally plot the result.
 
@@ -527,8 +539,13 @@ def optimize_and_plot(
     pos : Vector
         Fitted (or initial) parameter position.
     """
+    if noise is None:
+        noise = dict(max_std=1e-5, parameters=dict())
+    if plot_dct is None:
+        plot_dct = dict(odir=None, name=None)
+
     if opt_dct:
-        max_std = noise["max_std"] if "max_std" in noise else 1e-5
+        max_std = noise.get("max_std", 1e-5)
         noise_model = NoiseModel.build(shape=data.shape, **noise)
 
         k_n, k_o = random.split(key)

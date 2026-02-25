@@ -12,7 +12,7 @@ def masks_from_maps(
     points_map,
     object_maps,
     it,
-    freq=[1.0],
+    freq=None,
     factor=1,
     margin_fac=0.2,
     margin_min=2,
@@ -49,6 +49,8 @@ def masks_from_maps(
     mask_dct : dict
         Dictionary of mask arrays keyed by component identifier.
     """
+    if freq is None:
+        freq = [1.0]
     mask_dct = {}
     margin_min *= factor
     tile_size = to_shape(tile_size, (2,), "int64") * factor

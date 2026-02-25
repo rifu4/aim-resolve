@@ -52,7 +52,7 @@ class PSFConvolve(Model):
         return res
 
     @classmethod
-    def build(cls, *, sky, RNR_l, psf_kernel_fn="", split={}):
+    def build(cls, *, sky, RNR_l, psf_kernel_fn="", split=None):
         """Build a PSF convolution operator.
 
         Loads or creates the PSF kernel and optionally applies
@@ -81,12 +81,16 @@ class PSFConvolve(Model):
         ValueError
             If the cached kernel shape does not match the expected shape.
         """
+        if split is None:
+            split = {}
         if os.path.isfile(psf_kernel_fn):
-            psf_kernel = pickle.load(open(psf_kernel_fn, "rb"))
+            with open(psf_kernel_fn, "rb") as f:
+                psf_kernel = pickle.load(f)
         else:
             psf_kernel = build_psf_kernel(RNR_l)
             if psf_kernel_fn:
-                pickle.dump(psf_kernel, open(psf_kernel_fn, "wb"))
+                with open(psf_kernel_fn, "wb") as f:
+                    pickle.dump(psf_kernel, f)
 
         rk_shape = sky.target.shape[:-2] + tuple(s * 2 for s in sky.target.shape[-2:])
         if psf_kernel.shape != rk_shape:
@@ -222,11 +226,13 @@ class NInvConvolve(Model):
             If the cached kernel shape does not match the expected shape.
         """
         if os.path.isfile(n_inv_kernel_fn):
-            n_inv_kernel = pickle.load(open(n_inv_kernel_fn, "rb"))
+            with open(n_inv_kernel_fn, "rb") as f:
+                n_inv_kernel = pickle.load(f)
         else:
             n_inv_kernel = build_n_inv_kernel(RNR, 1e-3)
             if n_inv_kernel_fn:
-                pickle.dump(n_inv_kernel, open(n_inv_kernel_fn, "wb"))
+                with open(n_inv_kernel_fn, "wb") as f:
+                    pickle.dump(n_inv_kernel, f)
 
         nk_shape = psf_conv.target.shape
         if n_inv_kernel.shape != nk_shape:
@@ -334,7 +340,7 @@ def build_fft_kernel(kernel, shape, dvol=1.0):
 
 def build_padder(in_shape, out_shape):
     """Return a zero-padding function from *in_shape* to *out_shape*."""
-    p_h, p_w = (o - i for i, o in zip(in_shape[-2:], out_shape[-2:]))
+    p_h, p_w = (o - i for i, o in zip(in_shape[-2:], out_shape[-2:], strict=False))
     pad_width = [(0, 0)] * (len(in_shape) - 2) + [(0, p_h), (0, p_w)]
     return lambda x: jnp.pad(x, pad_width)
 

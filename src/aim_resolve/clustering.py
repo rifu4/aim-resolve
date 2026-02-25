@@ -52,7 +52,7 @@ def dbscan_clustering(objects_map, print_cl=True, **cl_kwargs):
     # print number of detected objects and noise points
     if print_cl:
         print(f"n objects: {n_clusters}")
-        print("n noise points: %d" % n_noise)
+        print(f"n noise points: {n_noise}")
 
     # create one output map for each detected object and an empty map for the background
     cluster_maps = np.zeros((n_clusters,) + objects_map.shape)

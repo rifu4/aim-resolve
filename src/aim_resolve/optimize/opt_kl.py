@@ -7,7 +7,7 @@ import pickle
 from collections.abc import Callable
 from functools import partial
 from os import makedirs
-from typing import Literal, Union
+from typing import Literal
 
 import jax
 from jax import numpy as jnp
@@ -47,13 +47,22 @@ def my_lh(
 
     logger.setLevel(logging.ERROR)
     if noise_model and noise_model.scaling:
-        res = lambda x: noise_model(x) * noise_std_inv * (data - sky_response(x))
+
+        def res(x):
+            return noise_model(x) * noise_std_inv * (data - sky_response(x))
+
         lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     elif noise_model and noise_model.varcov:
-        res = lambda x: (noise_std_inv * (data - sky_response(x)), noise_model(x))
+
+        def res(x):
+            return (noise_std_inv * (data - sky_response(x)), noise_model(x))
+
         lh = VariableCovarianceGaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     else:
-        res = lambda x: noise_std_inv * (data - sky_response(x))
+
+        def res(x):
+            return noise_std_inv * (data - sky_response(x))
+
         lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
     logger.setLevel(logging.DEBUG)
 
@@ -70,7 +79,7 @@ SMPL_MODE_TYP = Literal[
     "nonlinear_resample",
     "nonlinear_update",
 ]
-SMPL_MODE_GENERIC_TYP = Union[SMPL_MODE_TYP, Callable[[int], SMPL_MODE_TYP]]
+SMPL_MODE_GENERIC_TYP = SMPL_MODE_TYP | Callable[[int], SMPL_MODE_TYP]
 
 
 def optimize_kl(
@@ -89,14 +98,10 @@ def optimize_kl(
     residual_map="lmap",
     kl_reduce=_reduce,
     mirror_samples=True,
-    draw_linear_kwargs=dict(minimize=_cg, cg_name="SL", cg_kwargs=dict()),
+    draw_linear_kwargs=None,
     # draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
-    nonlinearly_update_kwargs=dict(
-        minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
-    ),
-    kl_kwargs=dict(
-        minimize=_newton_cg, minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None))
-    ),
+    nonlinearly_update_kwargs=None,
+    kl_kwargs=None,
     # kl_kwargs=dict(minimize_kwargs=dict(name="M", cg_kwargs=dict(name="MCG"))),
     sample_mode: SMPL_MODE_GENERIC_TYP = "nonlinear_resample",
     resume: str | bool = False,
@@ -184,6 +189,18 @@ def optimize_kl(
     opt_vi_st : OptimizeVIState
         State of the optimization.
     """
+    if draw_linear_kwargs is None:
+        draw_linear_kwargs = dict(minimize=_cg, cg_name="SL", cg_kwargs=dict())
+    if nonlinearly_update_kwargs is None:
+        nonlinearly_update_kwargs = dict(
+            minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
+        )
+    if kl_kwargs is None:
+        kl_kwargs = dict(
+            minimize=_newton_cg,
+            minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
+        )
+
     LAST_FILENAME = "last.pkl"
     MINISANITY_FILENAME = "minisanity.txt"
     last_fn = os.path.join(odir, LAST_FILENAME) if odir is not None else None

@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
 from ..img_data.data import ImageDataGenerator
 from ..model.util import check_type

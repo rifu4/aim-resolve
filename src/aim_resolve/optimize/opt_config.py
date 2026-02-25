@@ -214,7 +214,7 @@ class OptimizeKLConfig:
         dct = self.sections
 
         opt_keys = sorted(
-            (k for k in dct.keys() if k.startswith("opt.")),
+            (k for k in dct if k.startswith("opt.")),
             key=lambda k: int(k.split(".")[1]),
         )
         dct["opt.0"] = add_dicts(*[dct[k] for k in opt_keys])
@@ -235,9 +235,10 @@ class OptimizeKLConfig:
             val = get_it(sec, it)
             if key in ["constants", "point_estimates"]:
                 val = self.get_constants_or_point_estimates(val, it)
-            elif isinstance(val, str):
-                if len(val) > 1 and val.startswith("="):  # is reference
-                    val = self.instantiate_sec(val[1:])
+            elif (
+                isinstance(val, str) and len(val) > 1 and val.startswith("=")
+            ):  # is reference
+                val = self.instantiate_sec(val[1:])
             return val
 
         if is_or_contains_type(sec, list):
@@ -254,9 +255,8 @@ class OptimizeKLConfig:
 
         # Instantiate all references (also in subsections)
         for key, val in dct.items():
-            if isinstance(val, str):
-                if len(val) > 1 and val[0] == "=":  # is reference
-                    dct[key] = self.instantiate_sec(val[1:])
+            if isinstance(val, str) and len(val) > 1 and val[0] == "=":  # is reference
+                dct[key] = self.instantiate_sec(val[1:])
 
         # Plug into builders dictionary
         if sec in self.builders:
@@ -351,8 +351,10 @@ class OptimizeKLConfig:
         return True
 
 
-def get_base(sec_dct, dct, key_lst=[]):
+def get_base(sec_dct, dct, key_lst=None):
     """Recursively replace the `base` entries in all (sub)sections by the content of the section it points to."""
+    if key_lst is None:
+        key_lst = []
     for key, val in sec_dct.items():
         if len(key_lst) != len(set(key_lst)):
             raise RuntimeError("You are trying a base-loop. Please do not do that :(")

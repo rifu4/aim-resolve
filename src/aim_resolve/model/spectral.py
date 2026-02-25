@@ -30,7 +30,7 @@ MF_KEYS = {"i0", "alpha", "deviations", "nonlinearity", "ref_freq_index"}
 def spectral_model(
     prefix,
     grid,
-    freq=np.ones((1,)),
+    freq=None,
     nonlinearity=None,
     n_copies=1,
     **params,
@@ -58,6 +58,8 @@ def spectral_model(
     model : Model
         The initialized model.
     """
+    if freq is None:
+        freq = np.ones((1,))
     check_type(prefix, str)
     check_type(grid, (SignalGrid, PointGrid))
     check_type(freq, np.ndarray)
@@ -171,7 +173,7 @@ def spectral_prior_model(
     *,
     prefix,
     grid,
-    freq=np.ones((1,)),
+    freq=None,
     i0,
     alpha=None,
     deviations=None,
@@ -208,6 +210,8 @@ def spectral_prior_model(
     model : Model or VModel
         The initialized spectral prior model.
     """
+    if freq is None:
+        freq = np.ones((1,))
     i0, _ = prior_model(f"{prefix}i0 ", grid, **i0)
 
     if freq.size == 1:

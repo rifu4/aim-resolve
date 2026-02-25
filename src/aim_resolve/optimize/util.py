@@ -13,7 +13,7 @@ def clean_dict(dct):
         """Check if a key is referenced in any value of the dictionary."""
         if "opt" in key and "base" not in key:
             return True
-        for k, v in dct.items():
+        for _k, v in dct.items():
             if isinstance(v, dict):
                 if _need_key(key, v):
                     return True
@@ -67,8 +67,10 @@ def split_its(dct):
     return [v for k, v in sorted(n_dct.items())]
 
 
-def update_it(dct, it, fix_keys=[]):
+def update_it(dct, it, fix_keys=None):
     """Update the iteration number in the keys of a dictionary for not fixed keys (new_it = old_it + 1)."""
+    if fix_keys is None:
+        fix_keys = []
     n_dct = {}
     for key, val in dct.items():
         if isinstance(val, dict):
@@ -78,15 +80,14 @@ def update_it(dct, it, fix_keys=[]):
             pre, suf = n_key.split(".")
             if int(suf) <= it:
                 n_key = pre + "." + str(it + 1)
-        except:
+        except Exception:
             pass
         n_val = val
         try:
             pre, suf = n_val.split(".")
-            if not any(fk in n_val for fk in fix_keys):
-                if int(suf) <= it:
-                    n_val = pre + "." + str(it + 1)
-        except:
+            if not any(fk in n_val for fk in fix_keys) and int(suf) <= it:
+                n_val = pre + "." + str(it + 1)
+        except Exception:
             pass
         n_dct[n_key] = n_val
 
@@ -95,7 +96,7 @@ def update_it(dct, it, fix_keys=[]):
 
 def has_key(dct, key):
     """Check if a key is in a dictionary or any subdictionary."""
-    if key in dct.keys():
+    if key in dct:
         return True
     for v in dct.values():
         if isinstance(v, dict):
@@ -158,11 +159,10 @@ def is_or_contains_type(dct, typ):
         return True
     elif isinstance(dct, dict):
         for val in dct.values():
-            if isinstance(val, list):
+            if isinstance(val, list) or (
+                isinstance(val, dict) and is_or_contains_type(val, typ)
+            ):
                 return True
-            elif isinstance(val, dict):
-                if is_or_contains_type(val, typ):
-                    return True
     return False
 
 
@@ -211,15 +211,16 @@ def clean_reps(dct, simplify=True):
         expr = re.sub(r"'([^']*)'", r"\1", str(lst))
         if not any(isinstance(li, list) for li in lst):
             val = []
+            l0 = None
             for i, li in enumerate(lst + [""]):
                 if i == 0:
                     f = 1
-                elif li == l0 and type(li) == type(l0):
+                elif li == l0 and type(li) is type(l0):
                     f += 1
-                elif li != l0 or type(li) != type(l0):
+                elif li != l0 or type(li) is not type(l0):
                     val += [f"{f}*[{l0}]"] if f > 1 else [f"[{l0}]"]
                     f = 1
-                l0 = li
+                l0 = li  # noqa: F841
             val = " + ".join(val)
             val = re.sub(r"'([^']*)'", r"\1", str(val))
             if len(val) < len(expr):
@@ -265,14 +266,14 @@ def eval_string(expr):
                 return tuple(_eval(el) for el in elts)
             case ast.BinOp(left=left, op=ast.Add(), right=right):
                 left, right = _eval(left), _eval(right)
-                if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+                if isinstance(left, list | tuple) and isinstance(right, list | tuple):
                     return left + right
                 raise ValueError("Invalid addition")
             case ast.BinOp(left=left, op=ast.Mult(), right=right):
                 left, right = _eval(left), _eval(right)
-                if isinstance(left, (list, tuple)) and isinstance(right, int):
+                if isinstance(left, list | tuple) and isinstance(right, int):
                     return left * right
-                if isinstance(left, int) and isinstance(right, (list, tuple)):
+                if isinstance(left, int) and isinstance(right, list | tuple):
                     return right * left
                 raise ValueError("Invalid multiplication")
             case ast.Constant(value=value):
@@ -292,9 +293,11 @@ def eval_list(expr):
     return expr
 
 
-def check_dict(dct, needed, optional=[]):
+def check_dict(dct, needed, optional=None):
     """Check if all needed keys are in the dictionary and remove wrong keys."""
     # TODO: adjust function -> similar to check_type
+    if optional is None:
+        optional = []
     allowed = set(needed) | set(optional)
     if dct:
         dct = {key: val for key, val in dct.items() if key in allowed}

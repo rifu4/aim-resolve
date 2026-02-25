@@ -146,9 +146,14 @@ def map_array(
             # (x, y) -> (n_out, x', y')
             case (2, 1, n_out):
                 out_array = jnp.zeros((n_out,) + out_shape, dtype=in_array.dtype)
-                loop_over_n_out = lambda i, o: o.at[i].set(
-                    map_array_2d(in_array, o[i], in_start[i], out_start[i], in_shape)
-                )
+
+                def loop_over_n_out(i, o):
+                    return o.at[i].set(
+                        map_array_2d(
+                            in_array, o[i], in_start[i], out_start[i], in_shape
+                        )
+                    )
+
                 out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
 
             # (n/f, x, y) -> (n/f, x', y')
@@ -161,25 +166,36 @@ def map_array(
             # (n_in, x, y) -> (x', y')
             case (3, n_in, 1):
                 out_array = jnp.zeros(out_shape, dtype=in_array.dtype)
-                loop_over_n_in = lambda i, o: map_array_2d(
-                    in_array[i], o, in_start[i], out_start[i], in_shape
-                )
+
+                def loop_over_n_in(i, o):
+                    return map_array_2d(
+                        in_array[i], o, in_start[i], out_start[i], in_shape
+                    )
+
                 out_array = fori_loop(0, n_in, loop_over_n_in, out_array)
             # (n_in, x, y) -> (n_out, x', y') if n_in == n_out
             case (3, n_in, n_out) if n_in == n_out:
                 out_array = jnp.zeros((n_out,) + out_shape, dtype=in_array.dtype)
-                loop_over_n_out = lambda i, o: o.at[i].set(
-                    map_array_2d(in_array[i], o[i], in_start[i], out_start[i], in_shape)
-                )
+
+                def loop_over_n_out(i, o):
+                    return o.at[i].set(
+                        map_array_2d(
+                            in_array[i], o[i], in_start[i], out_start[i], in_shape
+                        )
+                    )
+
                 out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
             # (f, x, y) -> (n_out, f, x, y)
             case (3, 1, n_out):
                 f = in_array.shape[0]
                 out_array = jnp.zeros((n_out, f) + out_shape, dtype=in_array.dtype)
                 vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-                loop_over_n_out = lambda i, o: o.at[i].set(
-                    vmap_over_f(in_array, o[i], in_start[i], out_start[i], in_shape)
-                )
+
+                def loop_over_n_out(i, o):
+                    return o.at[i].set(
+                        vmap_over_f(in_array, o[i], in_start[i], out_start[i], in_shape)
+                    )
+
                 out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
 
             # (n, f, x, y) -> (n, f, x', y')
@@ -187,27 +203,38 @@ def map_array(
                 n, f = in_array.shape[:2]
                 out_array = jnp.zeros((n, f) + out_shape, dtype=in_array.dtype)
                 vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-                loop_over_n = lambda i, o: o.at[i].set(
-                    vmap_over_f(in_array[i], o[i], in_start, out_start, in_shape)
-                )
+
+                def loop_over_n(i, o):
+                    return o.at[i].set(
+                        vmap_over_f(in_array[i], o[i], in_start, out_start, in_shape)
+                    )
+
                 out_array = fori_loop(0, n, loop_over_n, out_array)
             # (n_in, f, x, y) -> (f, x', y')
             case (4, n_in, 1):
                 f = in_array.shape[1]
                 out_array = jnp.zeros((f,) + out_shape, dtype=in_array.dtype)
                 vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-                loop_over_n_in = lambda i, o: vmap_over_f(
-                    in_array[i], o, in_start[i], out_start[i], in_shape
-                )
+
+                def loop_over_n_in(i, o):
+                    return vmap_over_f(
+                        in_array[i], o, in_start[i], out_start[i], in_shape
+                    )
+
                 out_array = fori_loop(0, n_in, loop_over_n_in, out_array)
             # (n_in, f, x, y) -> (n_out, f, x', y') if n_in == n_out
             case (4, n_in, n_out) if n_in == n_out:
                 f = in_array.shape[1]
                 out_array = jnp.zeros((n_out, f) + out_shape, dtype=in_array.dtype)
                 vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-                loop_over_n_out = lambda i, o: o.at[i].set(
-                    vmap_over_f(in_array[i], o[i], in_start[i], out_start[i], in_shape)
-                )
+
+                def loop_over_n_out(i, o):
+                    return o.at[i].set(
+                        vmap_over_f(
+                            in_array[i], o[i], in_start[i], out_start[i], in_shape
+                        )
+                    )
+
                 out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
 
         if zoom > 1:

@@ -97,14 +97,10 @@ def fast_optimize_kl(
     residual_map="lmap",
     kl_reduce=_reduce,
     mirror_samples=True,
-    draw_linear_kwargs=dict(minimize=_cg, cg_name="SL", cg_kwargs=dict()),
+    draw_linear_kwargs=None,
     # draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
-    nonlinearly_update_kwargs=dict(
-        minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
-    ),
-    kl_kwargs=dict(
-        minimize=_newton_cg, minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None))
-    ),
+    nonlinearly_update_kwargs=None,
+    kl_kwargs=None,
     # kl_kwargs=dict(minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
     sample_mode: SMPL_MODE_GENERIC_TYP = "nonlinear_resample",
     resume: str | bool = False,
@@ -180,6 +176,18 @@ def fast_optimize_kl(
     n_major_iterations : int
         Total number of major iterations performed.
     """
+    if draw_linear_kwargs is None:
+        draw_linear_kwargs = dict(minimize=_cg, cg_name="SL", cg_kwargs=dict())
+    if nonlinearly_update_kwargs is None:
+        nonlinearly_update_kwargs = dict(
+            minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
+        )
+    if kl_kwargs is None:
+        kl_kwargs = dict(
+            minimize=_newton_cg,
+            minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
+        )
+
     LAST_FILENAME = "last.pkl"
     MINISANITY_FILENAME = "minisanity.txt"
     last_fn = os.path.join(odir, LAST_FILENAME) if odir is not None else None
@@ -269,7 +277,7 @@ def fast_optimize_kl(
         )
 
         kl_nm = "OPTIMIZE_KL"
-        for i in range(last_mn, get_at_nit(n_minor_iterations, i_mj)):
+        for _i in range(last_mn, get_at_nit(n_minor_iterations, i_mj)):
             logger.info(f"{kl_nm}: Starting {opt_vi_st.nit + 1:04d}")
             samples, opt_vi_st = opt_vi.my_update(samples, opt_vi_st, lh_dict=lh_i)
             kl_msg = opt_vi.get_status_message(

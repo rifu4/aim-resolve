@@ -34,7 +34,14 @@ class NoiseModel(Model):
 
     @classmethod
     def build(
-        cls, *, shape, parameters={}, prefix="nm", scaling=False, varcov=False, **kwargs
+        cls,
+        *,
+        shape,
+        parameters=None,
+        prefix="nm",
+        scaling=False,
+        varcov=False,
+        **kwargs,
     ):
         """Build an inverse noise model from the given parameters.
 
@@ -61,6 +68,8 @@ class NoiseModel(Model):
         NoiseModel or LazyNoise
             The constructed noise model.
         """
+        if parameters is None:
+            parameters = {}
         if parameters and (scaling or varcov):
             model = inverse_gamma_model(prefix=None, shape=shape, **parameters)
             return cls(model, prefix, scaling, varcov)

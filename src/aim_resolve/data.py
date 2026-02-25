@@ -71,7 +71,7 @@ def image_data(
     try:
         img_data = ImageDataGenerator.load(fname, odir, dtype="float64")
         data = img_data.get_sample(idx)
-    except:
+    except Exception:
         data = ImageData.load(fname, odir, dtype="float64")
 
     data.add_noise(key, max_std)
@@ -125,7 +125,7 @@ def radio_data(
         obs = obs.get_freqs(freq)
 
     if nrow:
-        if not isinstance(nrow, (int, float)):
+        if not isinstance(nrow, int | float):
             raise TypeError("`nvis` has to be of Type `int` or `float`")
         obs = obs.subsample_rows(nrow)
 

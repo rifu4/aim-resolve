@@ -106,10 +106,7 @@ def is_val(array):
     bool
         True if any non-NaN element is non-zero.
     """
-    if np.any(array[~np.isnan(array)] != 0):
-        return True
-    else:
-        return False
+    return bool(np.any(array[~np.isnan(array)] != 0))
 
 
 def extend_shape(n_copies, freq, shape, *, offset=False):
