@@ -1,3 +1,22 @@
+# Snakemake workflow for the AIM-Resolve iterative reconstruction pipeline.
+#
+# This pipeline performs iterative sky model reconstruction consisting of:
+#   0. Initialize the configuration and run a first background-only reconstruction.
+#   1..n For each subsequent iteration:
+#       a) Detect point sources and extended objects in the current reconstruction.
+#       b) Build an enhanced sky model incorporating the detected components.
+#       c) Pre-fit: transition samples from the old to the new model domain.
+#       d) Reconstruct: optimize the enhanced sky model via variational inference.
+#
+# Usage:
+#   snakemake --configfile config/snake.yml
+#   snakemake --config file=config/snake.yml cuda_device=0
+#
+# Configuration keys (loaded from the YAML file specified by ``file``):
+#   odir   : str  - Output directory for all pipeline artifacts.
+#   n_it   : int  - Total number of reconstruction iterations.
+#   data   : dict - Data section containing at least ``fname`` (path to the data file).
+
 import os
 
 cuda_device = config.get('cuda_device', '')
@@ -22,14 +41,16 @@ base = f'{odir}/files/base.yml'
 
 
 
-# overall snakemake rule: specifies last generated file of the pipeline
+# --- Target rule ---
+# Requests the final reconstruction file, triggering the full pipeline.
 rule all:
     input:
-        f'{odir}/files/{n_it-1}_rec.pkl' # run whole pipeline
+        f'{odir}/files/{n_it-1}_rec.pkl'
 
 
 
-# generation of the initial cfg file for nifty reconstruction
+# --- Iteration 0: Initialization ---
+# Generate the initial configuration file from the base model YAML and pipeline settings.
 rule:
     name:
         '0. model'
@@ -44,7 +65,8 @@ rule:
 
 
 
-# optimize the initial model to get a preliminary reconstruction of the data
+# --- Iteration 0: Background reconstruction ---
+# Optimize the initial background-only sky model to obtain a first reconstruction.
 rule:
     name:
         f'0. reconstruct'
@@ -62,10 +84,10 @@ rule:
 
 
 
-# loop over the number of reconstructions (last iteration ends after the reconstruction)
+# --- Iterations 1..n_it-1: Iterative source detection and reconstruction ---
 for it in range(1, n_it):
 
-    # predict point sources in the reconstruction of the background signal
+    # Step a) Detect point sources and extended objects in the previous reconstruction.
     rule:
         name:
             f'{it}. detect'
@@ -80,7 +102,7 @@ for it in range(1, n_it):
             'python3 scripts/detect.py {input.o} {params.b} {params.i}'
 
 
-    # create cfg file for enhanced signal model containing an additional point source model
+    # Step b) Build an enhanced sky model with detected point sources and objects.
     rule:
         name:
             f'{it}. model'
@@ -97,7 +119,7 @@ for it in range(1, n_it):
             'python3 scripts/model.py {input.p} {input.o} {input.d} {params.b} {params.i}'
 
 
-    # perform a transition from the old to the new model
+    # Step c) Transition samples from the old to the new sky model domain.
     rule:
         name:
             f'{it}. pre-fit'
@@ -113,7 +135,7 @@ for it in range(1, n_it):
             'python3 scripts/pre_fit.py {input.m} {params.r} {params.b} {params.i}'
 
 
-    # using the cfg file to build the signal model and optimize it to get a reconstruction of the data
+    # Step d) Optimize the enhanced sky model via variational inference.
     rule:
         name:
             f'{it}. reconstruct'
