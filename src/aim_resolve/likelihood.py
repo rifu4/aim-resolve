@@ -114,8 +114,7 @@ def fast_likelihood(*,
         psf_kernel_fn = '',
         n_inv_kernel_fn = '',
         noise = dict(parameters=dict()),
-        split = 0,
-        **kwargs,
+        split = {},
 ):
     '''
     Generate a fast likelihood function for the radio data (fast-resolve).
@@ -132,51 +131,41 @@ def fast_likelihood(*,
         The noise kernel filename. Create a new kernel if not specified.
     noise : dict
         Dictionary containing the noise parameters (see NoiseModel).
-    split : int
-        Size of the central kernel for the psf split convolution. If 0, no split is performed.
-    kwargs : dict
-        Additional keyword arguments, e.g. to load a second observation.
+    split : dict
+        The parameters for kernel-splitting. Needs `size` and `factor`. Default is `{}` (no split).
     ''' 
-    observations = [data, ]
-    for k,v in filter(lambda item: 'data' in item[0], kwargs.items()):
-        observations.append(v)
+    if isinstance(data, Observation):
+        data = data.to_resolve_obs()
+    obs = data.to_double_precision()
 
-    RNRs, RNR_ls, data = [], [], []
-    for i,obs in enumerate(observations):
-        if isinstance(obs, Observation):
-            obs = obs.to_resolve_obs()
-        obs = obs.to_double_precision()
+    print('sky model shape:', sky.target.shape)
 
-        R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
-        RNRs.append(RNR)
-        RNR_ls.append(RNR_l)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
 
-        N_inv = makeOp(obs.weight)
-        data.append(R.adjoint(N_inv(obs.vis)).val)
+    N_inv = makeOp(obs.weight)
+    data = R.adjoint(N_inv(obs.vis)).val
+    print('dirty image shape:', data.shape)
 
     psf_conv = PSFConvolve.build(
         sky = sky,
-        RNR_l = RNR_ls[0] if len(RNR_ls) == 1 else RNR_ls,
+        RNR_l = RNR_l,
         psf_kernel_fn = psf_kernel_fn,
         split = split,
     )
 
     sky_response = NInvConvolve.build(
         psf_conv = psf_conv,
-        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        RNR = RNR,
         n_inv_kernel_fn = n_inv_kernel_fn,
         noise = noise,
     )
-
-    data = np.concatenate(data, axis=0)
-    print('dirty image shape:', data.shape)
 
     lh_dct = dict(
         data = jnp.array(data),
         sky_model = sky,
         sky_response = sky_response,
         noise_model = sky_response.noise_model,
-        RNR = RNRs[0] if len(RNRs) == 1 else RNRs,
+        RNR = RNR,
     )
     return lh_dct
 
