@@ -5,18 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aim-resolve"
 dynamic = ["version"]
-description = ""
+description = "Automatic Identification and Modeling for Bayesian Radio Interferometric Imaging"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {file = "LICENSE"}
-keywords = []
+keywords = ["radio interferometry", "bayesian inference", "image reconstruction", "jax", "nifty"]
 authors = [
   {name = "Richard Fuchs", email = "richard.fuchs@tum.de"},
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
