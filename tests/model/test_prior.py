@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import pytest
 from nifty.re import Model, VModel
 
-from aim_resolve.model.grid import SignalGrid
 from aim_resolve.model.prior import (
     correlated_field_model,
     inverse_gamma_model,
@@ -13,35 +12,30 @@ from aim_resolve.model.prior import (
     uniform_model,
 )
 
-
-@pytest.fixture
-def grid():
-    return SignalGrid.build(space=(16, 16))
-
-
 # ---------- prior_model dispatcher ----------
+# Uses the shared ``medium_grid`` fixture (16×16) from tests/conftest.py.
 
 
 class TestPriorModelDispatch:
-    def test_dispatch_normal(self, grid):
-        model, pspec = prior_model("test ", grid, mean=0.0, std=1.0)
+    def test_dispatch_normal(self, medium_grid):
+        model, pspec = prior_model("test ", medium_grid, mean=0.0, std=1.0)
         assert isinstance(model, Model)
         assert pspec is None
 
-    def test_dispatch_inverse_gamma(self, grid):
-        model, pspec = prior_model("test ", grid, alpha=3.0, scale=2.0)
+    def test_dispatch_inverse_gamma(self, medium_grid):
+        model, pspec = prior_model("test ", medium_grid, alpha=3.0, scale=2.0)
         assert isinstance(model, Model)
         assert pspec is None
 
-    def test_dispatch_uniform(self, grid):
-        model, pspec = prior_model("test ", grid, u_min=0.0, u_max=1.0)
+    def test_dispatch_uniform(self, medium_grid):
+        model, pspec = prior_model("test ", medium_grid, u_min=0.0, u_max=1.0)
         assert isinstance(model, Model)
         assert pspec is None
 
-    def test_dispatch_cfm(self, grid):
+    def test_dispatch_cfm(self, medium_grid):
         model, pspec = prior_model(
             "test ",
-            grid,
+            medium_grid,
             offset_std=(1.0, 0.1),
             fluctuations=(1.0, 0.1),
             loglogavgslope=(-2.0, 0.5),
@@ -49,9 +43,9 @@ class TestPriorModelDispatch:
         assert isinstance(model, Model)
         assert pspec is not None
 
-    def test_invalid_keys_raises(self, grid):
+    def test_invalid_keys_raises(self, medium_grid):
         with pytest.raises(ValueError):
-            prior_model("test ", grid, bad_key=42)
+            prior_model("test ", medium_grid, bad_key=42)
 
 
 # ---------- correlated_field_model ----------

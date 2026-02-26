@@ -7,13 +7,11 @@ from aim_resolve.model.components import ComponentModel
 from aim_resolve.model.signal import SignalModel
 
 
+# Uses the shared ``background_signal`` fixture from tests/conftest.py as
+# ``background``.  The local alias keeps all test signatures unchanged.
 @pytest.fixture
-def background():
-    return SignalModel.build(
-        grid=dict(space=(16, 16)),
-        params=dict(i0=dict(mean=0.0, std=1.0)),
-        prefix="bg",
-    )
+def background(background_signal):
+    return background_signal
 
 
 class TestComponentModelBuild:
