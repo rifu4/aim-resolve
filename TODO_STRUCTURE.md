@@ -11,31 +11,13 @@ Status overview of the package-structure improvements discussed earlier.
 - [x] **Python version alignment** — Bumped `pyproject.toml` to `requires-python = ">=3.11"`, removed 3.10 classifier. Consistent with `pixi.toml` and `ruff` target.
 - [x] **Project metadata** — Added description and keywords to `pyproject.toml`.
 - [x] **Reduce pixi.toml duplication** — Shared deps in default feature, CUDA/CPU only override JAX + cuda-version. ~50% fewer lines.
+- [x] **Optional dependencies** — Moved `torch`, `lightning`, `segmentation-models-pytorch`, `neuraloperator`, `wandb` to `[train]` extra; `snakemake` to `[pipeline]` extra. Guarded `train` imports with `try/except`. Added missing `jubik0` to core deps.
 
 ---
 
 ## Still Open
 
-### 1. Optional / Extra Dependencies
-
-**Priority: high**
-
-All heavy dependencies (`torch`, `lightning`, `neuraloperator`, `segmentation-models-pytorch`, `wandb`, `snakemake`) are currently listed as hard requirements in `pyproject.toml`.
-Most users only need the core imaging + inference stack.
-
-**Action:**
-- Move heavy deps into `[project.optional-dependencies]` groups, e.g.:
-  ```toml
-  [project.optional-dependencies]
-  train = ["torch>=2.0", "lightning>=2.0", "neuraloperator", "segmentation-models-pytorch", "wandb"]
-  pipeline = ["snakemake"]
-  all = ["aim-resolve[train,pipeline]"]
-  ```
-- Guard the corresponding imports with lazy imports or informative `ImportError` messages.
-
----
-
-### 2. CI / CD (GitHub Actions)
+### 1. CI / CD (GitHub Actions)
 
 **Priority: medium**
 
@@ -65,7 +47,7 @@ jobs:
 
 ---
 
-### 3. Shared Test Fixtures (`conftest.py`)
+### 2. Shared Test Fixtures (`conftest.py`)
 
 **Priority: medium**
 
@@ -77,7 +59,7 @@ jobs:
 
 ---
 
-### 4. Documentation Build
+### 3. Documentation Build
 
 **Priority: medium**
 
@@ -90,7 +72,7 @@ jobs:
 
 ---
 
-### 5. PEP 561 Type Marker (`py.typed`)
+### 4. PEP 561 Type Marker (`py.typed`)
 
 **Priority: low**
 
@@ -98,7 +80,7 @@ Add an empty `src/aim_resolve/py.typed` file so type checkers (mypy, pyright) re
 
 ---
 
-### 6. Separate `steering/` from the Library Package
+### 5. Separate `steering/` from the Library Package
 
 **Priority: low**
 
@@ -111,7 +93,7 @@ Consider:
 
 ---
 
-### 7. `__all__` in Subpackage `__init__.py` Files
+### 6. `__all__` in Subpackage `__init__.py` Files
 
 **Priority: low**
 

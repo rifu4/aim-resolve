@@ -125,11 +125,14 @@ from .resolve import (
     str2rad,
 )
 
-# --- train ---
-from .train import (
-    Dataset,
-    SegmentationModel,
-    brightest_pixels,
-    model_predict,
-)
+# --- train (optional: pip install aim-resolve[train]) ---
+try:  # noqa: SIM105
+    from .train import (
+        Dataset,
+        SegmentationModel,
+        brightest_pixels,
+        model_predict,
+    )
+except ImportError:
+    pass
 from .transition import transition_addt, transition_anew, transition_func

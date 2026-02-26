@@ -26,18 +26,28 @@ dependencies = [
     "jaxbind",
     "jax-finufft",
     "jax-tqdm",
-    "lightning",
+    "jubik0",
     "matplotlib",
-    "neuraloperator",
     "nifty[re]",
     "nifty8[re]",
     "pandas",
     "PyYAML",
-    "snakemake",
     "scikit-learn",
+]
+
+[project.optional-dependencies]
+train = [
+    "lightning>=2.0",
+    "neuraloperator",
     "segmentation-models-pytorch",
-    "torch",
+    "torch>=2.0",
     "wandb",
+]
+pipeline = [
+    "snakemake",
+]
+all = [
+    "aim-resolve[train,pipeline]",
 ]
 
 [tool.setuptools.dynamic]
