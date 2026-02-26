@@ -24,20 +24,26 @@ ducc0 = "*"
 h5py = "*"
 pandas = "*"
 scikit-learn = "*"
-wandb = "*"
 
 [pypi-dependencies]
 jaxlib = ">=0.4.30"
 jaxbind = "*"
 jax-finufft = "*"
 jax-tqdm = "*"
+nifty8 = { version = ">=8.0.0,<9", extras = ["re"] }
+nifty = { version = ">=9.1.0,<10", extras = ["re"] }
+
+# ── train extra (mirrors [project.optional-dependencies] train) ──────
+[feature.train.pypi-dependencies]
 torch = ">=2.0"
 lightning = ">=2.0"
 neuraloperator = "*"
 segmentation-models-pytorch = "*"
+wandb = "*"
+
+# ── pipeline extra (mirrors [project.optional-dependencies] pipeline) ─
+[feature.pipeline.pypi-dependencies]
 snakemake = "*"
-nifty8 = { version = ">=8.0.0,<9", extras = ["re"] }
-nifty = { version = ">=9.1.0,<10", extras = ["re"] }
 
 # ── CUDA feature (default environment) ───────────────────────────────
 [feature.cuda.dependencies]
@@ -55,5 +61,5 @@ jax = ">=0.4.30,!=0.6"
 
 # ── Environments ─────────────────────────────────────────────────────
 [environments]
-default = { features = ["cuda"] }
-cpu = { features = ["cpu"] }
+default = { features = ["cuda", "train", "pipeline"] }
+cpu = { features = ["cpu", "train", "pipeline"] }
