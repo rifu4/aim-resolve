@@ -49,6 +49,10 @@ radio = [
     "jubik @ git+https://github.com/NIFTy-PPL/J-UBIK.git",
     "ift-resolve @ git+https://gitlab.mpcdf.mpg.de/ift/resolve.git",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
 all = [
     "aim-resolve[train,pipeline,radio]",
 ]
@@ -85,6 +89,6 @@ ignore = [
 known-first-party = ["aim_resolve"]
 
 [project.urls]
-Documentation = "https://github.com/rifu4/aim-resolve#readme"
+Documentation = "https://rifu4.github.io/aim-resolve"
 Issues = "https://github.com/rifu4/aim-resolve/issues"
 Source = "https://github.com/rifu4/aim-resolve"

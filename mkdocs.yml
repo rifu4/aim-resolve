@@ -1,0 +1,72 @@
+site_name: aim-resolve
+site_description: Automatic Identification and Modeling for Bayesian Radio Interferometric Imaging
+site_url: https://rifu4.github.io/aim-resolve
+repo_url: https://github.com/rifu4/aim-resolve
+repo_name: rifu4/aim-resolve
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            filters:
+              - "!^_"   # hide private members by default
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Getting Started: getting-started.md
+  - API Reference:
+      - Core: api/core.md
+      - Model: api/model.md
+      - Optimize: api/optimize.md
+      - Fast Resolve: api/fast_resolve.md
+      - Image Data: api/img_data.md
+      - Resolve: api/resolve.md
+      - Plot: api/plot.md
+      - Train: api/train.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html

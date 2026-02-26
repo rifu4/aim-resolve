@@ -80,9 +80,7 @@ class NoiseModel(Model):
 class LazyNoise:
     """Lazy noise model assuming constant noise without any model.
 
-    Parameters
-    ----------
-    None
+    Takes no parameters. Always returns 1 when called.
     """
 
     def __init__(self):

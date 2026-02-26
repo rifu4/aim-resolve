@@ -3,6 +3,9 @@
 *lightning_logs/
 *wandb/
 *.snakemake/
+
+# MkDocs build output
+site/
 *.DS_Store
 *.lock
 

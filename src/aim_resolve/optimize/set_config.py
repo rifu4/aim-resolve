@@ -147,7 +147,7 @@ class SetupKLConfig:
 
         Parameters
         ----------
-        key : str
+        sec_key : str
             Key of the new section.
         kwargs : dict
             Parameters for the new section.
@@ -160,9 +160,9 @@ class SetupKLConfig:
 
         Parameters
         ----------
-        key : str
+        sec_key : str
             Key of the section that is modified.
-        base : bool
+        merge_base : bool
             If False, keys containing `base` are not merged.
         kwargs : dict
             Parameters that shall be changed in or added to the section.
@@ -180,7 +180,7 @@ class SetupKLConfig:
 
         Parameters
         ----------
-        key : str
+        sec_key : str
             Key of the section that is removed.
         """
         dct = self.sections

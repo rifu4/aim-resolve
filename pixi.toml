@@ -51,6 +51,11 @@ snakemake = "*"
 jubik = { git = "https://github.com/NIFTy-PPL/J-UBIK.git" }
 ift-resolve = { git = "https://gitlab.mpcdf.mpg.de/ift/resolve.git" }
 
+# ── docs extra (mirrors [project.optional-dependencies] docs) ────────
+[feature.docs.pypi-dependencies]
+mkdocs-material = ">=9.5"
+mkdocstrings = { version = ">=0.25", extras = ["python"] }
+
 # ── CUDA feature (default environment) ───────────────────────────────
 [feature.cuda.dependencies]
 cuda-version = "12.6.*"
