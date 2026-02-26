@@ -26,6 +26,7 @@ pandas = "*"
 scikit-learn = "*"
 
 [pypi-dependencies]
+aim-resolve = { path = ".", editable = true }
 jaxlib = ">=0.4.30"
 jaxbind = "*"
 jax-finufft = "*"
