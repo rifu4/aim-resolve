@@ -60,6 +60,9 @@ all = [
 [tool.setuptools.dynamic]
 version = {attr = "aim_resolve.__version__.__version__"}
 
+[tool.setuptools.package-data]
+aim_resolve = ["py.typed"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
