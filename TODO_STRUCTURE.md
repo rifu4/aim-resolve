@@ -14,23 +14,13 @@ Status overview of the package-structure improvements discussed earlier.
 - [x] **Optional dependencies** — Moved `torch`, `lightning`, `segmentation-models-pytorch`, `neuraloperator`, `wandb` to `[train]` extra; `snakemake` to `[pipeline]` extra. Added `[radio]` extra for `jubik0` + `resolve` (both not on PyPI — installed via `git+` URL). Guarded `train` imports with `try/except`. `jubik0` guarded in `spectral.py`; `resolve` is already lazily imported inside functions.
 - [x] **CI / CD** — Added `.github/workflows/ci.yml`: ruff lint + format check + pytest on cpu environment via `prefix-dev/setup-pixi`. Separate `test-radio` job clones `resolve` (with submodules) and `jubik0` from GitLab; marked `continue-on-error: true` since GitLab access is not guaranteed in public CI.
 
+- [x] **Shared Test Fixtures (`conftest.py`)** — Added `tests/conftest.py` with `jax_key`, `small_grid` (8×8), `medium_grid` (16×16), `large_grid` (32×32), `background_signal`, and `rng`. Removed duplicate local `grid` fixtures from `test_prior.py` and `test_spectral.py`; delegated `background` in `test_components.py` to the shared fixture.
+
 ---
 
 ## Still Open
 
-### 1. Shared Test Fixtures (`conftest.py`)
-
-**Priority: medium**
-
-55 test files exist but there is no `conftest.py` with shared fixtures. Common objects (JAX keys, small models, test data arrays) are likely recreated in every test module.
-
-**Action:**
-- Add `tests/conftest.py` with shared `@pytest.fixture` definitions.
-- Deduplicate repeated setup code across test files.
-
----
-
-### 2. Documentation Build
+### 1. Documentation Build
 
 **Priority: medium**
 
@@ -43,7 +33,7 @@ Status overview of the package-structure improvements discussed earlier.
 
 ---
 
-### 3. PEP 561 Type Marker (`py.typed`)
+### 2. PEP 561 Type Marker (`py.typed`)
 
 **Priority: low**
 
@@ -51,7 +41,7 @@ Add an empty `src/aim_resolve/py.typed` file so type checkers (mypy, pyright) re
 
 ---
 
-### 4. Separate `steering/` from the Library Package
+### 3. Separate `steering/` from the Library Package
 
 **Priority: low**
 
@@ -64,7 +54,7 @@ Consider:
 
 ---
 
-### 5. `__all__` in Subpackage `__init__.py` Files
+### 4. `__all__` in Subpackage `__init__.py` Files
 
 **Priority: low**
 
