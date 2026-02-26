@@ -4,11 +4,17 @@ from collections.abc import Callable
 
 import jax.numpy as jnp
 import numpy as np
-from jubik0 import build_simple_spectral_sky
-from jubik0.sky_model.multifrequency.spectral_product_utils.frequency_deviations import (
-    build_frequency_deviations_model_with_degeneracies,
-)
 from nifty.re import Model, VModel
+
+try:  # jubik is an optional external package (not on PyPI)
+    from jubik import build_simple_spectral_sky
+    from jubik.sky_model.multifrequency.spectral_product_utils.frequency_deviations import (
+        build_frequency_deviations_model_with_degeneracies,
+    )
+
+    _JUBIK_AVAILABLE = True
+except ImportError:
+    _JUBIK_AVAILABLE = False
 
 from ..optimize.samples import domain_tree, model_init
 from .grid import PointGrid, SignalGrid
@@ -149,6 +155,12 @@ def spectral_ubik_model(
         ref_freq_index if isinstance(ref_freq_index, int) else len(freq) // 2
     )
 
+    if not _JUBIK_AVAILABLE:
+        raise ImportError(
+            "spectral_ubik_model requires jubik. "
+            "Install it with: pip install 'aim-resolve[radio]'"
+        )
+
     model = build_simple_spectral_sky(
         prefix,
         grid.shape,
@@ -230,6 +242,11 @@ def spectral_prior_model(
         alpha, _ = prior_model(f"{prefix}alpha ", grid, **alpha)
 
         if deviations:
+            if not _JUBIK_AVAILABLE:
+                raise ImportError(
+                    "spectral deviations require jubik. "
+                    "Install it with: pip install 'aim-resolve[radio]'"
+                )
             deviations = build_frequency_deviations_model_with_degeneracies(
                 grid.shape,
                 log_freq,

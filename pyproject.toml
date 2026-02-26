@@ -26,7 +26,6 @@ dependencies = [
     "jaxbind",
     "jax-finufft",
     "jax-tqdm",
-    "jubik0",
     "matplotlib",
     "nifty[re]",
     "nifty8[re]",
@@ -46,8 +45,12 @@ train = [
 pipeline = [
     "snakemake",
 ]
+radio = [
+    "jubik @ git+https://github.com/NIFTy-PPL/J-UBIK.git",
+    "ift-resolve @ git+https://gitlab.mpcdf.mpg.de/ift/resolve.git",
+]
 all = [
-    "aim-resolve[train,pipeline]",
+    "aim-resolve[train,pipeline,radio]",
 ]
 
 [tool.setuptools.dynamic]

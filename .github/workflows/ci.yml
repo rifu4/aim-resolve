@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master", "claude"]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8
+        with:
+          environments: cpu
+          pixi-version: latest
+
+      - name: Lint (ruff check)
+        run: pixi run -e cpu ruff check src/ tests/
+
+      - name: Format check (ruff format)
+        run: pixi run -e cpu ruff format --check src/ tests/
+
+      - name: Install package
+        run: pixi run -e cpu pip install -e . --no-deps
+
+      - name: Run tests
+        run: pixi run -e cpu pytest tests/ -q --tb=short
+
+  test-radio:
+    runs-on: ubuntu-latest
+    # resolve requires cloning submodules + C++ compilation; jubik is on GitHub.
+    # Mark continue-on-error so the main pipeline stays green if GitLab is down.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8
+        with:
+          environments: cpu
+          pixi-version: latest
+
+      - name: Install pybind11 + setuptools (needed to build resolve)
+        run: pixi run -e cpu pip install "pybind11>=2.6" setuptools
+
+      - name: Clone resolve with submodules
+        # pip install via git+ does not recurse into submodules; clone manually
+        run: git clone --recursive https://gitlab.mpcdf.mpg.de/ift/resolve /tmp/resolve
+
+      - name: Install resolve
+        run: pixi run -e cpu pip install /tmp/resolve
+
+      - name: Install jubik
+        run: pixi run -e cpu pip install git+https://github.com/NIFTy-PPL/J-UBIK.git
+
+      - name: Install package
+        run: pixi run -e cpu pip install -e . --no-deps
+
+      - name: Run tests
+        run: pixi run -e cpu pytest tests/ -q --tb=short

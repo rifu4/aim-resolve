@@ -45,6 +45,12 @@ wandb = "*"
 [feature.pipeline.pypi-dependencies]
 snakemake = "*"
 
+# ── radio extra (mirrors [project.optional-dependencies] radio) ──────
+# Installed from GitLab (not on PyPI). Requires network access to gitlab.mpcdf.mpg.de.
+[feature.radio.pypi-dependencies]
+jubik = { git = "https://github.com/NIFTy-PPL/J-UBIK.git" }
+ift-resolve = { git = "https://gitlab.mpcdf.mpg.de/ift/resolve.git" }
+
 # ── CUDA feature (default environment) ───────────────────────────────
 [feature.cuda.dependencies]
 cuda-version = "12.6.*"
@@ -63,3 +69,5 @@ jax = ">=0.4.30,!=0.6"
 [environments]
 default = { features = ["cuda", "train", "pipeline"] }
 cpu = { features = ["cpu", "train", "pipeline"] }
+# Optional: includes jubik0 + resolve from gitlab.mpcdf.mpg.de (may require access)
+radio-cpu = { features = ["cpu", "train", "pipeline", "radio"] }

@@ -11,43 +11,14 @@ Status overview of the package-structure improvements discussed earlier.
 - [x] **Python version alignment** — Bumped `pyproject.toml` to `requires-python = ">=3.11"`, removed 3.10 classifier. Consistent with `pixi.toml` and `ruff` target.
 - [x] **Project metadata** — Added description and keywords to `pyproject.toml`.
 - [x] **Reduce pixi.toml duplication** — Shared deps in default feature, CUDA/CPU only override JAX + cuda-version. ~50% fewer lines.
-- [x] **Optional dependencies** — Moved `torch`, `lightning`, `segmentation-models-pytorch`, `neuraloperator`, `wandb` to `[train]` extra; `snakemake` to `[pipeline]` extra. Guarded `train` imports with `try/except`. Added missing `jubik0` to core deps.
+- [x] **Optional dependencies** — Moved `torch`, `lightning`, `segmentation-models-pytorch`, `neuraloperator`, `wandb` to `[train]` extra; `snakemake` to `[pipeline]` extra. Added `[radio]` extra for `jubik0` + `resolve` (both not on PyPI — installed via `git+` URL). Guarded `train` imports with `try/except`. `jubik0` guarded in `spectral.py`; `resolve` is already lazily imported inside functions.
+- [x] **CI / CD** — Added `.github/workflows/ci.yml`: ruff lint + format check + pytest on cpu environment via `prefix-dev/setup-pixi`. Separate `test-radio` job clones `resolve` (with submodules) and `jubik0` from GitLab; marked `continue-on-error: true` since GitLab access is not guaranteed in public CI.
 
 ---
 
 ## Still Open
 
-### 1. CI / CD (GitHub Actions)
-
-**Priority: medium**
-
-No `.github/workflows/` directory exists yet. Add at minimum:
-
-- **Lint** — `ruff check` + `ruff format --check`
-- **Test** — `pytest` on the `cpu` pixi environment
-- **Optional:** build wheel, publish to PyPI on tags
-
-A minimal workflow:
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on: [push, pull_request]
-jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8
-        with:
-          environments: cpu
-      - run: pixi run -e cpu ruff check src/ tests/
-      - run: pixi run -e cpu ruff format --check src/ tests/
-      - run: pixi run -e cpu pytest tests/ -q
-```
-
----
-
-### 2. Shared Test Fixtures (`conftest.py`)
+### 1. Shared Test Fixtures (`conftest.py`)
 
 **Priority: medium**
 
@@ -59,7 +30,7 @@ jobs:
 
 ---
 
-### 3. Documentation Build
+### 2. Documentation Build
 
 **Priority: medium**
 
@@ -72,7 +43,7 @@ jobs:
 
 ---
 
-### 4. PEP 561 Type Marker (`py.typed`)
+### 3. PEP 561 Type Marker (`py.typed`)
 
 **Priority: low**
 
@@ -80,7 +51,7 @@ Add an empty `src/aim_resolve/py.typed` file so type checkers (mypy, pyright) re
 
 ---
 
-### 5. Separate `steering/` from the Library Package
+### 4. Separate `steering/` from the Library Package
 
 **Priority: low**
 
@@ -93,7 +64,7 @@ Consider:
 
 ---
 
-### 6. `__all__` in Subpackage `__init__.py` Files
+### 5. `__all__` in Subpackage `__init__.py` Files
 
 **Priority: low**
 
