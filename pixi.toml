@@ -72,7 +72,7 @@ jax = ">=0.4.30,!=0.6"
 
 # ── Environments ─────────────────────────────────────────────────────
 [environments]
-default = { features = ["cuda", "train", "pipeline"] }
-cpu = { features = ["cpu", "train", "pipeline"] }
-# Optional: includes jubik0 + resolve from gitlab.mpcdf.mpg.de (may require access)
-radio-cpu = { features = ["cpu", "train", "pipeline", "radio"] }
+default = { features = ["cuda", "train", "pipeline", "docs"] }
+cpu = { features = ["cpu", "train", "pipeline", "docs"] }
+radio-cuda = { features = ["cuda", "train", "pipeline", "radio", "docs"] }
+radio-cpu = { features = ["cpu", "train", "pipeline", "radio", "docs"] }
