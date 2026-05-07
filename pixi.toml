@@ -8,10 +8,8 @@ version = "0.1.0"
 
 # ── Shared (default feature) ─────────────────────────────────────────
 [dependencies]
-python = ">=3.11,<3.13"
+python = ">=3.11,<3.14"
 pytest = ">=8.4.2,<9"
-ruff = ">=0.8,<1"
-pre-commit = ">=4.0,<5"
 pip = ">=25.2,<26"
 numpy = ">=2.3.2,<3"
 scipy = ">=1.15,<2"
@@ -24,15 +22,16 @@ ducc0 = "*"
 h5py = "*"
 pandas = "*"
 scikit-learn = "*"
+ruff = ">=0.9"
+pre-commit = ">=4.0"
 
 [pypi-dependencies]
-aim-resolve = { path = ".", editable = true }
-jaxlib = ">=0.4.30"
 jaxbind = "*"
 jax-finufft = "*"
 jax-tqdm = "*"
-nifty8 = { version = ">=8.0.0,<9", extras = ["re"] }
-nifty = { version = ">=9.1.0,<10", extras = ["re"] }
+nifty = ">=9.0.0,<10"
+nifty8 = ">=8.0.0,<9"
+aim-resolve = { path = ".", editable = true }
 
 # ── train extra (mirrors [project.optional-dependencies] train) ──────
 [feature.train.pypi-dependencies]
@@ -65,7 +64,7 @@ cuda-version = "12.6.*"
 jax = { version = ">=0.4.30,!=0.6", extras = ["cuda12"] }
 
 [feature.cuda.system-requirements]
-cuda = "12.9"
+cuda = "12.6"
 
 # ── CPU feature ──────────────────────────────────────────────────────
 [feature.cpu.pypi-dependencies]
