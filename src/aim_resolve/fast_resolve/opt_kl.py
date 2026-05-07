@@ -91,8 +91,9 @@ def fast_optimize_kl(
     transitions: Callable | None = None,
     constants=(),
     point_estimates=(),
-    kl_jit=True,
-    residual_jit=True,
+    jit=True,
+    linear_minimizer_jit=False,
+    nonlinear_minimizer_jit=False,
     kl_map=jax.vmap,
     residual_map="lmap",
     kl_reduce=_reduce,
@@ -107,8 +108,6 @@ def fast_optimize_kl(
     callback: Callable[[Samples, OptimizeVIState], None] | None = None,
     odir: str | None = None,
     devices: list | None = None,
-    kl_device_map="shard_map",
-    residual_device_map="shard_map",
 ) -> tuple[MySamples, OptimizeVIState, int]:
     """Run the fast-resolve optimise-KL loop with major/minor cycles.
 
@@ -134,10 +133,12 @@ def fast_optimize_kl(
         Parameters held constant during KL minimisation.
     point_estimates : tuple or tree-like, optional
         Parameters treated as point estimates (not sampled).
-    kl_jit : bool, optional
-        JIT-compile the KL minimisation. Default is True.
-    residual_jit : bool, optional
-        JIT-compile the residual computation. Default is True.
+    jit : bool, optional
+        Whether to JIT-compile the KL value and gradient function. Default is True.
+    linear_minimizer_jit : bool, optional
+        Whether to JIT-compile the linear minimizer. Default is False.
+    nonlinear_minimizer_jit : bool, optional
+        Whether to JIT-compile the nonlinear minimizer. Default is False.
     kl_map : callable or str, optional
         Map function for the KL minimisation.
     residual_map : callable or str, optional
@@ -162,10 +163,6 @@ def fast_optimize_kl(
         Output directory for checkpoints and logs.
     devices : list or None, optional
         JAX devices for sample distribution.
-    kl_device_map : str, optional
-        Device-mapping strategy for KL minimisation.
-    residual_device_map : str, optional
-        Device-mapping strategy for residual computation.
 
     Returns
     -------
@@ -221,15 +218,14 @@ def fast_optimize_kl(
 
     opt_vi = MyOptimizeVI(
         lh_fun=my_lh,
-        kl_jit=kl_jit,
-        residual_jit=residual_jit,
+        jit=jit,
+        linear_minimizer_jit=linear_minimizer_jit,
+        nonlinear_minimizer_jit=nonlinear_minimizer_jit,
         kl_map=kl_map,
         residual_map=residual_map,
         kl_reduce=kl_reduce,
         mirror_samples=mirror_samples,
         devices=devices,
-        kl_device_map=kl_device_map,
-        residual_device_map=residual_device_map,
     )
 
     if opt_vi_st is None or len(opt_vi_st.config) == 0:

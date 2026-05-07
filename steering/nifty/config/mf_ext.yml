@@ -27,4 +27,3 @@ lh.5:
 data.5:
   fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
   mode: radio
-  nrow: 1000

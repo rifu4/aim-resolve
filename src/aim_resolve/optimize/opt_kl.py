@@ -92,8 +92,9 @@ def optimize_kl(
     transitions: Callable | None = None,
     constants=(),
     point_estimates=(),
-    kl_jit=True,
-    residual_jit=True,
+    jit=True,
+    linear_minimizer_jit=False,
+    nonlinear_minimizer_jit=False,
     kl_map=jax.vmap,
     residual_map="lmap",
     kl_reduce=_reduce,
@@ -144,10 +145,12 @@ def optimize_kl(
         it as a point estimate. As a convenience method, for dict-like
         inputs, a tuple of strings is also valid. From these the boolean
         indicator pytree is automatically constructed.
-    kl_jit: bool or callable
-        Whether to jit the KL minimization.
-    residual_jit: bool or callable
-        Whether to jit the residual sampling functions.
+    jit : bool, optional
+        Whether to JIT-compile the KL value and gradient function. Default is True.
+    linear_minimizer_jit : bool, optional
+        Whether to JIT-compile the linear minimizer. Default is False.
+    nonlinear_minimizer_jit : bool, optional
+        Whether to JIT-compile the nonlinear minimizer. Default is False.
     kl_map: callable or str
         Map function used for the KL minimization.
     residual_map: callable or str
@@ -228,8 +231,9 @@ def optimize_kl(
 
     opt_vi = MyOptimizeVI(
         lh_fun=my_lh,
-        kl_jit=kl_jit,
-        residual_jit=residual_jit,
+        jit=jit,
+        linear_minimizer_jit=linear_minimizer_jit,
+        nonlinear_minimizer_jit=nonlinear_minimizer_jit,
         kl_map=kl_map,
         residual_map=residual_map,
         kl_reduce=kl_reduce,
