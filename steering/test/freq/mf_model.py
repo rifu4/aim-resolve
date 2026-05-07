@@ -1,3 +1,5 @@
+# %%
+
 import jax
 import numpy as np
 from aim_resolve import SignalModel, PointModel, TileModel, ComponentModel, plot_arrays
@@ -15,12 +17,16 @@ bg = SignalModel.build(
             offset_std=(1,0.1),
             fluctuations=(1,0.1),
             loglogavgslope=(-2,0.5),
+            flexibility=[1.2, 0.4],
+            asperity=[0.2, 0.2],
         ),
         alpha=dict(
             offset_mean=-3,
             offset_std=(1,0.1),
             fluctuations=(1,0.1),
             loglogavgslope=(-2,0.5),
+            flexibility=[1.2, 0.4],
+            asperity=[0.2, 0.2],
         ),
         deviations=dict(
             process='wiener',
@@ -29,6 +35,7 @@ bg = SignalModel.build(
     ),
 )
 print(bg.domain)
+exit()
 
 key, subkey = jax.random.split(key)
 xi = bg.init(subkey)

@@ -1,3 +1,5 @@
+# %%
+
 import jax
 import numpy as np
 from aim_resolve import SignalModel, PointModel, TileModel, ComponentModel, plot_arrays
@@ -35,6 +37,7 @@ bg = SignalModel.build(
     ),
 )
 print(bg.domain)
+exit()
 
 key, subkey = jax.random.split(key)
 xi = bg.init(subkey)
