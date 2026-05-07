@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0+ OR BSD-2-Clause
 # Authors: Matteo Guardiani & Julian Rüstig,
 
-from typing import Any, Union
-
 
 def check_demands(model_name, kwargs, demands):
     """Check that all demands are provided in kwargs."""

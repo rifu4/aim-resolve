@@ -108,11 +108,11 @@ def prior_or_const(value, ptree, name, prior=lognormal_prior):
     WrappedCall or scalar
         A callable prior or the unchanged constant value.
     """
-    if isinstance(value, (tuple, list)) and len(value) == 2:
+    if isinstance(value, tuple | list) and len(value) == 2:
         value = prior(*value)
         value = WrappedCall(value, name=name)
         ptree.update(value.domain)
-    elif not isinstance(value, (int, float)):
+    elif not isinstance(value, int | float):
         raise TypeError(f"`{value}` must be of type `tuple`, `list`, `int` or `float`")
     return value
 

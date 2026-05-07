@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0+ OR BSD-2-Clause
 # Authors: Matteo Guardiani & Julian Rüstig
 
-from typing import Union
+from collections.abc import Callable
 
 from nifty.re.model import Model
 from nifty.re.num.stats_distributions import lognormal_prior, normal_prior
@@ -22,7 +22,7 @@ class ScaledExcitations(Model):
 
 def build_scaled_excitations(
     prefix: str,
-    fluctuations_settings: Union[callable, tuple, list],
+    fluctuations_settings: Callable[..., object] | tuple | list,
     shape: tuple[int],
 ) -> ScaledExcitations:
     fluctuations = build_distribution_or_default(

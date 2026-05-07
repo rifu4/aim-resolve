@@ -2,8 +2,8 @@
 
 # SPDX-License-Identifier: BSD-2-Clause
 
+from collections.abc import Callable
 from functools import partial
-from typing import Callable, Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -17,7 +17,7 @@ from nifty.re.tree_math import ShapeWithDtype, random_like
 def nd_wiener_process(
     xi: Array,
     x0: Array,
-    sigma: Union[float, Array],
+    sigma: float | Array,
     dt: Array,
 ):
     """Implements the Wiener process (WP)."""
@@ -29,10 +29,10 @@ class NdGaussMarkovProcess(Model):
     def __init__(
         self,
         process: Callable,
-        x0: Union[float, Array, LazyModel],
-        dt: Union[float, Array],
+        x0: float | Array | LazyModel,
+        dt: float | Array,
         name="xi",
-        N_steps: Optional[int] = None,
+        N_steps: int | None = None,
         **kwargs,
     ):
         if jnp.isscalar(dt):
@@ -69,9 +69,9 @@ class NdGaussMarkovProcess(Model):
 
 
 def build_wiener_process(
-    x0: Union[tuple, float, Array, LazyModel],
-    sigma: Union[tuple, float, Array, LazyModel],
-    dt: Union[float, Array],
+    x0: tuple | float | Array | LazyModel,
+    sigma: tuple | float | Array | LazyModel,
+    dt: float | Array,
     name: str = "wp",
     n_steps: int = None,
 ) -> NdGaussMarkovProcess:
@@ -119,8 +119,8 @@ def build_wiener_process(
 
 
 def build_fixed_point_wiener_process(
-    x0: Union[tuple, float, Array, LazyModel],
-    sigma: Union[tuple, float, Array, LazyModel],
+    x0: tuple | float | Array | LazyModel,
+    sigma: tuple | float | Array | LazyModel,
     t: Array,
     reference_t_index: int,
     name: str = "wp",

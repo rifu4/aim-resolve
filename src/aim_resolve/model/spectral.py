@@ -6,7 +6,10 @@ import jax.numpy as jnp
 import numpy as np
 from nifty.re import Model, VModel
 
-from ..multi_frequency import build_simple_spectral_sky, build_frequency_deviations_model_with_degeneracies
+from ..multi_frequency import (
+    build_frequency_deviations_model_with_degeneracies,
+    build_simple_spectral_sky,
+)
 from ..optimize.samples import domain_tree, model_init
 from .grid import PointGrid, SignalGrid
 from .prior import prior_model

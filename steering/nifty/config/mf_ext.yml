@@ -2,7 +2,7 @@
 
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
-file: 4_pre_2z.yml
+file: 3_pre_2z.yml
 
 ---
 
@@ -13,15 +13,18 @@ ref_freq_index: 1
 
 ---
 
-opt.6:
+opt.5:
   base: base_opt.0
+  likelihood: =lh.5
 
-lh.6:
-  data: =data.6
-  split:
-    size: 256
-    factor: 2
+lh.5:
+  data: =data.5
+  mode: fast
+  # split:
+  #   size: 256
+  #   factor: 2
 
-data.6:
+data.5:
   fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
   mode: radio
+  nrow: 1000

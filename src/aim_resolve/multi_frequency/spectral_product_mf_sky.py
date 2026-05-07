@@ -4,8 +4,8 @@
 # Vincent Eberle, Philipp Frank, Vishal Johnson,
 # Jakob Roth, Margret Westerkamp
 
+from collections.abc import Callable
 from functools import partial, reduce
-from typing import Callable, Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
@@ -18,19 +18,19 @@ from nifty.re.correlated_field import (
     make_grid,
 )
 from nifty.re.model import Model
-from nifty.re.num.stats_distributions import lognormal_prior, normal_prior
+from nifty.re.num.stats_distributions import normal_prior
 from nifty.re.tree_math.vector import Vector
 from numpy.typing import ArrayLike
 
-from .spectral_product_utils.frequency_deviations import (
-    build_frequency_deviations_model_with_degeneracies,
-)
 from .spectral_product_utils.distribution_or_default import (
     build_distribution_or_default,
 )
+from .spectral_product_utils.frequency_deviations import (
+    build_frequency_deviations_model_with_degeneracies,
+)
 from .spectral_product_utils.normalized_amplitude_model import (
-    build_normalized_amplitude_model,
     assert_normalized_amplitude_model,
+    build_normalized_amplitude_model,
 )
 from .spectral_product_utils.scaled_excitations import (
     ScaledExcitations,
@@ -77,14 +77,12 @@ class SpectralProductSky(Model):
         self,
         zero_mode: Model,
         spatial_scaled_excitations: ScaledExcitations,
-        spatial_amplitude: Union[MaternAmplitude, NonParametricAmplitude],
+        spatial_amplitude: MaternAmplitude | NonParametricAmplitude,
         log_spectral_behavior: HarmonicLogSpectralBehavior,
-        spectral_amplitude: Optional[
-            Union[MaternAmplitude, NonParametricAmplitude]
-        ] = None,
-        spectral_index_deviations: Optional[Model] = None,
-        log_ref_freq_mean_model: Optional[Model] = None,
-        nonlinearity: Optional[Callable] = jnp.exp,
+        spectral_amplitude: MaternAmplitude | NonParametricAmplitude | None = None,
+        spectral_index_deviations: Model | None = None,
+        log_ref_freq_mean_model: Model | None = None,
+        nonlinearity: Callable | None = jnp.exp,
     ):
         """
         Parameters
@@ -318,7 +316,9 @@ class SpectralProductSky(Model):
         return jnp.array(
             [
                 (self._hdvol * self._ht(amplitude[self._pd] * spf)) + spm
-                for spm, spf in zip(spectral_mean[:order], spectral_fluc[:order])
+                for spm, spf in zip(
+                    spectral_mean[:order], spectral_fluc[:order], strict=False
+                )
             ]
         )
 
@@ -451,16 +451,16 @@ def build_simple_spectral_sky(
     prefix: str,
     shape: tuple[int],
     distances: tuple[float],
-    log_frequencies: Union[tuple[float], ArrayLike],
+    log_frequencies: tuple[float] | ArrayLike,
     reference_frequency_index: int,
-    zero_mode_settings: Union[tuple, Callable],
+    zero_mode_settings: tuple | Callable,
     spatial_amplitude_settings: dict,
     spectral_index_settings: dict,
-    spectral_index_mean: Optional[Model] = None,
-    spectral_index_fluctuations: Optional[Model] = None,
-    spectral_amplitude_settings: Optional[dict] = None,
-    deviations_settings: Optional[dict] = None,
-    log_reference_frequency_mean_model: Optional[Model] = None,
+    spectral_index_mean: Model | None = None,
+    spectral_index_fluctuations: Model | None = None,
+    spectral_amplitude_settings: dict | None = None,
+    deviations_settings: dict | None = None,
+    log_reference_frequency_mean_model: Model | None = None,
     spatial_amplitude_model: str = "non_parametric",
     spectral_amplitude_model: str = "non_parametric",
     harmonic_type: str = "fourier",
@@ -630,5 +630,5 @@ def build_simple_spectral_sky(
 
 
 def add_prefix(object: SpectralProductSky, prefix_key: str):
-    setattr(object, "_prefix", prefix_key)
+    object._prefix = prefix_key
     return object

@@ -104,13 +104,13 @@ def plot_models(
         axes.append(figure.add_subplot(rows, cols, i + 1))
 
         model = models[x, y]
-        if not isinstance(model, (ComponentModel, PointModel, SignalModel, TileModel)):
+        if not isinstance(model, ComponentModel | PointModel | SignalModel | TileModel):
             raise TypeError(
                 "`model` has to be of type `ComponentModel`, `PointModel`, `SignalModel` or `TileModel`"
             )
         if isinstance(samples, MySamples):
             array = samples.mean(model)
-        elif isinstance(samples, (Vector, dict)):
+        elif isinstance(samples, Vector | dict):
             array = model(samples)
         else:
             raise TypeError(

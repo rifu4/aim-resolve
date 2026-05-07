@@ -3,23 +3,22 @@
 # Authors: Matteo Guardiani & Julian Rüstig
 # Vincent Eberle, Philipp Frank, Vishal Johnson,
 # Jakob Roth, Margret Westerkamp
-from typing import Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
 from nifty.re.num.stats_distributions import lognormal_prior
 from numpy.typing import ArrayLike
 
-from .gauss_markov import NdGaussMarkovProcess, build_fixed_point_wiener_process
 from .check_demands import check_demands
 from .distribution_or_default import build_distribution_or_default
+from .gauss_markov import NdGaussMarkovProcess, build_fixed_point_wiener_process
 
 
 def build_frequency_deviations_model_with_degeneracies(
     shape: tuple[int],
-    log_frequencies: Union[tuple[float], ArrayLike],
+    log_frequencies: tuple[float] | ArrayLike,
     reference_frequency_index: int,
-    deviations_settings: Optional[dict],
+    deviations_settings: dict | None,
     prefix: str = None,
 ) -> NdGaussMarkovProcess | None:
     """

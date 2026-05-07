@@ -43,7 +43,7 @@ class SignalGrid:
         )
 
     def __contains__(self, other):
-        if not isinstance(other, (SignalGrid, PointGrid)):
+        if not isinstance(other, SignalGrid | PointGrid):
             raise ValueError(
                 "Can only check containment for a SignalGrid or PointGrid."
             )

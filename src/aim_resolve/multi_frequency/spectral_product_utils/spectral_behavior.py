@@ -7,11 +7,10 @@ from functools import reduce
 
 import jax.numpy as jnp
 from jax.typing import ArrayLike
-
-from .scaled_excitations import ScaledExcitations
-
 from nifty.re.model import Model
 from nifty.re.tree_math.vector import Vector
+
+from .scaled_excitations import ScaledExcitations
 
 
 class HarmonicLogSpectralBehavior(Model, ABC):

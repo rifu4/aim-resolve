@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0+ OR BSD-2-Clause
 # Authors: Matteo Guardiani & Julian Rüstig,
 
-from typing import Union
+from collections.abc import Callable
 
 from nifty.re.correlated_field import (
     MaternAmplitude,
@@ -14,7 +14,10 @@ from nifty.re.num.stats_distributions import lognormal_prior, normal_prior
 from .check_demands import check_demands
 
 
-def _set_default_or_call(arg: Union[callable, tuple, list] | None, default: callable):
+def _set_default_or_call(
+    arg: Callable[..., object] | tuple | list | None,
+    default: Callable[..., object],
+):
     """Either sets the default distribution or the callable"""
     if arg is None:
         return None
@@ -65,7 +68,7 @@ def build_normalized_amplitude_model(
     renormalize_amplitude: bool = True,
     prefix: str = None,
     kind: str = "amplitude",
-) -> Union[None, MaternAmplitude, NonParametricAmplitude]:
+) -> None | MaternAmplitude | NonParametricAmplitude:
     """
     Build an amplitude model based on
     the specified settings and model type.

@@ -3,7 +3,6 @@
 # Authors: Matteo Guardiani
 
 from functools import reduce
-from typing import Optional, Union
 
 import jax.numpy as jnp
 import nifty.re as jft
@@ -72,9 +71,7 @@ class PointSourceSpectralIndex(SingleHarmonicLogSpectralBehavior):
         return self._mean(p)
 
     def fluctuations(self, p) -> ArrayLike:
-        return jnp.zeros(
-            self._spatial_shape, dtype=self.relative_log_frequencies.dtype
-        )
+        return jnp.zeros(self._spatial_shape, dtype=self.relative_log_frequencies.dtype)
 
     def fluctuations_with_frequencies(self, p) -> ArrayLike:
         return self.fluctuations(p) * self.relative_log_frequencies
@@ -112,7 +109,7 @@ class MultiFrequencyInvGammaSky(jft.Model):
         self,
         reference_frequency_model: jft.Model,
         log_spectral_behavior: SingleHarmonicLogSpectralBehavior,
-        spectral_index_deviations: Optional[jft.Model] = None,
+        spectral_index_deviations: jft.Model | None = None,
     ):
         """
         Parameters
@@ -167,8 +164,10 @@ class MultiFrequencyInvGammaSky(jft.Model):
         """Convenience method to retrieve the log spectral distribution."""
         deviations = 0.0
         if self.spectral_index_deviations is not None:
-            deviations = self.log_spectral_behavior.remove_degeneracy_of_spectral_deviations(
-                self.spectral_index_deviations(p)
+            deviations = (
+                self.log_spectral_behavior.remove_degeneracy_of_spectral_deviations(
+                    self.spectral_index_deviations(p)
+                )
             )
 
         return (
@@ -195,7 +194,7 @@ def build_mf_invgamma_sky(
     alpha: float,
     q: float,
     shape: tuple[int, ...],
-    log_frequencies: Union[tuple[float, ...], ArrayLike],
+    log_frequencies: tuple[float, ...] | ArrayLike,
     reference_frequency_index: int,
     spectral_settings: dict,
     dtype: type = jnp.float64,

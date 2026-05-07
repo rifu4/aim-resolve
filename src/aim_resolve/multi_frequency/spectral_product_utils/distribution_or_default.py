@@ -2,15 +2,16 @@
 # SPDX-License-Identifier: GPL-2.0+ OR BSD-2-Clause
 # Authors: Matteo Guardiani & Julian Rüstig,
 
-from typing import Any, Union
+from collections.abc import Callable
+from typing import Any
 
 from nifty.re.correlated_field import WrappedCall
 
 
 def build_distribution_or_default(
-    arg: Union[callable, tuple, list],
+    arg: Callable[..., Any] | tuple | list,
     key: str,
-    default: callable,
+    default: Callable[..., Any],
     shape: tuple = (),
     dtype: Any | None = None,
 ):

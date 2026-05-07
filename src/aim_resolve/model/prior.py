@@ -212,13 +212,13 @@ def inverse_gamma_model(
         scale = mode * (alpha + 1)
     """
     match (mean, mode, alpha, scale):
-        case (me, mo, None, None) if isinstance(me, (int, float)) and isinstance(
-            mo, (int, float)
+        case (me, mo, None, None) if isinstance(me, int | float) and isinstance(
+            mo, int | float
         ):
             alpha = 2 / (me / mo - 1) + 1
             scale = mo * (alpha + 1)
-        case (None, None, al, sc) if isinstance(al, (int, float)) and isinstance(
-            sc, (int, float)
+        case (None, None, al, sc) if isinstance(al, int | float) and isinstance(
+            sc, int | float
         ):
             pass
         case _:
