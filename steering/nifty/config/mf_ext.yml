@@ -3,6 +3,7 @@
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
 file: 3_pre_2z.yml
+run: 1
 
 ---
 
@@ -20,9 +21,9 @@ opt.5:
 lh.5:
   data: =data.5
   mode: fast
-  # split:
-  #   size: 256
-  #   factor: 2
+  split:
+    size: 256
+    factor: 2
 
 data.5:
   fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz

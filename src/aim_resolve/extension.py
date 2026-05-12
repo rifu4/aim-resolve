@@ -47,6 +47,7 @@ def freq_extension(
     freq,
     base="base.yml",
     ref_freq_index=1,
+    run=0,
     **kwargs,
 ):
     """Create a multi-frequency extension configuration.
@@ -67,6 +68,8 @@ def freq_extension(
         Name of the base configuration file. Default is ``'base.yml'``.
     ref_freq_index : int, optional
         Index of the reference frequency in *freq*. Default is 1.
+    run : int, optional
+        Run number to append to the output directory name. Default is 0 (no run number).
     **kwargs
         Additional section overrides applied before writing.
 
@@ -84,6 +87,7 @@ def freq_extension(
     """
     base = f"{odir}/files/{base}"
     base_dct = yaml_load(base)
+    run = "" if run == 0 else f"_{run}"
 
     cfg = SetupKLConfig.from_file(f"{odir}/files/{file}")
 
@@ -97,7 +101,7 @@ def freq_extension(
     cfg.modify_sec(
         "opt",
         resume=cfg.sections["opt"]["odir"],
-        odir=cfg.sections["opt"]["odir"] + f"_{len(freq)}f",
+        odir=cfg.sections["opt"]["odir"] + f"_{len(freq)}f{run}",
     )
 
     for sec in cfg.sections:
@@ -139,7 +143,7 @@ def freq_extension(
 
     cfg = fun2mode(cfg)
 
-    ext_file = f"{odir}/files/{file.split('.')[0]}_{len(freq)}f.yml"
+    ext_file = f"{odir}/files/{file.split('.')[0]}_{len(freq)}f{run}.yml"
     cfg.to_file(ext_file)
 
     return base, ext_file
@@ -151,6 +155,7 @@ def zoom_extension(
     file,
     zoom,
     base="base.yml",
+    run=0,
     **kwargs,
 ):
     """Create a zoom extension configuration.
@@ -169,6 +174,8 @@ def zoom_extension(
         Zoom factor to apply to non-background grids.
     base : str, optional
         Name of the base configuration file. Default is ``'base.yml'``.
+    run : int, optional
+        Run number to append to the output directory name. Default is 0 (no run number).
     **kwargs
         Additional section overrides applied before writing.
 
@@ -181,6 +188,7 @@ def zoom_extension(
     """
     base = f"{odir}/files/{base}"
     base_dct = yaml_load(base)
+    run = "" if run == 0 else f"_{run}"
 
     cfg = SetupKLConfig.from_file(f"{odir}/files/{file}")
 
@@ -189,7 +197,7 @@ def zoom_extension(
     cfg.modify_sec(
         "opt",
         resume=cfg.sections["opt"]["odir"],
-        odir=cfg.sections["opt"]["odir"] + f"_{zoom}z",
+        odir=cfg.sections["opt"]["odir"] + f"_{zoom}z{run}",
     )
 
     for sec in cfg.sections:
@@ -212,7 +220,7 @@ def zoom_extension(
         lh_new=f"=lh.{cfg.it}",
         mode="zoom",
         opt_dct=dict(base="base_trans"),
-        odir=f"{odir}/opt/{cfg.it - 1}_rec_{zoom}z/trans",
+        odir=f"{odir}/opt/{cfg.it - 1}_rec_{zoom}z{run}/trans",
     )
     cfg.modify_sec(f"opt.{cfg.it}", base="base_opt.n", transitions=f"=trans.{cfg.it}")
 
@@ -221,7 +229,7 @@ def zoom_extension(
 
     cfg = fun2mode(cfg)
 
-    ext_file = f"{odir}/files/{file.split('.')[0]}_{zoom}z.yml"
+    ext_file = f"{odir}/files/{file.split('.')[0]}_{zoom}z{run}.yml"
     cfg.to_file(ext_file)
 
     return base, ext_file

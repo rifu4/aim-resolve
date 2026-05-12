@@ -30,7 +30,7 @@ class PSFConvolve(Model):
         Pre-computed PSF kernel array.
     """
 
-    fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
+    fft_kernel: Any = dataclasses.field(metadata=dict(static=False))
 
     def __init__(self, sky, psf_kernel):
         self.sky = sky
@@ -121,8 +121,8 @@ class PSFSplitConvolve(Model):
         Down-sampling factor for the low-resolution part.
     """
 
-    kernel_high: Any = dataclasses.field(metadata=dict(static=True))
-    kernel_low: Any = dataclasses.field(metadata=dict(static=True))
+    kernel_high: Any = dataclasses.field(metadata=dict(static=False))
+    kernel_low: Any = dataclasses.field(metadata=dict(static=False))
 
     def __init__(self, sky, psf_kernel, *, size, factor):
         self.sky = sky
@@ -177,7 +177,7 @@ class NInvConvolve(Model):
         Learnable noise scaling model.
     """
 
-    fft_kernel: Any = dataclasses.field(metadata=dict(static=True))
+    fft_kernel: Any = dataclasses.field(metadata=dict(static=False))
 
     def __init__(self, psf_conv, n_inv_kernel, noise_model):
         self.psf_conv = psf_conv

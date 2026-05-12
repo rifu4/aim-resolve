@@ -5,6 +5,8 @@ repos:
       - id: ruff
         args: [--fix, src/, tests/]
         files: ^(src|tests)/
+        exclude: ^(steering|demos|docs|site)/|\.ipynb$
       - id: ruff-format
         args: [src/, tests/]
         files: ^(src|tests)/
+        exclude: ^(steering|demos|docs|site)/|\.ipynb$

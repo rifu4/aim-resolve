@@ -1,5 +1,5 @@
 opt:
-  odir: nifty/runs/fast_rec
+  odir: runs/nifty/fast_rec
   key: 4
 
 ---
@@ -9,7 +9,7 @@ opt.0:
   likelihood: =lh.0
   n_major_iterations: 3
   n_minor_iterations: 1
-  n_samples: 0
+  n_samples: 2
   kl_kwargs:
     minimize_kwargs:
       name: M
@@ -33,8 +33,9 @@ lh.0:
   mode: fast
 
 data.0:
-  fname: data/runs/files/radio512_1deg.pkl
+  fname: /scratch/users/rfuchs/data/eso_986-1137mhz.npz
   mode: radio
+  nrow: 1000
 
 grid_bg:
   space: [512, 512]

@@ -49,6 +49,7 @@ def main(config, cuda_device, plot_range):
     # Instantiate the optimize-config class
     cfg = aim.OptimizeKLConfig.from_file((base, ext_file), aim.get_builders)
     odir = cfg.sections["opt"]["odir"] + "/plots"
+    print(f"odir: {odir}")
 
     # Initialize all signal models for each iteration
     sky_dct = {

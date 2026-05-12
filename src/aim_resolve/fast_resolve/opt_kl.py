@@ -12,8 +12,8 @@ from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
 from nifty.re import Gaussian, Model, OptimizeVIState, Samples, logger
-from nifty.re.conjugate_gradient import cg as _cg
-from nifty.re.optimize import _newton_cg
+from nifty.re.conjugate_gradient import static_cg as _cg
+from nifty.re.optimize import _static_newton_cg as _newton_cg
 
 from ..optimize.opt_kl import SMPL_MODE_GENERIC_TYP, _reduce, get_at_nit
 from ..optimize.opt_vi import MyOptimizeVI
@@ -38,9 +38,9 @@ class SkyResidualModel(Model):
         Residual data subtracted after convolution.
     """
 
-    sky_response: Callable = dataclasses.field(metadata=dict(static=True))
-    old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=True))
-    residual_data: ArrayLike = dataclasses.field(metadata=dict(static=True))
+    # sky_response: Callable = dataclasses.field(metadata=dict(static=True))
+    old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=False))
+    residual_data: ArrayLike = dataclasses.field(metadata=dict(static=False))
 
     def __init__(self, sky_response, old_reconstruction, residual_data):
         self.sky_response = sky_response
@@ -92,8 +92,8 @@ def fast_optimize_kl(
     constants=(),
     point_estimates=(),
     jit=True,
-    linear_minimizer_jit=False,
-    nonlinear_minimizer_jit=False,
+    linear_minimizer_jit=True,
+    nonlinear_minimizer_jit=True,
     kl_map=jax.vmap,
     residual_map="lmap",
     kl_reduce=_reduce,
