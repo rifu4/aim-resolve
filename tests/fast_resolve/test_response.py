@@ -31,15 +31,7 @@ class TestApplyExactResponse:
         result = apply_exact_response(rnr, val)
         assert result.shape == (1, 8, 8)
 
-    def test_list_of_operators(self):
-        rnr1 = self._make_mock_rnr((1, 8, 8))
-        rnr2 = self._make_mock_rnr((1, 8, 8))
-        val = np.ones((2, 8, 8))
-        result = apply_exact_response([rnr1, rnr2], val)
-        assert result.shape == (2, 8, 8)
-
-    def test_list_wrong_dims_raises(self):
+    def test_invalid_operator_raises(self):
         op = MagicMock()
-        op.domain.shape = (8, 8)  # 2 dims instead of 3
-        with pytest.raises(ValueError, match="3 dimensions"):
-            apply_exact_response([op], np.ones((8, 8)))
+        with pytest.raises(ValueError, match="shape mismatch"):
+            apply_exact_response(op, np.ones((8, 8)))

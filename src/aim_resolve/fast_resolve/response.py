@@ -73,13 +73,10 @@ def build_exact_responses(
 def apply_exact_response(RNR, val):
     """Apply the exact RNR response to a sky array.
 
-    Handles both single and list-of-operator cases by splitting the
-    value along the leading axis.
-
     Parameters
     ----------
-    RNR : Operator or list of Operator
-        RNR operator(s).
+    RNR : Operator
+        RNR operator.
     val : np.ndarray
         Sky value array.
 
@@ -87,21 +84,5 @@ def apply_exact_response(RNR, val):
     -------
     np.ndarray
         Response-applied array.
-
-    Raises
-    ------
-    ValueError
-        If any operator domain does not have exactly 3 dimensions.
     """
-    results, idx = [], 0
-    if isinstance(RNR, list):
-        for rnr in RNR:
-            if len(rnr.domain.shape) != 3:
-                raise ValueError("rnr domain must have 3 dimensions.")
-            results.append(
-                apply_exact_response(rnr, val[idx : idx + rnr.domain.shape[0]])
-            )
-            idx += rnr.domain.shape[0]
-        return np.concatenate(results, axis=0)
-
     return RNR(ift.makeField(RNR.domain, np.array(val))).val
