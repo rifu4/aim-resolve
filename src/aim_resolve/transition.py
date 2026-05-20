@@ -101,7 +101,7 @@ def transition_anew(
     pos_new = random_init(k_p, models, factor=0.01)
 
     print("New model parameters:")
-    for k, v in pos_new.ptree.items():
+    for k, v in domain_tree(pos_new).items():
         print(f"  {k}:", v.shape)
 
     return pos_new
@@ -167,7 +167,7 @@ def transition_freq(
     )
 
     print("New model parameters:")
-    for k, v in pos_new.ptree.items():
+    for k, v in domain_tree(pos_new).items():
         print(f"  {k}:", v.shape)
 
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
@@ -388,7 +388,7 @@ def transition_addt(
     )
 
     print("New model parameters:")
-    for k, v in pos_new.ptree.items():
+    for k, v in domain_tree(pos_new).items():
         print(f"  {k}:", v.shape)
 
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
@@ -514,7 +514,7 @@ def transition_zoom(
     )
 
     print("New model parameters:")
-    for k, v in pos_new.ptree.items():
+    for k, v in domain_tree(pos_new).items():
         print(f"  {k}:", v.shape)
 
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
