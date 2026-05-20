@@ -53,7 +53,7 @@ class MySamples(Samples):
     @classmethod
     def from_samples(cls, samples: Samples) -> "MySamples":
         """Create a MySamples object from a nifty.re.Samples object."""
-        return cls(pos=samples.pos, samples=samples.samples, keys=samples.keys)
+        return cls(pos=samples._pos, samples=samples._samples, keys=samples._keys)
 
     def to_samples(self) -> Samples:
         """Convert MySamples object to a nifty.re.Samples object."""
