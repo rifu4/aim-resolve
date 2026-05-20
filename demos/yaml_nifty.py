@@ -1,9 +1,17 @@
 # %%
 
+import os 
+# os.environ["JAX_PLATFORM_NAME"] = "cpu"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+
+
+# %%
+
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import nifty8.re as jft
+import nifty.re as jft
 import numpy as np
 
 from aim_resolve import OptimizeKLConfig, optimize_kl, random_init
@@ -113,9 +121,15 @@ def likelihood(
     *,
     signal,
     data,
+    mode,
     noise_var=0.01,
 ):
-    lh = dict(model=signal, data=data, noise_cov_inv=lambda x: noise_var**-2 * x)
+    lh = dict(
+        signal=signal, 
+        sky_response=signal,
+        data=data, 
+        noise_cov_inv=lambda x: noise_var**-2 * x,
+    )
     return lh
 
 
@@ -144,7 +158,7 @@ def transition(
     sig_new,
     opt_dct,
     margin=1,
-    noise_var=0.01,
+    noise_var=0.1,
     odir=None,
 ):
     def tr(key, samples, it):
@@ -175,7 +189,7 @@ def transition(
         data = rec + noise
 
         # setup the likelihood function
-        lh = dict(model=sig_df, data=data, noise_cov_inv=lambda x: noise_var**-2 * x)
+        lh = dict(sky_response=sig_df, data=data, noise_cov_inv=lambda x: noise_var**-2 * x)
 
         # optimize the new diffuse signal model
         samples, state = optimize_kl(lh, key=k_o, **opt_dct)

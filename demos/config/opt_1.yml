@@ -2,7 +2,7 @@
 
 opt:
   odir: runs/opt_1
-  key: 42
+  key: 44
   resume: false
 
 ---
@@ -17,12 +17,13 @@ opt.1:
 lh.1:
   signal: =sig.1
   data: =data
-  noise_var: 0.01
+  noise_var: 0.1
+  mode: image
 
 data:
   signal: =sig.2
   seed: 1234
-  noise_var: 0.01
+  noise_var: 0.1
 
 sig.1:
   diffuse: =sig_df.1
@@ -33,7 +34,7 @@ sig_df.1:
   offset_mean: 8.
   offset_std: [1., .1]
   fluctuations: [5., 1.]
-  loglogavgslope: [-2., 1.]
+  loglogavgslope: [-2., 0.5]
   flexibility: [1.2, .4]
   asperity: [.2, .2]
 
@@ -75,7 +76,7 @@ sig_df.2:
   offset_mean: 10.0
   offset_std: [1.0, 0.1]
   fluctuations: [5.0, 1.0]
-  loglogavgslope: [-2.0, 1.0]
+  loglogavgslope: [-2.0, 0.5]
   flexibility: [1.2, 0.4]
   asperity: [0.2, 0.2]
 
@@ -83,5 +84,5 @@ sig_ps.2:
   prefix: ps.2
   shape: *shp
   coos: [[5,6],[54,67],[31,90],[100,22],[46,120]]
-  mean: 10.0
+  mean: 20.0
   std: 2.0
