@@ -72,7 +72,5 @@ jax = ">=0.4.30,!=0.6"
 
 # ── Environments ─────────────────────────────────────────────────────
 [environments]
-default = { features = ["cuda", "train", "pipeline", "docs"] }
-cpu = { features = ["cpu", "train", "pipeline", "docs"] }
-radio-cuda = { features = ["cuda", "train", "pipeline", "radio", "docs"] }
-radio-cpu = { features = ["cpu", "train", "pipeline", "radio", "docs"] }
+default = { features = ["cuda", "train", "pipeline", "radio", "docs"] }
+cpu = { features = ["cpu", "train", "pipeline", "radio", "docs"] }
