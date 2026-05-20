@@ -16,4 +16,4 @@ Fast interferometric response and KL optimisation using the DUCC gridder.
 
 ## Optimisation (KL)
 
-::: aim_resolve.fast_resolve.opt_kl
+::: aim_resolve.fast_resolve.fast_kl

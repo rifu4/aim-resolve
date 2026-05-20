@@ -100,10 +100,9 @@ def transition_anew(
     key, k_p = random.split(key)
     pos_new = random_init(k_p, models, factor=0.01)
 
-    # print ptree
-    # print('New model parameters:')
-    # for k,v in pos_new.ptree.items():
-    #     print(f'  {k}:', v.shape)
+    print("New model parameters:")
+    for k, v in pos_new.ptree.items():
+        print(f"  {k}:", v.shape)
 
     return pos_new
 
@@ -162,15 +161,14 @@ def transition_freq(
             domain_tree(samples)[nm_old.prefix], nm_new.target.shape
         )
 
-    # print ptree
-    print("Copied model parameters:")
-    for k, v in ptree.items():
-        print(f"  {k}:", v.shape)
-
     key, k_p = random.split(key)
     pos_new = random_init(
         k_p, [v for v in lh_new.values() if isinstance(v, Model)], ptree, factor=0.01
     )
+
+    print("New model parameters:")
+    for k, v in pos_new.ptree.items():
+        print(f"  {k}:", v.shape)
 
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
 
@@ -223,7 +221,7 @@ def transition_util(
             samples = pickle.load(f)
         models = [v for v in lh_new.values() if isinstance(v, Model)]
         if domain_keys(samples) == domain_keys(models):
-            return samples
+            return MySamples.from_samples(samples)
 
     samples, *_ = func(key, samples, it, lh_new=lh_new, odir=odir, **kwargs)
 
@@ -384,12 +382,16 @@ def transition_addt(
             domain_tree(samples)[nm_old.prefix]
         )
 
-    # print ptree
-    # print('New model parameters:')
-    # for k,v in ptree.items():
-    #     print(f'  {k}:', v.shape)
+    key, k_p = random.split(key)
+    pos_new = random_init(
+        k_p, [v for v in lh_new.values() if isinstance(v, Model)], ptree, factor=0.01
+    )
 
-    samples_new = MySamples(pos=Vector(ptree), samples=None, keys=None)
+    print("New model parameters:")
+    for k, v in pos_new.ptree.items():
+        print(f"  {k}:", v.shape)
+
+    samples_new = MySamples(pos=pos_new, samples=None, keys=None)
 
     return samples_new, ofs_dct
 
@@ -462,14 +464,28 @@ def transition_zoom(
         if sky_ni.grid not in sky_oi.grid and sky_oi.grid in sky_ni.grid:
             raise ValueError("Old and new sky model components have to match.")
         rec_oi = map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
-        pos_ci = optimize_and_plot(
-            key=keys.pop(),
-            sky=sky_ni,
-            data=rec_oi,
-            noise=noise.copy(),
-            opt_dct=opt_dct,
-            plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
-        )
+        if sky_ni.grid == sky_oi.grid:
+            pos_ci = {
+                k.replace(sky_oi.prefix, sky_ni.prefix): v
+                for k, v in domain_tree(samples).items()
+                if k.startswith(sky_oi.prefix)
+            }
+            pos_ci = optimize_and_plot(
+                key=keys.pop(),
+                sky=sky_ni,
+                data=rec_oi,
+                pos=Vector(pos_ci),
+                plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+            )
+        else:
+            pos_ci = optimize_and_plot(
+                key=keys.pop(),
+                sky=sky_ni,
+                data=rec_oi,
+                noise=noise.copy(),
+                opt_dct=opt_dct,
+                plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+            )
         ptree |= pos_ci.tree
 
     rec_sky = map_signal(sky_old.grid, sky_new.grid)(samples.mean(sky_old))
@@ -492,12 +508,16 @@ def transition_zoom(
             domain_tree(samples)[nm_old.prefix]
         )
 
-    # print ptree
+    key, k_p = random.split(key)
+    pos_new = random_init(
+        k_p, [v for v in lh_new.values() if isinstance(v, Model)], ptree, factor=0.01
+    )
+
     print("New model parameters:")
-    for k, v in ptree.items():
+    for k, v in pos_new.ptree.items():
         print(f"  {k}:", v.shape)
 
-    samples_new = MySamples(pos=Vector(ptree), samples=None, keys=None)
+    samples_new = MySamples(pos=pos_new, samples=None, keys=None)
 
     return samples_new, None
 

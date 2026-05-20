@@ -10,10 +10,6 @@ Optimization routines and configuration helpers.
 
 ::: aim_resolve.optimize.opt_kl
 
-## Variational Inference (VI)
-
-::: aim_resolve.optimize.opt_vi
-
 ## Descent (DCT)
 
 ::: aim_resolve.optimize.opt_dct

@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from ..fast_resolve.opt_kl import fast_optimize_kl
+from ..fast_resolve.fast_kl import fast_optimize_kl
 from .opt_kl import optimize_kl
 from .samples import domain_keys
 from .util import (
@@ -235,6 +235,8 @@ class OptimizeKLConfig:
             val = get_it(sec, it)
             if key in ["constants", "point_estimates"]:
                 val = self.get_constants_or_point_estimates(val, it)
+            elif key == "likelihood" and it > 0 and val == get_it(sec, it - 1):
+                val = None
             elif (
                 isinstance(val, str) and len(val) > 1 and val.startswith("=")
             ):  # is reference

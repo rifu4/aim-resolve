@@ -50,6 +50,15 @@ class MySamples(Samples):
         else:
             return mean_and_std(tuple(model(s) for s in self))
 
+    @classmethod
+    def from_samples(cls, samples: Samples) -> "MySamples":
+        """Create a MySamples object from a nifty.re.Samples object."""
+        return cls(pos=samples.pos, samples=samples.samples, keys=samples.keys)
+
+    def to_samples(self) -> Samples:
+        """Convert MySamples object to a nifty.re.Samples object."""
+        return Samples(pos=self._pos, samples=self._samples, keys=self._keys)
+
 
 def get_samples(
     key, samples, position_or_samples, lh_dict, transition=None, it=None
@@ -108,7 +117,7 @@ def get_samples(
                         "\n---\nperforming transition to update the model params"
                     )
                     key, k_t, k_p = random.split(key, 3)
-                    samples = tr(k_t, samples, it)
+                    samples = tr(k_t, MySamples.from_samples(samples), it)
                     logger.warning("finished transition\n---\n")
                     if domain_keys(samples) != m:
                         raise ValueError(
@@ -121,19 +130,22 @@ def get_samples(
                         "`samples` and `likelihood` have different domains and no transition is specified"
                     )
 
-    # Turn the samples into a MySamples object
+    # Turn the samples into a `nifty.re.Samples` object
     match samples:
         case Vector():
-            samples = MySamples(pos=samples, samples=None, keys=None)
-        case Samples():
-            samples = MySamples(
-                pos=samples._pos, samples=samples._samples, keys=samples._keys
-            )
+            samples = Samples(pos=samples, samples=None, keys=None)
+        case MySamples():
+            samples = samples.to_samples()
     return key, samples
 
 
 def domain_tree(
-    model: Model | Samples | Vector | dict | Iterable[Model, Samples, Vector, dict],
+    model: Model
+    | Samples
+    | MySamples
+    | Vector
+    | dict
+    | Iterable[Model, Samples, MySamples, Vector, dict],
     error=True,
 ) -> dict:
     """
@@ -141,7 +153,7 @@ def domain_tree(
 
     Parameters
     ----------
-    model : Model, Samples, Vector, dict, iterable
+    model : Model, Samples, MySamples, Vector, dict, iterable
         Model, vector, dict or samples object or a iterable of those.
     error : bool, optional
         If True, raise an error if the model is not of the expected type. Otherwise return an empty dict. Default is True.
@@ -151,7 +163,7 @@ def domain_tree(
             return {}
         case Model() | VModel():
             return domain_tree(model.domain, error)
-        case Samples():
+        case Samples() | MySamples():
             return domain_tree(model.pos, error)
         case Vector():
             return domain_tree(model.tree, error)
@@ -171,7 +183,9 @@ def domain_tree(
             return {}
 
 
-def domain_keys(model: Model | Samples | Vector | dict, error=True) -> set[str]:
+def domain_keys(
+    model: Model | Samples | MySamples | Vector | dict, error=True
+) -> set[str]:
     """Get the keys of the parameter tree (see `domain_tree` function)."""
     return set(domain_tree(model, error).keys())
 
@@ -209,7 +223,7 @@ def model_init(model: Model | Iterable[Model], error=True) -> Initializer:
 def random_init(
     key,
     model: Iterable[Model] | Model,
-    pos: Samples | Vector | dict | None = None,
+    pos: Samples | MySamples | Vector | dict | None = None,
     factor=0.01,
 ) -> Vector:
     """
@@ -221,7 +235,7 @@ def random_init(
         Random key to use for the initialization.
     model : Model, iterable
         Model or iterable of models to be initialized.
-    pos : Samples, Vector, dict, optional
+    pos : Samples, MySamples, Vector, dict, optional
         Position vector or dictionary to set some parameters by hand. Default is {}.
     factor : float, optional
         Factor to scale the random initialization. Default is 0.01.
@@ -231,5 +245,5 @@ def random_init(
     mdl_tree = domain_tree(model)
     pos_tree = {k: v for k, v in domain_tree(pos).items() if k in mdl_tree}
     mdl_init = model_init(model)
-    pos_init = 0.01 * Vector(mdl_init(key))
+    pos_init = factor * Vector(mdl_init(key))
     return Vector(domain_tree(pos_init) | pos_tree)

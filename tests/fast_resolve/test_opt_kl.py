@@ -1,10 +1,10 @@
-"""Tests for aim_resolve.fast_resolve.opt_kl — SkyResidualModel and my_lh."""
+"""Tests for aim_resolve.fast_resolve.fast_kl — SkyResidualModel and build_likelihood."""
 
 import jax.numpy as jnp
 import numpy as np
 from nifty.re import Model, Vector
 
-from aim_resolve.fast_resolve.opt_kl import SkyResidualModel, my_lh
+from aim_resolve.fast_resolve.fast_kl import SkyResidualModel, build_likelihood
 
 
 # A trivial nifty Model used as a stand-in sky_response.
@@ -44,7 +44,7 @@ class TestSkyResidualModel:
         assert result.shape == (4, 4)
 
 
-class TestMyLh:
+class TestBuildLikelihood:
     """Tests for the fast-resolve Gaussian likelihood builder."""
 
     def test_returns_callable(self):
@@ -52,7 +52,7 @@ class TestMyLh:
         old_rec = jnp.zeros((4,))
         res_data = jnp.zeros((4,))
 
-        lh = my_lh(
+        lh = build_likelihood(
             sky_response=sky_resp,
             old_reconstruction=old_rec,
             residual_data=res_data,

@@ -2,7 +2,6 @@
 
 from .opt_config import OptimizeKLConfig
 from .opt_kl import optimize_kl
-from .opt_vi import MyOptimizeVI
 from .samples import (
     MySamples,
     domain_keys,

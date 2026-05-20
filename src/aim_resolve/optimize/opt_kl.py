@@ -14,22 +14,41 @@ from jax import numpy as jnp
 from jax import random
 from jax.tree_util import tree_map
 from jax.typing import ArrayLike
-from nifty.re import Gaussian, OptimizeVIState, VariableCovarianceGaussian, logger
-from nifty.re.conjugate_gradient import cg as _cg
-from nifty.re.optimize import _newton_cg
+from nifty.re import (
+    Gaussian,
+    OptimizeVI,
+    OptimizeVIState,
+    VariableCovarianceGaussian,
+    logger,
+)
 
-from .opt_vi import MyOptimizeVI
 from .samples import MySamples, get_samples
 
 
 def get_at_nit(c, nit):
     """Get the value of `c` at the iteration `nit`."""
     if callable(c) and len(inspect.getfullargspec(c).args) == 1:
-        c = c(nit)
-    return c
+        return c(nit)
+    elif isinstance(c, dict) and nit > 0:
+        return None
+    else:
+        return c
 
 
-def my_lh(
+_reduce = partial(tree_map, partial(jnp.mean, axis=0))
+
+
+SMPL_MODE_TYP = Literal[
+    "linear_sample",
+    "linear_resample",
+    "nonlinear_sample",
+    "nonlinear_resample",
+    "nonlinear_update",
+]
+SMPL_MODE_GENERIC_TYP = SMPL_MODE_TYP | Callable[[int], SMPL_MODE_TYP]
+
+
+def build_lh(
     *,
     data,
     sky_response,
@@ -38,8 +57,28 @@ def my_lh(
     noise_model=None,
     **kwargs,
 ):
-    """Likelihood function that is passed to the OptimizeVI class. Builds a likelihood at each iteration."""
+    """Likelihood function that is passed to the OptimizeVI class. Builds a likelihood at each iteration.
 
+    Parameters
+    ----------
+    data : np.ndarray
+        The to be reconstructed data array.
+    sky_response : Model
+        The response model that maps the sky to the data space.
+    noise_cov_inv : np.ndarray, optional
+        The inverse noise covariance matrix. Default is None.
+    noise_std_inv : np.ndarray, optional
+        The inverse noise standard deviation array. Default is None.
+    noise_model : Model, optional
+        Adds a noise model with learnable parameters. Default is None.
+    **kwargs
+        Additional parametrs of the likelihood dictionary.
+
+    Returns
+    -------
+    lh : Model
+        The likelihood model to be passed to the OptimizeVI class.
+    """
     if noise_cov_inv:
         noise_std_inv = get_at_nit(noise_cov_inv, 1) ** 0.5
     else:
@@ -69,19 +108,6 @@ def my_lh(
     return lh
 
 
-_reduce = partial(tree_map, partial(jnp.mean, axis=0))
-
-
-SMPL_MODE_TYP = Literal[
-    "linear_sample",
-    "linear_resample",
-    "nonlinear_sample",
-    "nonlinear_resample",
-    "nonlinear_update",
-]
-SMPL_MODE_GENERIC_TYP = SMPL_MODE_TYP | Callable[[int], SMPL_MODE_TYP]
-
-
 def optimize_kl(
     likelihood: dict | Callable[[int], dict],
     *,
@@ -100,107 +126,86 @@ def optimize_kl(
     kl_reduce=_reduce,
     mirror_samples=True,
     draw_linear_kwargs=None,
-    # draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
     nonlinearly_update_kwargs=None,
     kl_kwargs=None,
-    # kl_kwargs=dict(minimize_kwargs=dict(name="M", cg_kwargs=dict(name="MCG"))),
     sample_mode: SMPL_MODE_GENERIC_TYP = "nonlinear_resample",
     resume: str | bool = False,
     callback: Callable[[MySamples, OptimizeVIState], None] | None = None,
     odir: str | None = None,
+    devices: list | None = None,
 ) -> tuple[MySamples, OptimizeVIState]:
-    """
-    One-stop-shop for MGVI/geoVI style VI approximation. Can be used with the `OptimizeKLConfig` class.
+    """Run the optimization of the KL divergence with NIFTy.
 
     Parameters
     ----------
-    likelihood: dict or callable
-        Dictionary containing the inputs for the likelihood function as items (see `my_lh` function):
+    likelihood : dict or callable
+        Dictionary containing the values needed to build the likelihood:
         - data: array-like
-        (- sky_model: Model)
         - sky_response: Model
-        - noise_cov_inv: callable or array-like
-        - noise_std_inv: callable or array-like
+        - noise_cov_inv: array-like or None
+        - noise_std_inv: array-like or None
         - noise_model: Model or None
-    key : int or array-like
-        Random key. If an integer is passed, it is used to seed a random key.
+        Can contain additional paramters not needed for the likelihood-build.
+    key : int or array_like
+        JAX random key (or integer seed).
     n_total_iterations : int
         Total number of iterations.
     n_samples : int, callable or None
-        Number of samples.
-    position_or_samples: Samples or tree-like
-        Initial position for minimization. If `None`, draw new samples randomly. Default is None.
-    transitions : callable or None
-        Transition function that can be used if parts of the likelihood are
-        replaced and thereby have a different domain.
-    constants: tree-like structure, tuple of str or callable
-        Pytree of same structure as likelihood input but with boolean
-        leaves indicating whether to keep these values constant during the
-        KL minimization. As a convenience method, for dict-like inputs, a
-        tuple of strings is also valid. From these the boolean indicator
-        pytree is automatically constructed.
-    point_estimates: tree-like structure, tuple of str or callable
-        Pytree of same structure as likelihood input but with boolean
-        leaves indicating whether to sample the value in the input or use
-        it as a point estimate. As a convenience method, for dict-like
-        inputs, a tuple of strings is also valid. From these the boolean
-        indicator pytree is automatically constructed.
+        Number of posterior samples.
+    position_or_samples : Samples or tree-like or None, optional
+        Initial position. Drawn randomly when None.
+    transitions : callable or None, optional
+        Transition function applied between iterations.
+    constants : tuple or tree-like, optional
+        Parameters held constant during KL minimisation.
+    point_estimates : tuple or tree-like, optional
+        Parameters treated as point estimates (not sampled).
     jit : bool, optional
         Whether to JIT-compile the KL value and gradient function. Default is True.
     linear_minimizer_jit : bool, optional
         Whether to JIT-compile the linear minimizer. Default is False.
     nonlinear_minimizer_jit : bool, optional
         Whether to JIT-compile the nonlinear minimizer. Default is False.
-    kl_map: callable or str
-        Map function used for the KL minimization.
-    residual_map: callable or str
-        Map function used for the residual sampling functions.
-    kl_reduce: callable
-        Reduce function used for the KL minimization.
-    mirror_samples: bool
-        Whether to mirror the samples or not.
-    draw_linear_kwargs : dict or callable
-        Configuration for drawing linear samples
-    nonlinearly_update_kwargs : dict or callable
-        Configuration for nonlinearly updating samples
-    kl_kwargs : dict or callable
-        Keyword arguments for the KL minimizer.
-    sample_mode : str or callable
-        One in {"linear_sample", "linear_resample", "nonlinear_sample",
-        "nonlinear_resample", "nonlinear_update"}. The mode denotes the way
-        samples are drawn and/or updates, "linear" draws MGVI samples,
-        "nonlinear" draws MGVI samples which are then nonlinearly updated
-        with geoVI, the "_sample" versus "_resample" suffix denotes whether
-        the same stochasticity or new stochasticity is used for the drawing
-        of the samples, and "nonlinear_update" nonlinearly updates existing
-        samples using geoVI.
-    resume : str or bool
-        Resume partially run optimization. If `True`, the optimization is
-        resumed from the previos state in `odir` otherwise it is resumed from
-        the location toward which `resume` points
-        (stating the folder containing the `last.pkl` file is sufficient).
-    callback : callable or None
-        Function called after every global iteration taking the samples and the
-        optimization state.
-    odir : str or None
-        Path at which all output files are saved.
+    kl_map : callable or str, optional
+        Map function for the KL minimisation.
+    residual_map : callable or str, optional
+        Map function for the residual computation.
+    kl_reduce : callable, optional
+        Reduce function for the KL minimisation.
+    mirror_samples : bool, optional
+        Whether to mirror samples. Default is True.
+    draw_linear_kwargs : dict, optional
+        Configuration for drawing linear samples.
+    nonlinearly_update_kwargs : dict, optional
+        Configuration for nonlinear sample updates.
+    kl_kwargs : dict, optional
+        Keyword arguments for the KL minimiser.
+    sample_mode : str or callable, optional
+        Sampling strategy. Default is ``'nonlinear_resample'``.
+    resume : str or bool, optional
+        Path or flag to resume a previous run. Default is False.
+    callback : callable or None, optional
+        Called after every minor iteration with ``(samples, state, mj)``.
+    odir : str or None, optional
+        Output directory for checkpoints and logs.
+    devices : list or None, optional
+        JAX devices for sample distribution.
 
     Returns
     -------
     samples : MySamples
         Posterior samples.
     opt_vi_st : OptimizeVIState
-        State of the optimization.
+        Final optimisation state.
     """
     if draw_linear_kwargs is None:
-        draw_linear_kwargs = dict(minimize=_cg, cg_name="SL", cg_kwargs=dict())
+        draw_linear_kwargs = dict(cg_name="SL", cg_kwargs=dict())
     if nonlinearly_update_kwargs is None:
         nonlinearly_update_kwargs = dict(
             minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
         )
     if kl_kwargs is None:
         kl_kwargs = dict(
-            minimize=_newton_cg,
             minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
         )
 
@@ -227,30 +232,21 @@ def optimize_kl(
             f.write(msg)
 
     key = random.PRNGKey(key) if isinstance(key, int) else key
-    jax.clear_caches()
-
-    opt_vi = MyOptimizeVI(
-        lh_fun=my_lh,
-        jit=jit,
-        linear_minimizer_jit=linear_minimizer_jit,
-        nonlinear_minimizer_jit=nonlinear_minimizer_jit,
-        kl_map=kl_map,
-        residual_map=residual_map,
-        kl_reduce=kl_reduce,
-        mirror_samples=mirror_samples,
-    )
 
     if opt_vi_st is None or len(opt_vi_st.config) == 0:
         key, k_o = random.split(key)
-        opt_vi_st_init = opt_vi.init_state(
-            k_o,
-            n_samples=n_samples,
-            draw_linear_kwargs=draw_linear_kwargs,
-            nonlinearly_update_kwargs=nonlinearly_update_kwargs,
-            kl_kwargs=kl_kwargs,
-            sample_mode=sample_mode,
-            point_estimates=point_estimates,
-            constants=constants,
+        opt_vi_st_init = OptimizeVIState(
+            nit=0,
+            key=k_o,
+            config=dict(
+                n_samples=n_samples,
+                draw_linear_kwargs=draw_linear_kwargs,
+                nonlinearly_update_kwargs=nonlinearly_update_kwargs,
+                kl_kwargs=kl_kwargs,
+                sample_mode=sample_mode,
+                point_estimates=point_estimates,
+                constants=constants,
+            ),
         )
         opt_vi_st = opt_vi_st_init if opt_vi_st is None else opt_vi_st
         if len(opt_vi_st.config) == 0:  # resume or _optimize_vi_state has empty config
@@ -259,22 +255,38 @@ def optimize_kl(
     nm = "OPTIMIZE_KL"
     for i in range(opt_vi_st.nit, n_total_iterations):
         logger.info(f"{nm}: Starting {i + 1:04d}")
-        lh_i = get_at_nit(likelihood, i)
-        tr_i = get_at_nit(transitions, i)
-        key, samples = get_samples(
-            key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
-        )
-        samples, opt_vi_st = opt_vi.my_update(samples, opt_vi_st, lh_dict=lh_i)
-        msg = opt_vi.get_status_message(samples, opt_vi_st, lh_dict=lh_i, name=nm)
+
+        if get_at_nit(likelihood, i) is not None:
+            logger.info("-> Building new likelihood")
+            lh_i = get_at_nit(likelihood, i)
+            tr_i = get_at_nit(transitions, i)
+            key, samples = get_samples(
+                key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
+            )
+            opt_vi = OptimizeVI(
+                likelihood=build_lh(**lh_i),
+                n_total_iterations=None,
+                jit=jit,
+                linear_minimizer_jit=linear_minimizer_jit,
+                nonlinear_minimizer_jit=nonlinear_minimizer_jit,
+                kl_map=kl_map,
+                residual_map=residual_map,
+                kl_reduce=kl_reduce,
+                mirror_samples=mirror_samples,
+                devices=devices,
+            )
+
+        samples, opt_vi_st = opt_vi.update(samples, opt_vi_st)
+        msg = opt_vi.get_status_message(samples, opt_vi_st, name=nm)
         logger.info(msg)
         if odir:
             with open(last_fn, "wb") as f:
-                pickle.dump((samples, opt_vi_st._replace(config={})), f)
+                pickle.dump(
+                    (MySamples.from_samples(samples), opt_vi_st._replace(config={})), f
+                )
             with open(sanity_fn, "a") as f:
                 f.write("\n" + msg)
         if callback is not None:
-            callback(samples, opt_vi_st)
+            callback(MySamples.from_samples(samples), opt_vi_st)
 
-        jax.clear_caches()
-
-    return samples, opt_vi_st
+    return MySamples.from_samples(samples), opt_vi_st

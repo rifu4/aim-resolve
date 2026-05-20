@@ -82,7 +82,6 @@ from .modeling import (
 
 # --- optimize ---
 from .optimize import (
-    MyOptimizeVI,
     MySamples,
     OptimizeKLConfig,
     SetupKLConfig,

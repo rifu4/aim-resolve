@@ -7,16 +7,13 @@ import pickle
 from collections.abc import Callable
 from os import makedirs
 
-import jax
+import jax  # type: ignore
 from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
-from nifty.re import Gaussian, Model, OptimizeVIState, Samples, logger
-from nifty.re.conjugate_gradient import static_cg as _cg
-from nifty.re.optimize import _static_newton_cg as _newton_cg
+from nifty.re import Gaussian, Model, OptimizeVI, OptimizeVIState, Samples, logger
 
 from ..optimize.opt_kl import SMPL_MODE_GENERIC_TYP, _reduce, get_at_nit
-from ..optimize.opt_vi import MyOptimizeVI
 from ..optimize.samples import MySamples, get_samples
 from .response import apply_exact_response
 
@@ -31,14 +28,13 @@ class SkyResidualModel(Model):
     Parameters
     ----------
     sky_response : Model
-        Response model (e.g. ``NInvConvolve``).
+        Approximate response model.
     old_reconstruction : array_like
         Previous sky reconstruction subtracted before convolution.
     residual_data : array_like
         Residual data subtracted after convolution.
     """
 
-    # sky_response: Callable = dataclasses.field(metadata=dict(static=True))
     old_reconstruction: ArrayLike = dataclasses.field(metadata=dict(static=False))
     residual_data: ArrayLike = dataclasses.field(metadata=dict(static=False))
 
@@ -52,19 +48,17 @@ class SkyResidualModel(Model):
         return self.sky_response(x, self.old_reconstruction, self.residual_data)
 
 
-def my_lh(*, sky_response, old_reconstruction, residual_data, **kwargs):
+def build_likelihood(sky_response, old_reconstruction, residual_data):
     """Build the fast-resolve Gaussian likelihood for one minor cycle.
 
     Parameters
     ----------
     sky_response : Model
-        Response model (e.g. ``NInvConvolve``).
+        Approximate response model.
     old_reconstruction : array_like
         Previous sky reconstruction.
     residual_data : array_like
         Residual (dirty-image minus predicted) data.
-    **kwargs
-        Ignored extra keyword arguments from the likelihood dictionary.
 
     Returns
     -------
@@ -92,31 +86,33 @@ def fast_optimize_kl(
     constants=(),
     point_estimates=(),
     jit=True,
-    linear_minimizer_jit=True,
-    nonlinear_minimizer_jit=True,
+    linear_minimizer_jit=False,
+    nonlinear_minimizer_jit=False,
     kl_map=jax.vmap,
     residual_map="lmap",
     kl_reduce=_reduce,
     mirror_samples=True,
     draw_linear_kwargs=None,
-    # draw_linear_kwargs=dict(cg_name='SL', cg_kwargs=dict()),
     nonlinearly_update_kwargs=None,
     kl_kwargs=None,
-    # kl_kwargs=dict(minimize_kwargs=dict(name='M', cg_kwargs=dict(name=None))),
     sample_mode: SMPL_MODE_GENERIC_TYP = "nonlinear_resample",
     resume: str | bool = False,
     callback: Callable[[Samples, OptimizeVIState], None] | None = None,
     odir: str | None = None,
     devices: list | None = None,
+    plot_residuals=True,
 ) -> tuple[MySamples, OptimizeVIState, int]:
     """Run the fast-resolve optimise-KL loop with major/minor cycles.
 
     Parameters
     ----------
     likelihood : dict or callable
-        Likelihood dictionary (or callable returning one per major
-        iteration) with keys ``data``, ``sky_model``, ``sky_response``,
-        ``noise_model`` and ``RNR``.
+        Dictionary containing the values needed for the fast-resolve inference:
+        - data: array-like (dirty image)
+        - sky_model: Model (prior model for the sky)
+        - sky_response: Model (approximate response model for the minor cycles)
+        - noise_model: Model or None
+        - RNR: Model or None (true response for the major cycles)
     key : int or array_like
         JAX random key (or integer seed).
     n_major_iterations : int
@@ -163,6 +159,8 @@ def fast_optimize_kl(
         Output directory for checkpoints and logs.
     devices : list or None, optional
         JAX devices for sample distribution.
+    plot_residuals : bool, optional
+        Whether to plot the residuals at each major iteration. Default is True.
 
     Returns
     -------
@@ -174,14 +172,13 @@ def fast_optimize_kl(
         Total number of major iterations performed.
     """
     if draw_linear_kwargs is None:
-        draw_linear_kwargs = dict(minimize=_cg, cg_name="SL", cg_kwargs=dict())
+        draw_linear_kwargs = dict(cg_name="SL", cg_kwargs=dict())
     if nonlinearly_update_kwargs is None:
         nonlinearly_update_kwargs = dict(
             minimize_kwargs=dict(name="SN", cg_kwargs=dict(name=None))
         )
     if kl_kwargs is None:
         kl_kwargs = dict(
-            minimize=_newton_cg,
             minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
         )
 
@@ -216,57 +213,68 @@ def fast_optimize_kl(
 
     key = random.PRNGKey(key) if isinstance(key, int) else key
 
-    opt_vi = MyOptimizeVI(
-        lh_fun=my_lh,
-        jit=jit,
-        linear_minimizer_jit=linear_minimizer_jit,
-        nonlinear_minimizer_jit=nonlinear_minimizer_jit,
-        kl_map=kl_map,
-        residual_map=residual_map,
-        kl_reduce=kl_reduce,
-        mirror_samples=mirror_samples,
-        devices=devices,
-    )
-
     if opt_vi_st is None or len(opt_vi_st.config) == 0:
         key, k_o = random.split(key)
-        opt_vi_st_init = opt_vi.init_state(
-            k_o,
-            n_samples=n_samples,
-            draw_linear_kwargs=draw_linear_kwargs,
-            nonlinearly_update_kwargs=nonlinearly_update_kwargs,
-            kl_kwargs=kl_kwargs,
-            sample_mode=sample_mode,
-            point_estimates=point_estimates,
-            constants=constants,
+        opt_vi_st_init = OptimizeVIState(
+            nit=0,
+            key=k_o,
+            config=dict(
+                n_samples=n_samples,
+                draw_linear_kwargs=draw_linear_kwargs,
+                nonlinearly_update_kwargs=nonlinearly_update_kwargs,
+                kl_kwargs=kl_kwargs,
+                sample_mode=sample_mode,
+                point_estimates=point_estimates,
+                constants=constants,
+            ),
         )
         opt_vi_st = opt_vi_st_init if opt_vi_st is None else opt_vi_st
-        if len(opt_vi_st.config) == 0:  # resume or _optimize_vi_state has empty config
+        if len(opt_vi_st.config) == 0:
             opt_vi_st = opt_vi_st._replace(config=opt_vi_st_init.config)
 
-    if not resume:
-        data = get_at_nit(likelihood, 0)["data"]
-        residual_data = data
-        sub_val = jnp.zeros(data.shape, dtype=data.dtype)
-
+    fr_nm = "FAST-RESOLVE MAJOR"
     for i_mj in range(last_mj, n_major_iterations):
-        mj_msg = f"\nMAJOR: Iteration {i_mj + 1:02d}\n"
-        logger.info("\n" + mj_msg.replace("Iteration", "Starting"))
+        mj_msg = f"\n{fr_nm}: Iteration {i_mj + 1:02d}\n"
+        logger.info("\n" + mj_msg)
 
-        lh_i = get_at_nit(likelihood, i_mj)
-        tr_i = get_at_nit(transitions, i_mj)
-        key, samples = get_samples(
-            key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
-        )
+        if get_at_nit(likelihood, i_mj) is not None:
+            logger.info("-> Building new likelihood")
+            lh_i = get_at_nit(likelihood, i_mj)
+            tr_i = get_at_nit(transitions, i_mj)
+            key, samples = get_samples(
+                key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
+            )
 
         if opt_vi_st.nit > 0:
-            sub_val = samples.mean(lh_i["sky_model"])
-            residual_data = lh_i["data"] - apply_exact_response(lh_i["RNR"], sub_val)
+            old_rec = MySamples.from_samples(samples).mean(lh_i["sky_model"])
+            residual_data = lh_i["data"] - apply_exact_response(lh_i["RNR"], old_rec)
+        else:
+            residual_data = lh_i["data"]
+            old_rec = jnp.zeros(residual_data.shape, dtype=residual_data.dtype)
 
-        lh_i["old_reconstruction"] = sub_val
-        lh_i["residual_data"] = residual_data
+        if plot_residuals and odir:
+            from ..plot import plot_arrays
 
-        jax.clear_caches()
+            plot_arrays(
+                array=[old_rec, residual_data],
+                rows=1,
+                norm="log",
+                odir=f"{odir}/residuals",
+                name=f"mj_{i_mj:02d}",
+            )
+
+        opt_vi = OptimizeVI(
+            likelihood=build_likelihood(lh_i["sky_response"], old_rec, residual_data),
+            n_total_iterations=None,
+            jit=jit,
+            linear_minimizer_jit=linear_minimizer_jit,
+            nonlinear_minimizer_jit=nonlinear_minimizer_jit,
+            kl_map=kl_map,
+            residual_map=residual_map,
+            kl_reduce=kl_reduce,
+            mirror_samples=mirror_samples,
+            devices=devices,
+        )
 
         last_mn = opt_vi_st.nit - sum(
             get_at_nit(n_minor_iterations, mj) for mj in range(i_mj)
@@ -275,17 +283,22 @@ def fast_optimize_kl(
         kl_nm = "OPTIMIZE_KL"
         for _i in range(last_mn, get_at_nit(n_minor_iterations, i_mj)):
             logger.info(f"{kl_nm}: Starting {opt_vi_st.nit + 1:04d}")
-            samples, opt_vi_st = opt_vi.my_update(samples, opt_vi_st, lh_dict=lh_i)
-            kl_msg = opt_vi.get_status_message(
-                samples, opt_vi_st, lh_dict=lh_i, name=kl_nm
-            )
+            samples, opt_vi_st = opt_vi.update(samples, opt_vi_st)
+            kl_msg = opt_vi.get_status_message(samples, opt_vi_st, name=kl_nm)
             logger.info(mj_msg + kl_msg)
             if odir:
                 with open(last_fn, "wb") as f:
-                    pickle.dump((samples, opt_vi_st._replace(config={}), i_mj + 1), f)
+                    pickle.dump(
+                        (
+                            MySamples.from_samples(samples),
+                            opt_vi_st._replace(config={}),
+                            i_mj + 1,
+                        ),
+                        f,
+                    )
                 with open(sanity_fn, "a") as f:
                     f.write(mj_msg + kl_msg)
             if callback is not None:
-                callback(samples, opt_vi_st, i_mj + 1)
+                callback(MySamples.from_samples(samples), opt_vi_st, i_mj + 1)
 
-    return samples, opt_vi_st, n_major_iterations
+    return MySamples.from_samples(samples), opt_vi_st, n_major_iterations
