@@ -44,7 +44,7 @@ def main(config, cuda_device, plot_range):
 
     # Create the new config file to perform the extension
     base, ext_file = aim.extension_func(**cfg_dct)
-    # exit()
+
 
     # Instantiate the optimize-config class
     cfg = aim.OptimizeKLConfig.from_file((base, ext_file), aim.get_builders)

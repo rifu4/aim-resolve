@@ -11,7 +11,7 @@ from . import enforce_float64
 from .builders import get_builders
 from .clustering import dbscan_clustering, objects2points
 from .data import data_func, image_data, radio_data
-from .extension import extension_func, freq_extension, zoom_extension
+from .extension import extension_func, freq_extension, iter_extension, zoom_extension
 
 # --- fast_resolve ---
 from .fast_resolve import (

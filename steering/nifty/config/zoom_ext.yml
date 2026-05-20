@@ -2,8 +2,8 @@
 
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
-file: 3_pre.yml
-run: 0
+file: 4_pre.yml
+run: 1
 
 ---
 

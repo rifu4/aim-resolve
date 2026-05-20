@@ -40,6 +40,7 @@ class SignalGrid:
             self.shape == other.shape
             and self.n_copies == other.n_copies
             and np.all(self.lims == other.lims)
+            and self.factor == other.factor
         )
 
     def __contains__(self, other):
@@ -179,6 +180,7 @@ class SignalGrid:
         )
 
     def update(self, **kwargs):
+        """Update the grid parameters and return a new SignalGrid instance."""
         dct = self.to_dict()
         dct.update(kwargs)
         return SignalGrid.build(**dct)
@@ -277,7 +279,9 @@ class PointGrid:
 
         coos = to_shape(coordinates, (n_copies, 2), "float64")
         grid = np.linspace(1 / (2 * factor), 1 - 1 / (2 * factor), factor)
-        if not np.all(np.isin(coos % 1, grid)):
+        frac = np.mod(coos, 1.0)
+        on_grid = np.isclose(frac[..., None], grid, atol=1e-8, rtol=0.0).any(axis=-1)
+        if not np.all(on_grid):
             raise ValueError(
                 f"For a factor of {factor}, coordinates % 1 must be in {grid}."
             )
@@ -318,13 +322,24 @@ class PointGrid:
         return self.coos.reshape(-1, 2)[:, :, None].repeat(2, axis=-1)
 
     def refine(self, factor):
-        offsets = np.array([[-1, -1], [-1, 1], [1, -1], [1, 1]]) / (
-            2 * self.fac * factor
-        )
-        coos = self.coos.reshape(-1, 2)[None, :, :] + offsets[:, None, :]
-        coos = coos.reshape(-1, 2)
-        order = np.concatenate([np.arange(i, coos.shape[0], 2) for i in range(2)])
-        coos = coos[order]
+        """Multiply the resolution of the grid by a factor."""
+        fac_old = self.fac
+        fac_new = fac_old * factor
+        base = self.coos.reshape(-1, 2)
+        int_part = np.floor(base)
+        frac = base - int_part
+        m_idx = np.rint((frac * (2 * fac_old) - 1) / 2).astype(int)
+
+        grid = np.arange(factor)
+        gx, gy = np.meshgrid(grid, grid, indexing="xy")
+        new_mx = m_idx[:, 0][:, None, None] * factor + gx[None, :, :]
+        new_my = m_idx[:, 1][:, None, None] * factor + gy[None, :, :]
+
+        new_frac_x = (2 * new_mx + 1) / (2 * fac_new)
+        new_frac_y = (2 * new_my + 1) / (2 * fac_new)
+        new_x = int_part[:, 0][:, None, None] + new_frac_x
+        new_y = int_part[:, 1][:, None, None] + new_frac_y
+        coos = np.stack((new_x, new_y), axis=-1).reshape(-1, 2)
         return PointGrid(
             tuple(map(tuple, coos.tolist())),
             self.factor * factor,
@@ -332,6 +347,7 @@ class PointGrid:
         )
 
     def update(self, **kwargs):
+        """Update the grid parameters and return a new PointGrid instance."""
         dct = self.to_dict()
         dct.update(kwargs)
         return PointGrid.build(**dct)

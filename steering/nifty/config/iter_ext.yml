@@ -2,15 +2,12 @@
 
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
-file: 4_pre_2z_1.yml
+file: 4_pre.yml
 run: 1
 
 ---
 
-mode: freq
-freq: [992153320.3125, 1053594726.5625, 1114618164.0625, 1329454101.5625, 1398998058.6408134,
-    1468637695.3125]
-ref_freq_index: 1
+mode: iter
 
 ---
 
