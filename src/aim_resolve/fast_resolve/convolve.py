@@ -7,11 +7,12 @@ from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
+from jax import vmap
 from jax.lax import dynamic_slice
 from jax.numpy.fft import fftn, ifftn
-from nifty.re import Model, Vector, smap
+from nifty.re import Model, Vector
 
-# from ..model.map import downsample, upsample
+from ..model.map import downsample, upsample
 from ..model.noise import NoiseModel
 from ..optimize.samples import domain_tree, model_init
 from .kernel import build_n_inv_kernel, build_psf_kernel
@@ -245,53 +246,34 @@ class NInvConvolve(Model):
         return cls(psf_conv, n_inv_kernel, noise_model)
 
 
-def downsample(array, factor):
-    """Down-sample the last two axes by averaging blocks of *factor*.
-
-    Parameters
-    ----------
-    array : np.ndarray or jnp.ndarray
-        Input array whose last two dimensions are divisible by *factor*.
-    factor : int
-        Down-sampling factor.
-
-    Returns
-    -------
-    np.ndarray or jnp.ndarray
-        Down-sampled array.
-    """
-    h, w = array.shape[-2], array.shape[-1]
-    assert h % factor == 0 and w % factor == 0, "Dims must be divisible by factor."
-    shape = array.shape[:-2] + (h // factor, factor, w // factor, factor)
-    return array.reshape(shape).mean(axis=(-3, -1))
-
-
-def upsample(array, factor):
-    """Up-sample the last two axes by repeating pixels.
-
-    Parameters
-    ----------
-    array : np.ndarray or jnp.ndarray
-        Input array.
-    factor : int
-        Up-sampling factor.
-
-    Returns
-    -------
-    np.ndarray or jnp.ndarray
-        Up-sampled array.
-    """
-    return array.repeat(factor, axis=-2).repeat(factor, axis=-1)
-
-
 def fft_convolve_2d(x, kernel):
     """Convolve a single 2-D image with a 2-D kernel via FFT."""
     return ifftn(kernel * fftn(x)).real
 
 
 def fft_convolve(x, kernel):
-    """Batch-convolve along the leading axis using ``fft_convolve_2d``."""
-    return smap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
+    """Perform FFT convolution on 2-D or 3-D arrays.
+
+    Parameters
+    ----------
+    x : jnp.ndarray
+        Input array of shape (H, W) or (N, H, W).
+    kernel : jnp.ndarray
+        Convolution kernel of shape (H_k, W_k) or (N, H_k, W_k).
+
+    Returns
+    -------
+    jnp.ndarray
+        Convolved array of the same shape as *x*.
+    """
+    if x.ndim == 2 and kernel.ndim == 2:
+        return fft_convolve_2d(x, kernel)
+    elif x.ndim == 3 and kernel.ndim == 3 and x.shape[0] == kernel.shape[0]:
+        return vmap(fft_convolve_2d, in_axes=(0, 0))(x, kernel)
+    else:
+        raise ValueError(
+            "Input and kernel must be either 2-D or 3-D with matching leading dimension."
+        )
 
 
 def split_fft_convolve(
@@ -333,11 +315,6 @@ def split_fft_convolve(
     return jnp.squeeze(x_high + x_low)
 
 
-def build_fft_kernel(kernel, shape, dvol=1.0):
-    """Build an FFT-space kernel from a spatial-domain kernel."""
-    return jnp.fft.fftn(kernel, shape[-2:], axes=(-2, -1)) * dvol
-
-
 def build_padder(in_shape, out_shape):
     """Return a zero-padding function from *in_shape* to *out_shape*."""
     p_h, p_w = (o - i for i, o in zip(in_shape[-2:], out_shape[-2:], strict=False))
@@ -349,6 +326,26 @@ def build_slicer(start_indices, out_shape):
     """Return a slicing function that extracts *out_shape* from a padded array."""
     start_indices = (0,) * (len(out_shape) - 2) + start_indices[-2:]
     return lambda x: dynamic_slice(x, start_indices, out_shape)
+
+
+def build_fft_kernel(kernel, shape, dvol=1.0):
+    """Build an FFT-space kernel from a spatial-domain kernel.
+
+    Parameters
+    ----------
+    kernel : np.ndarray
+        Spatial-domain kernel array.
+    shape : tuple of int
+        Desired shape of the FFT-space kernel (must be compatible with *kernel*).
+    dvol : float, optional
+        Volume element scaling factor. Default is 1.0.
+
+    Returns
+    -------
+    jnp.ndarray
+        FFT-space kernel array of shape *shape*.
+    """
+    return jnp.fft.fftn(kernel, shape[-2:], axes=(-2, -1)) * dvol
 
 
 def build_split_kernel(kernel, shape, size, factor, dvol=1.0):
