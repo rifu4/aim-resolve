@@ -12,7 +12,37 @@ zoom: 3
 
 ---
 
-# lh.4:
-#   split:
-#     size: 512
-#     factor: 2
+
+opt.5:
+  base: base_opt.5
+  likelihood: =lh.5
+
+base_opt.5:
+  n_major_iterations: 10
+  n_minor_iterations: 1
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 1000
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 20
+      maxiter: 200
+      energy_reduction_factor: 1.e-3
+  sample_mode: nonlinear_resample

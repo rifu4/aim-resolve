@@ -2,7 +2,7 @@
 
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
-file: 4_pre.yml
+file: 4_pre_2z_1_6f_2.yml
 run: 1
 
 ---
@@ -11,17 +11,36 @@ mode: iter
 
 ---
 
-opt.6:
-  base: base_opt.0
+opt.7:
+  base: base_opt.7
   likelihood: =lh.6
 
-lh.6:
-  data: =data.6
-  mode: fast
-  # split:
-  #   size: 256
-  #   factor: 2
-
-data.6:
-  fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
-  mode: radio
+base_opt.7:
+  n_major_iterations: 10
+  n_minor_iterations: 1
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 1000
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 20
+      maxiter: 200
+      energy_reduction_factor: 1.e-3
+  sample_mode: nonlinear_resample

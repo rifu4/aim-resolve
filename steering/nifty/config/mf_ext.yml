@@ -15,7 +15,7 @@ ref_freq_index: 1
 ---
 
 opt.6:
-  base: base_opt.0
+  base: base_opt.6
   likelihood: =lh.6
 
 lh.6:
@@ -28,3 +28,33 @@ lh.6:
 data.6:
   fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
   mode: radio
+
+base_opt.6:
+  n_major_iterations: 10
+  n_minor_iterations: 1
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [100]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [10]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + [50]
+      energy_reduction_factor: 1.e-3
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
