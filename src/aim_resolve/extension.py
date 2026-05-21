@@ -295,6 +295,11 @@ def iter_extension(
         odir=cfg.sections["opt"]["odir"] + f"_it{run}",
     )
 
+    cfg.modify_sec(
+        f"opt.{cfg.it}",
+        transitions=None,
+    )
+
     for key, val in kwargs.items():
         cfg.modify_sec(key, **val)
 
