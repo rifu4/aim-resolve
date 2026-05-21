@@ -253,16 +253,26 @@ def optimize_kl(
             opt_vi_st = opt_vi_st._replace(config=opt_vi_st_init.config)
 
     nm = "OPTIMIZE_KL"
+    lh_i = None
     for i in range(opt_vi_st.nit, n_total_iterations):
         logger.info(f"{nm}: Starting {i + 1:04d}")
 
-        if get_at_nit(likelihood, i) is not None:
-            logger.info("-> Building new likelihood")
-            lh_i = get_at_nit(likelihood, i)
-            tr_i = get_at_nit(transitions, i)
-            key, samples = get_samples(
-                key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
-            )
+        if get_at_nit(likelihood, i) is not None or lh_i is None:
+            if get_at_nit(likelihood, i) is not None:
+                logger.info("-> Building new likelihood")
+                lh_i = get_at_nit(likelihood, i)
+                tr_i = get_at_nit(transitions, i)
+                key, samples = get_samples(
+                    key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
+                )
+            elif lh_i is None:
+                for prev_i in range(i - 1, -1, -1):
+                    lh_i = get_at_nit(likelihood, prev_i)
+                    if lh_i is not None:
+                        break
+                if lh_i is None:
+                    raise ValueError("No valid likelihood found for iteration.")
+
             opt_vi = OptimizeVI(
                 likelihood=build_lh(**lh_i),
                 n_total_iterations=None,

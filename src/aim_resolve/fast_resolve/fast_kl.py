@@ -233,6 +233,7 @@ def fast_optimize_kl(
             opt_vi_st = opt_vi_st._replace(config=opt_vi_st_init.config)
 
     fr_nm = "FAST-RESOLVE MAJOR"
+    lh_i = None
     for i_mj in range(last_mj, n_major_iterations):
         mj_msg = f"\n{fr_nm}: Iteration {i_mj + 1:02d}\n"
         logger.info("\n" + mj_msg)
@@ -244,6 +245,13 @@ def fast_optimize_kl(
             key, samples = get_samples(
                 key, samples, position_or_samples, lh_i, tr_i, opt_vi_st.nit
             )
+        elif lh_i is None:
+            for prev_mj in range(i_mj - 1, -1, -1):
+                lh_i = get_at_nit(likelihood, prev_mj)
+                if lh_i is not None:
+                    break
+            if lh_i is None:
+                raise ValueError("No valid likelihood found for major iteration.")
 
         if opt_vi_st.nit > 0:
             old_rec = MySamples.from_samples(samples).mean(lh_i["sky_model"])
