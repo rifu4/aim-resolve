@@ -157,6 +157,7 @@ def zoom_extension(
     odir,
     file,
     zoom,
+    zoom_bg=False,
     base="base.yml",
     run=0,
     **kwargs,
@@ -175,6 +176,8 @@ def zoom_extension(
         Name of the existing configuration file inside ``odir/files/``.
     zoom : int
         Zoom factor to apply to non-background grids.
+    zoom_bg : bool, optional
+        Whether to also zoom the background grid. Default is False.
     base : str, optional
         Name of the base configuration file. Default is ``'base.yml'``.
     run : int, optional
@@ -217,6 +220,13 @@ def zoom_extension(
             tile_grid = SignalGrid.build(**cfg.sections[sec]["tile_grid"])
             tile_grid = tile_grid.refine(zoom)
             cfg.modify_sec(sec, tile_grid=tile_grid.to_dict())
+        elif zoom_bg and "sky_bg" in sec and f".{cfg.it}" in sec:
+            if "shape" in cfg.sections[sec]["grid"]:
+                grid = SignalGrid.build(**cfg.sections[sec]["grid"])
+            else:
+                grid = SignalGrid.build(**base_dct["grid_bg"])
+            grid = grid.refine(zoom)
+            cfg.modify_sec(sec, grid=grid.to_dict())
 
     pkdir = "_".join(cfg.sections[f"lh.{cfg.it}"]["psf_kernel_fn"].split("_")[:-1])
     nkdir = "_".join(cfg.sections[f"lh.{cfg.it}"]["n_inv_kernel_fn"].split("_")[:-1])
