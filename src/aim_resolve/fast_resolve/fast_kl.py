@@ -11,7 +11,16 @@ import jax  # type: ignore
 from jax import numpy as jnp
 from jax import random
 from jax.typing import ArrayLike
-from nifty.re import Gaussian, Model, OptimizeVI, OptimizeVIState, Samples, logger
+from nifty.re import (
+    Gaussian,
+    Model,
+    OptimizeVI,
+    OptimizeVIState,
+    Samples,
+    logger,
+    static_cg,
+    static_newton_cg,
+)
 
 from ..optimize.opt_kl import SMPL_MODE_GENERIC_TYP, _reduce, get_at_nit
 from ..optimize.samples import MySamples, get_samples
@@ -181,6 +190,21 @@ def fast_optimize_kl(
         kl_kwargs = dict(
             minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
         )
+    if devices is not None:
+
+        def add_static_update(fn_or_dict, update):
+            if fn_or_dict is None:
+                return update
+            if callable(fn_or_dict):
+                return lambda i: dict(fn_or_dict(i)) | update
+            return dict(fn_or_dict) | update
+
+        draw_linear_kwargs = add_static_update(draw_linear_kwargs, dict(cg=static_cg))
+        nonlinearly_update_kwargs = add_static_update(
+            nonlinearly_update_kwargs, dict(minimize=static_newton_cg)
+        )
+        if residual_map == "lmap":
+            residual_map = "vmap"
 
     LAST_FILENAME = "last.pkl"
     MINISANITY_FILENAME = "minisanity.txt"
