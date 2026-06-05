@@ -34,6 +34,17 @@ class MySamples(Samples):
         else:
             return mean(tuple(model(s) for s in self))
 
+    def std(self, model=lambda x: x):
+        """
+        Calculate the standard deviation of the samples using the model. Returns `None` if there are less than 2 samples.
+
+        Parameters
+        ----------
+        model : callable
+            Function to apply to the samples. Default is identity function.
+        """
+        return self.mean_and_std(model)[1]
+
     def mean_and_std(self, model=lambda x: x):
         """
         Calculate the mean and standard deviation of the samples using the model.
