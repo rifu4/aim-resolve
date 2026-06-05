@@ -10,8 +10,10 @@ import numpy as np
 from jax import vmap
 from jax.lax import dynamic_slice
 from jax.numpy.fft import fftn, ifftn
+from jax.scipy.ndimage import map_coordinates
 from nifty.re import Model, Vector
 
+from ..model.grid import SignalGrid
 from ..model.map import downsample, upsample
 from ..model.noise import NoiseModel
 from ..optimize.samples import domain_tree, model_init
@@ -145,6 +147,8 @@ class PSFSplitConvolve(Model):
             tuple(k * (self.factor - 1) // (2 * self.factor) for k in psf_kernel.shape),
             shape_low,
         )
+        self.downsampler = basic_downsampler(self.grid.shape, self.factor, order=0)
+        self.upsampler = basic_upsampler(shape_low, self.factor, order=0)
 
         super().__init__(domain=sky.domain, init=sky.init)
 
@@ -158,7 +162,8 @@ class PSFSplitConvolve(Model):
             self.padder_low,
             self.slicer_high,
             self.slicer_low,
-            self.factor,
+            self.downsampler,
+            self.upsampler,
         )
         return res
 
@@ -277,7 +282,15 @@ def fft_convolve(x, kernel):
 
 
 def split_fft_convolve(
-    x, kernel_high, kernel_low, padder_high, padder_low, slicer_high, slicer_low, factor
+    x,
+    kernel_high,
+    kernel_low,
+    padder_high,
+    padder_low,
+    slicer_high,
+    slicer_low,
+    downsampler,
+    upsampler,
 ):
     """Perform a split high/low-resolution FFT convolution.
 
@@ -308,9 +321,9 @@ def split_fft_convolve(
     x_high = fft_convolve(x_high, kernel_high)
     x_high = slicer_high(x_high)
 
-    x_low = padder_low(downsample(x, factor))
+    x_low = padder_low(downsampler(x))
     x_low = fft_convolve(x_low, kernel_low)
-    x_low = upsample(slicer_low(x_low), factor)
+    x_low = upsampler(slicer_low(x_low))
 
     return jnp.squeeze(x_high + x_low)
 
@@ -387,7 +400,56 @@ def build_split_kernel(kernel, shape, size, factor, dvol=1.0):
     fshape_low = (n_freq,) + tuple(k // factor for k in kernel.shape[-2:])
     kernel_low = np.array(kernel.copy())
     kernel_low[slices] = 0
-    kernel_low = downsample(kernel_low, factor)
+    kernel_low = basic_downsampler(kernel_low.shape, factor)(kernel_low)
     kernel_low = build_fft_kernel(kernel_low, fshape_low, dvol * (factor**2))
 
     return kernel_high, kernel_low
+
+
+def basic_upsampler(in_shape, factor, order=0):
+    return lambda x: upsample(x, factor)
+
+
+def basic_downsampler(in_shape, factor, order=0):
+    return lambda x: downsample(x, factor)
+
+
+def map_coordinates_nd(array, coords, order):
+    if array.ndim == 2:
+        return map_coordinates(array, coords, order=order)
+    flat = array.reshape((-1,) + array.shape[-2:])
+    out = vmap(lambda a: map_coordinates(a, coords, order=order))(flat)
+    return out.reshape(array.shape[:-2] + coords.shape[1:])
+
+
+def get_relative_coords(in_shape, in_cen, factor, out_coords):
+    out_coords_T = out_coords.T.reshape(-1, 2)
+    out_coords_T -= in_cen
+    out_coords_T *= factor
+    out_coords_T += 0.5 * (jnp.array(in_shape) - 1)
+    out_coords = out_coords_T.reshape(out_coords.T.shape).T
+    return out_coords
+
+
+def build_upsampler(in_shape, factor, order=0):
+    spatial_shape = in_shape[-2:]
+    in_grid = SignalGrid(spatial_shape)
+    out_grid = in_grid.refine(factor)
+    coords = get_relative_coords(
+        spatial_shape, in_grid.cen, in_grid.factor, out_grid.coords
+    )
+    return lambda x: map_coordinates_nd(x, coords, order)
+
+
+def build_downsampler(in_shape, factor, order=0):
+    spatial_shape = in_shape[-2:]
+    if any(s % factor != 0 for s in spatial_shape):
+        raise ValueError(
+            f"Input shape {spatial_shape} is not divisible by factor {factor}."
+        )
+    in_grid = SignalGrid(tuple(s // factor for s in spatial_shape), factor=factor)
+    out_grid = in_grid.coarsen(factor)
+    coords = get_relative_coords(
+        spatial_shape, in_grid.cen, in_grid.factor, out_grid.coords
+    )
+    return lambda x: map_coordinates_nd(x, coords, order)

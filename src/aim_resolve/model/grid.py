@@ -172,11 +172,35 @@ class SignalGrid:
         else:
             return vmap(space_lims, in_axes=(None, 0))(self.spc, self.cen)
 
+    @property
+    def coords(self):
+        if self.n_copies == 1:
+            return space_coords(self.shp, self.fac, self.cen)
+        else:
+            return vmap(space_coords, in_axes=(None, None, 0))(
+                self.shp, self.fac, self.cen
+            )
+
     def refine(self, factor):
         """Multiply the resolution of the grid by a factor."""
         check_type(factor, int)
         return SignalGrid(
             self.space, self.center, self.factor * factor, self.distances, self.n_copies
+        )
+
+    def coarsen(self, factor):
+        """Divide the resolution of the grid by a factor."""
+        check_type(factor, int)
+        if self.factor % factor != 0:
+            raise ValueError(
+                f"Cannot coarsen by factor {factor} since current factor is {self.factor}."
+            )
+        return SignalGrid(
+            self.space,
+            self.center,
+            self.factor // factor,
+            self.distances,
+            self.n_copies,
         )
 
     def update(self, **kwargs):
@@ -227,6 +251,16 @@ def space_lims(spc, cen):
         Array of lower and upper limits for each dimension.
     """
     return spc[:, None] / 2 * np.array([-1, 1]) + cen[:, None]
+
+
+def space_coords(shp, fac, cen):
+    """Generate the coordinates of the space."""
+    coords = np.indices(shp).astype(float)
+    coords_T = coords.T.reshape(-1, 2)
+    coords_T -= 0.5 * (shp - 1)
+    coords_T /= fac
+    coords_T += cen
+    return coords_T.reshape(coords.T.shape).T
 
 
 class PointGrid:
