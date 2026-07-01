@@ -1,10 +1,16 @@
 # %%
+# ---------------------------------------------------------------------------
+# GPU / JAX environment setup (must run before importing jax).
+# ---------------------------------------------------------------------------
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # %%
+# ---------------------------------------------------------------------------
+# Imports.
+# ---------------------------------------------------------------------------
 import pickle
 
 import jax.numpy as jnp
@@ -13,11 +19,12 @@ import numpy as np
 import aim_resolve as aim
 from aim_resolve.model.util import to_shape, is_val
 from jax import vmap
-from jax .scipy.ndimage import map_coordinates
+from jax.scipy.ndimage import map_coordinates
 
 # %%
-
-
+# ---------------------------------------------------------------------------
+# Infrastructure: SignalSpace and mapping of signals between sky sub-fields.
+# ---------------------------------------------------------------------------
 class SignalSpace():
     '''Class to represent a signal space at a specific location in the sky. Use `build` function to create the space.'''
 
@@ -184,6 +191,10 @@ def map_one_signal(x, in_dis, in_cen, out_coos, order=0):
 
 
 # %%
+# ---------------------------------------------------------------------------
+# Helpers: PS/box markers, FITS loading, mapping a NIFTy image to the uSARA/AIRI
+# component grids, and the two-frequency spectral index.
+# ---------------------------------------------------------------------------
 def box_markers(cfg, ps_map, grid, it):
     import numpy as np
 
@@ -236,6 +247,10 @@ def compute_spectral_index(I_1, I_0, f_1, f_0):
 
 
 # %%
+# ---------------------------------------------------------------------------
+# Load the aim-resolve reconstruction: config, sky model, posterior samples and
+# the point-source / object-box markers for the chosen multi-frequency run.
+# ---------------------------------------------------------------------------
 dir = "/scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b"
 
 mf_rec = "4_rec_3z_4_6f_1_it_1_it_1"
@@ -273,7 +288,10 @@ markers_mf = box_markers(setup_cfg, ps_map, sky_mf.grid, mf_it)
 print("markers:", [f"{k}: {len(v['x'])}" for k, v in markers_mf.items()])
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Load the reference reconstructions (uSARA and AIRI, Dabbech et al. 2022) at
+# 1053 and 1399 MHz from FITS, and their two-frequency spectral index.
+# ---------------------------------------------------------------------------
 usara_1053mhz = fits2array("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1053MHz_uSARA.fits") * 1e3 / 3.6
 print("uSARA @1053 MHz shape:", usara_1053mhz.shape)
 
@@ -294,7 +312,10 @@ airi_alpha = compute_spectral_index(airi_1399mhz, airi_1053mhz, 1399e6, 1053e6)
 print("AIRIs alpha shape:", airi_alpha.shape)
 
 # %%
-
+# ---------------------------------------------------------------------------
+# aim-resolve component maps (posterior mean): brightness cube (all freqs) and
+# spectral index for both galaxies, mapped onto the full sky grid.
+# ---------------------------------------------------------------------------
 nifty_o0_sky = samples_mf.mean(sky_mf.objects[0]) * CONV_FACTOR
 nifty_o0_sky = aim.map_signal(sky_mf.objects[0].grid, sky_mf.grid)(nifty_o0_sky)
 print("NIFTy C1 shape:", nifty_o0_sky.shape)
@@ -312,6 +333,10 @@ nifty_o1_alpha = aim.map_signal(sky_mf.objects[1].grid, sky_mf.grid)(nifty_o1_al
 print("NIFTy C2 alpha shape:", nifty_o1_alpha.shape)
 
 # %%
+# ---------------------------------------------------------------------------
+# The `plot_rows` helper: stack 2D arrays in one column (each the same width),
+# sharing a single colorbar; mirrors the styling used across these plots.
+# ---------------------------------------------------------------------------
 def plot_rows(
     array,
     *,
@@ -453,14 +478,11 @@ def plot_rows(
             ax.contour(c_arr.T, origin="lower", **c)
 
         if lab:
-            ax.text(
-                0.97,
-                0.94,
-                lab,
-                transform=ax.transAxes,
-                ha="right",
-                va="top",
-                color=label_color,
+            # Fixed margin (points) below the image top, independent of height.
+            ax.annotate(
+                lab, xy=(0.97, 1.0), xycoords="axes fraction",
+                xytext=(0, -12), textcoords="offset points",
+                ha="right", va="top", color=label_color,
             )
 
         if frame:
@@ -483,17 +505,9 @@ def plot_rows(
         bottom = min(b.y0 for b in boxes)
         width = cbar_kwargs.get("fraction", 0.0225)
 
-        # Gap to the colorbar = the vertical gap between the images, expressed
-        # as the same physical distance (convert the y-gap in inches to an
-        # x-fraction). Keeps every space in the figure visually identical.
-        pad = cbar_kwargs.get("pad")
-        if pad is None:
-            ordered = sorted(boxes, key=lambda b: b.y0)
-            v_gaps = [
-                ordered[i + 1].y0 - ordered[i].y1 for i in range(len(ordered) - 1)
-            ]
-            gap_yfrac = min(v_gaps) if v_gaps else 0.02
-            pad = gap_yfrac * fig_h / fig_w
+        # Fixed image-to-colorbar gap (figure-width fraction), matching the
+        # `plot_column` plots in eso_components.py; `cbar_kwargs["pad"]` overrides.
+        pad = cbar_kwargs.get("pad", 0.011)
 
         if cbar_kwargs.get("loc", "right") == "left":
             x0 = min(b.x0 for b in boxes) - pad - width
@@ -514,7 +528,10 @@ def plot_rows(
     plt.close()
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Shared plot settings and the three-row panel labels (aim-resolve / AIRI /
+# uSARA).
+# ---------------------------------------------------------------------------
 plot_dict = dict(
     odir="/scratch/users/rfuchs/packages/aim-resolve/steering/paper/compare",
     norm="log",
@@ -532,7 +549,9 @@ panel_labels = [
 
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 1 (ESO137-006) brightness at 1053 MHz: aim-resolve vs AIRI vs uSARA.
+# ---------------------------------------------------------------------------
 nifty_c1_1053mhz, usara_c1_1053mhz, airi_c1_1053mhz = map2component(nifty_o0_sky[1], usara_1053mhz, airi_1053mhz, rel_fov=(0.16, 0.08), center=(0, "-0.05deg"))
 
 plot_rows(
@@ -552,7 +571,9 @@ plot_rows(
 )
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 1 (ESO137-006) brightness at 1399 MHz: aim-resolve vs AIRI vs uSARA.
+# ---------------------------------------------------------------------------
 nifty_c1_1399mhz, usara_c1_1399mhz, airi_c1_1399mhz = map2component(nifty_o0_sky[4], usara_1399mhz, airi_1399mhz, rel_fov=(0.16, 0.08), center=(0, "-0.05deg"))
 
 plot_rows(
@@ -572,7 +593,10 @@ plot_rows(
 )
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 1 (ESO137-006) spectral index: aim-resolve vs AIRI vs uSARA (masked
+# below a flux floor; black brightness contours).
+# ---------------------------------------------------------------------------
 nifty_c1_alpha, usara_c1_alpha, airi_c1_alpha = map2component(nifty_o0_alpha, usara_alpha, airi_alpha, rel_fov=(0.16, 0.08), center=(0, "-0.05deg"))
 
 alpha_min = 1e-2
@@ -580,7 +604,7 @@ nifty_c1_alpha = np.where(nifty_c1_1053mhz > alpha_min, nifty_c1_alpha, np.nan)
 usara_c1_alpha = np.where(usara_c1_1053mhz > alpha_min, usara_c1_alpha, np.nan)
 airi_c1_alpha = np.where(airi_c1_1053mhz > alpha_min, airi_c1_alpha, np.nan) 
 
-contours = [{"array": c1, "levels": [1e-2, 1e-1, 1, 10], "colors": "white", "linewidths": 0.5} for c1 in [nifty_c1_1053mhz, airi_c1_1053mhz, usara_c1_1053mhz]]
+contours = [{"array": c1, "levels": [1e-2, 1e-1, 1, 10], "colors": "black", "linewidths": 0.5} for c1 in [nifty_c1_1053mhz, airi_c1_1053mhz, usara_c1_1053mhz]]
 
 plot_rows(
     array=[nifty_c1_alpha, airi_c1_alpha, usara_c1_alpha],
@@ -603,7 +627,9 @@ plot_rows(
 )
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 2 (ESO137-007) brightness at 1053 MHz: aim-resolve vs AIRI vs uSARA.
+# ---------------------------------------------------------------------------
 nifty_c2_1053mhz, usara_c2_1053mhz, airi_c2_1053mhz = map2component(nifty_o1_sky[1], usara_1053mhz, airi_1053mhz, rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"))
 
 plot_rows(
@@ -623,7 +649,9 @@ plot_rows(
 )
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 2 (ESO137-007) brightness at 1399 MHz: aim-resolve vs AIRI vs uSARA.
+# ---------------------------------------------------------------------------
 nifty_c2_1399mhz, usara_c2_1399mhz, airi_c2_1399mhz = map2component(nifty_o1_sky[4], usara_1399mhz, airi_1399mhz, rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"))
 
 plot_rows(
@@ -643,7 +671,10 @@ plot_rows(
 )
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Galaxy 2 (ESO137-007) spectral index: aim-resolve vs AIRI vs uSARA (masked
+# below a flux floor; black brightness contours).
+# ---------------------------------------------------------------------------
 nifty_c2_alpha, usara_c2_alpha, airi_c2_alpha = map2component(nifty_o1_alpha, usara_alpha, airi_alpha, rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"))
 
 alpha_min = 5e-3
@@ -651,7 +682,7 @@ nifty_c2_alpha = np.where(nifty_c2_1053mhz > alpha_min, nifty_c2_alpha, np.nan)
 usara_c2_alpha = np.where(usara_c2_1053mhz > alpha_min, usara_c2_alpha, np.nan)
 airi_c2_alpha = np.where(airi_c2_1053mhz > alpha_min, airi_c2_alpha, np.nan) 
 
-contours = [{"array": c1, "levels": [1e-2, 1e-1, 1, 10], "colors": "white", "linewidths": 0.5} for c1 in [nifty_c2_1053mhz, airi_c2_1053mhz, usara_c2_1053mhz]]
+contours = [{"array": c1, "levels": [5e-3, 5e-2, 5e-1, 5], "colors": "black", "linewidths": 0.5} for c1 in [nifty_c2_1053mhz, airi_c2_1053mhz, usara_c2_1053mhz]]
 
 plot_rows(
     array=[nifty_c2_alpha, airi_c2_alpha, usara_c2_alpha],

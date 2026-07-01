@@ -1,10 +1,16 @@
 # %%
+# ---------------------------------------------------------------------------
+# GPU / JAX environment setup (must run before importing jax).
+# ---------------------------------------------------------------------------
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 # %%
+# ---------------------------------------------------------------------------
+# Imports.
+# ---------------------------------------------------------------------------
 import pickle
 
 import jax.numpy as jnp
@@ -14,11 +20,12 @@ import aim_resolve as aim
 from aim_resolve.model.util import to_shape, is_val
 from aim_resolve.plot.util import plot_figure
 from jax import vmap
-from jax .scipy.ndimage import map_coordinates
+from jax.scipy.ndimage import map_coordinates
 
 # %%
-
-
+# ---------------------------------------------------------------------------
+# Infrastructure: SignalSpace and mapping of signals between sky sub-fields.
+# ---------------------------------------------------------------------------
 class SignalSpace():
     '''Class to represent a signal space at a specific location in the sky. Use `build` function to create the space.'''
 
@@ -185,6 +192,10 @@ def map_one_signal(x, in_dis, in_cen, out_coos, order=0):
 
 
 # %%
+# ---------------------------------------------------------------------------
+# Helpers: PS/box markers, FITS loading, mapping a NIFTy image to the uSARA/AIRI
+# component grids, and the two-frequency spectral index.
+# ---------------------------------------------------------------------------
 def box_markers(cfg, ps_map, grid, it):
     import numpy as np
 
@@ -237,6 +248,10 @@ def compute_spectral_index(I_1, I_0, f_1, f_0):
 
 
 # %%
+# ---------------------------------------------------------------------------
+# Load the reconstruction: config, sky model, posterior samples, and the
+# point-source / object-box markers for the chosen multi-frequency run.
+# ---------------------------------------------------------------------------
 dir = "/scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b"
 
 mf_rec = "4_rec_3z_4_6f_1_it_1_it_1"
@@ -274,12 +289,12 @@ markers_mf = box_markers(setup_cfg, ps_map, sky_mf.grid, mf_it)
 print("markers:", [f"{k}: {len(v['x'])}" for k, v in markers_mf.items()])
 
 # %%
-
-
-# %%
-
+# ---------------------------------------------------------------------------
+# Shared plot settings and the `plot_tiles_grid` helper (a rows x cols grid of
+# image tiles sharing a single bottom colorbar).
+# ---------------------------------------------------------------------------
 plot_dict = dict(
-    odir="/scratch/users/rfuchs/packages/aim-resolve/steering/paper/compare",
+    odir="/scratch/users/rfuchs/packages/aim-resolve/steering/paper/components",
     norm="log",
     cmap="inferno",
     cbar=False,
@@ -410,7 +425,7 @@ def plot_tiles_grid(
                 ax.contour(
                     np.asarray(contour_arrays[i], dtype="float64").T,
                     levels=contour_levels,
-                    colors="white",
+                    colors="black",
                     linewidths=0.5,
                     origin="lower",
                 )
@@ -449,7 +464,10 @@ def plot_tiles_grid(
 
 
 # %%
-
+# ---------------------------------------------------------------------------
+# Per-tile maps: the 36 brightest sky tiles, shown as reference-frequency
+# brightness and spectral index on 6x6 grids.
+# ---------------------------------------------------------------------------
 import nifty.re as jft
 
 tiles = sky_mf.tiles[0]
@@ -515,8 +533,10 @@ plot_tiles_grid(
 )
 
 # %%
-
-
+# ---------------------------------------------------------------------------
+# The `plot_column` helper: stack images in a single column, same width, with
+# one shared colorbar on the side.
+# ---------------------------------------------------------------------------
 def plot_column(
     arrays,
     *,
@@ -532,6 +552,9 @@ def plot_column(
     cbar_width=0.0225,
     labels=None,
     label_color="white",
+    text=None,
+    text_color=None,
+    marker=None,
     frame=False,
     contour=None,
     origin="lower",
@@ -567,6 +590,15 @@ def plot_column(
         Per-row text drawn in the top-right corner (None to skip a row).
     label_color : str, optional
         Color of the per-row corner labels. Default is "white".
+    text : str or iterable of str, optional
+        Per-row text drawn in the top-LEFT corner (a single str applies to the
+        first row). Default is None.
+    text_color : str, optional
+        Color of the top-left text. Defaults to `label_color`.
+    marker : dict or list of dict, optional
+        Scatter markers. A single spec ({'x','y',...} or {'m0': {...}, ...}) is
+        drawn on every row; a list gives one spec per row (None to skip). Each
+        leaf dict is passed straight to `ax.scatter(**dict)`. Default is None.
     frame : bool, optional
         If True, draw a black box around each image (no ticks). Default is False.
     contour : dict or list of dict, optional
@@ -594,6 +626,22 @@ def plot_column(
         contours = list(contour) + [None] * (n - len(contour))
 
     row_labels = ([None] * n) if labels is None else list(labels) + [None] * (n - len(labels))
+
+    if text is None:
+        texts = [None] * n
+    elif isinstance(text, str):
+        texts = [text] + [None] * (n - 1)
+    else:
+        texts = list(text) + [None] * (n - len(text))
+
+    if marker is None:
+        markers = [None] * n
+    elif isinstance(marker, dict):
+        markers = [marker] * n
+    else:
+        markers = list(marker) + [None] * (n - len(marker))
+
+    text_color = label_color if text_color is None else text_color
 
     # Shared color limits so the single colorbar is valid for every image.
     finite = np.concatenate([a[np.isfinite(a)].ravel() for a in arrays])
@@ -624,7 +672,9 @@ def plot_column(
     axes = np.atleast_1d(axes).ravel().tolist()
 
     img = None
-    for ax, a, c, lab in zip(axes, arrays, contours, row_labels):
+    for ax, a, c, lab, txt, mrk in zip(
+        axes, arrays, contours, row_labels, texts, markers
+    ):
         img = ax.imshow(a.T, cmap=cmap, norm=color_norm, origin=origin, aspect="auto")
 
         if c:
@@ -632,10 +682,26 @@ def plot_column(
             c_arr = np.asarray(c.pop("array", a), dtype="float64")
             ax.contour(c_arr.T, origin="lower", **c)
 
+        if mrk:
+            # accept a single {x, y, ...} spec or a dict of such subdicts.
+            specs = {"m0": mrk} if all(k in mrk for k in ("x", "y")) else mrk
+            for spec in specs.values():
+                ax.scatter(**spec)
+
+        # Corner labels sit a fixed distance below the image top (offset in
+        # points), so the margin is the same regardless of the image height.
         if lab:
-            ax.text(
-                0.97, 0.94, lab, transform=ax.transAxes,
+            ax.annotate(
+                lab, xy=(0.97, 1.0), xycoords="axes fraction",
+                xytext=(0, -12), textcoords="offset points",
                 ha="right", va="top", color=label_color,
+            )
+
+        if txt:
+            ax.annotate(
+                txt, xy=(0.03, 1.0), xycoords="axes fraction",
+                xytext=(0, -12), textcoords="offset points",
+                ha="left", va="top", color=text_color,
             )
 
         ax.set_xticks([])
@@ -652,10 +718,9 @@ def plot_column(
         boxes = [ax.get_position() for ax in axes]
         top = max(b.y1 for b in boxes)
         bottom = min(b.y0 for b in boxes)
-        ordered = sorted(boxes, key=lambda b: b.y0)
-        v_gaps = [ordered[i + 1].y0 - ordered[i].y1 for i in range(len(ordered) - 1)]
-        gap = min(v_gaps) if v_gaps else 0.02
-        pad = gap * fig_h / fig_width  # same physical distance as the row gap
+        # Fixed image-to-colorbar gap (figure-width fraction) so every column
+        # plot -- single image or multi-row -- has the exact same spacing.
+        pad = 0.011
 
         if cbar_loc == "left":
             x0 = min(b.x0 for b in boxes) - pad - cbar_width
@@ -677,8 +742,12 @@ def plot_column(
 
 
 # %%
-
-
+# ---------------------------------------------------------------------------
+# Component maps for both galaxies (c1 + c2): reference-frequency brightness,
+# relative uncertainty, spectral index (+ std) and spectral curvature (mean +
+# sample-wise uncertainty), stacked with `plot_column`. Pixels below a
+# per-component flux floor are masked out.
+# ---------------------------------------------------------------------------
 def crop_component(nifty_array, rel_fov, center):
     """
     Crop a full-grid (2deg) nifty image to a component sub-field of view.
@@ -696,6 +765,20 @@ def crop_component(nifty_array, rel_fov, center):
     return map_signal(nifty_array, space, sub, vmap_sum=False)
 
 
+def curvature_from_cube(cube, u_freq):
+    """
+    Per-pixel spectral curvature of a multi-frequency cube. A log-parabola is
+    fit per pixel,  ln S = a + alpha * u + c * u^2  with  u = ln(nu / nu_ref),
+    and the quadratic coefficient `c` is returned:
+        c > 0  flattening to high nu -> blend / superposition of two spectra,
+        c < 0  steepening / break    -> single, connected, aged population.
+    `cube` is (nfreq, nx, ny); needs >= 3 frequencies.
+    """
+    ln = np.log(np.clip(cube, 1e-12, None))
+    c = np.polyfit(u_freq, ln.reshape(cube.shape[0], -1), 2)[0]
+    return c.reshape(cube.shape[1:])
+
+
 # Per-component crop geometry and the flux threshold used to mask empty pixels.
 galaxy_labels = ["ESO137-006", "ESO137-007"]
 components = [
@@ -703,7 +786,11 @@ components = [
     dict(obj=sky_mf.objects[1], rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"), flux_min=5e-3),
 ]
 
+# Frequency axis for the log-parabola curvature fit (invariant to the reference).
+u_freq = np.log(np.asarray(sky_mf.freq, dtype="float64") / sky_mf.freq[1])
+
 flux_comps, rel_std_comps, alpha_comps, alpha_std_comps = [], [], [], []
+curv_comps, curv_std_comps = [], []
 for comp in components:
     obj = comp["obj"]
 
@@ -721,18 +808,28 @@ for comp in components:
     flux_c = crop(flux_mean)
     mask = flux_c > comp["flux_min"]
 
+    # Spectral curvature: mean from the posterior-mean cube, std sample-wise.
+    curv_mean = curvature_from_cube(crop(to_grid(samples_mf.mean(obj)) * CONV_FACTOR), u_freq)
+    curv_k = np.stack(
+        [curvature_from_cube(crop(to_grid(obj(s)) * CONV_FACTOR), u_freq) for s in samples_mf]
+    )
+
     flux_comps.append(flux_c)
     rel_std_comps.append(crop(rel_std))
     alpha_comps.append(np.where(mask, crop(alpha), np.nan))
     alpha_std_comps.append(np.where(mask, crop(alpha_std), np.nan))
+    curv_comps.append(np.where(mask, curv_mean, np.nan))
+    curv_std_comps.append(np.where(mask, curv_k.std(axis=0), np.nan))
 
-# White flux contours (drawn from each component's flux) for all but the mean.
+# Black flux contours, used on every map. Per-component levels: c1 (upper
+# galaxy, ESO137-006) and c2 (ESO137-007, half the brightness scale).
+contour_levels = [[1e-2, 1e-1, 1, 10], [5e-3, 5e-2, 5e-1, 5]]
 flux_contours = [
-    {"array": f, "levels": [1e-2, 1e-1, 1, 10], "colors": "white", "linewidths": 0.5}
-    for f in flux_comps
+    {"array": f, "levels": lvls, "colors": "black", "linewidths": 0.5}
+    for f, lvls in zip(flux_comps, contour_levels)
 ]
 
-print("plotting nifty components c1 + c2 ...")
+print("plotting mean of the sky brightness ...")
 plot_column(
     flux_comps,
     odir=plot_dict["odir"],
@@ -747,7 +844,7 @@ plot_column(
     dpi=plot_dict["dpi"],
 )
 
-print("plotting relative std of the sky ...")
+print("plotting std of the sky brightness ...")
 plot_column(
     rel_std_comps,
     odir=plot_dict["odir"],
@@ -764,7 +861,7 @@ plot_column(
     dpi=plot_dict["dpi"],
 )
 
-print("plotting spectral index map ...")
+print("plotting mean of the spectral index ...")
 plot_column(
     alpha_comps,
     odir=plot_dict["odir"],
@@ -800,24 +897,71 @@ plot_column(
     dpi=plot_dict["dpi"],
 )
 
-# %%
+print("plotting mean of the spectral curvature ...")
+curv_vlim = float(
+    np.nanpercentile(np.abs(np.concatenate([c.ravel() for c in curv_comps])), 99)
+)
+plot_column(
+    curv_comps,
+    odir=plot_dict["odir"],
+    name="cs_curvature",
+    cmap="coolwarm",
+    norm="linear",
+    vmin=-curv_vlim,
+    vmax=curv_vlim,
+    frame=True,
+    label_color="black",
+    contour=flux_contours,
+    cbar_label=r"spectral curvature $c$",
+    labels=galaxy_labels,
+    fig_width=10.0,
+    dpi=plot_dict["dpi"],
+)
+
+print("plotting std of the spectral curvature ...")
+plot_column(
+    curv_std_comps,
+    odir=plot_dict["odir"],
+    name="cs_curvature_std",
+    cmap="inferno",
+    norm="linear",
+    vmin=0,
+    frame=True,
+    label_color="black",
+    contour=flux_contours,
+    cbar_label=r"curvature uncertainty $\sigma_c$",
+    labels=galaxy_labels,
+    fig_width=10.0,
+    dpi=plot_dict["dpi"],
+)
 
 # %%
+# ---------------------------------------------------------------------------
+# Full-field reference-frequency sky with the point-source and object-box
+# markers overplotted.
+# ---------------------------------------------------------------------------
 sky_rf_val = samples_mf.mean(sky_mf.ref_freq_model) * CONV_FACTOR
 
 print("plotting ...")
-aim.plot_arrays(
-    array=sky_rf_val,
+plot_column(
+    [sky_rf_val],
+    odir=plot_dict["odir"],
+    name="sky_1053mhz_box",
+    cmap="inferno",
+    norm="log",
     vmin=1e-3,
     marker=markers_mf,
-    name="sky_1053mhz_box",
-    figsize=(10,10),
-    callback=lambda fig, ax: fig.text(0.085, 0.90, ref_freq, fontsize=15, c="white"),
-    **plot_dict,
+    text=ref_freq,
+    text_color="white",
+    cbar_label="mJy / arcsec$^2$",
+    fig_width=10.0,
+    dpi=plot_dict["dpi"],
 )
 # %%
-
-# Sky zoom-in (50% of the FoV) for all 6 frequencies, single bottom colorbar.
+# ---------------------------------------------------------------------------
+# Sky zoom-in (central 40% of the FoV) across all 6 frequencies, as a 2x3 tile
+# grid with a single bottom colorbar.
+# ---------------------------------------------------------------------------
 sky_val_mf = samples_mf.mean(sky_mf) * CONV_FACTOR
 sky_val = crop_component(sky_val_mf, (0.4, 0.4), (0, 0))
 
