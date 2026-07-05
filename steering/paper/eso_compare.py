@@ -602,7 +602,17 @@ nifty_c1_alpha, usara_c1_alpha, airi_c1_alpha = map2component(nifty_o0_alpha, us
 alpha_min = 1e-2
 nifty_c1_alpha = np.where(nifty_c1_1053mhz > alpha_min, nifty_c1_alpha, np.nan)
 usara_c1_alpha = np.where(usara_c1_1053mhz > alpha_min, usara_c1_alpha, np.nan)
-airi_c1_alpha = np.where(airi_c1_1053mhz > alpha_min, airi_c1_alpha, np.nan) 
+airi_c1_alpha = np.where(airi_c1_1053mhz > alpha_min, airi_c1_alpha, np.nan)
+
+# Shared spectral-index colour limits: the min/max of the not-masked NIFTy
+# alpha over BOTH components, so the c1 and c2 alpha plots use identical
+# vmin/vmax. The c2 NIFTy maps are computed here (same crop/mask as below).
+_n_c2_1053 = map2component(nifty_o1_sky[1], usara_1053mhz, airi_1053mhz, rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"))[0]
+_n_c2_alpha = map2component(nifty_o1_alpha, usara_alpha, airi_alpha, rel_fov=(0.25, 0.09), center=("0.18deg", "0.31deg"))[0]
+_n_c2_alpha = np.where(_n_c2_1053 > 5e-3, _n_c2_alpha, np.nan)
+ALPHA_VMIN = float(min(np.nanmin(nifty_c1_alpha), np.nanmin(_n_c2_alpha)))
+ALPHA_VMAX = float(max(np.nanmax(nifty_c1_alpha), np.nanmax(_n_c2_alpha)))
+print(f"shared alpha vmin/vmax (NIFTy, both components): {ALPHA_VMIN:.3f} / {ALPHA_VMAX:.3f}")
 
 contours = [{"array": c1, "levels": [1e-2, 1e-1, 1, 10], "colors": "black", "linewidths": 0.5} for c1 in [nifty_c1_1053mhz, airi_c1_1053mhz, usara_c1_1053mhz]]
 
@@ -616,8 +626,8 @@ plot_rows(
     contour=contours,
     figsize=(10,10),
     **plot_dict | dict(
-        vmin=-4,
-        vmax=0,
+        vmin=ALPHA_VMIN,
+        vmax=ALPHA_VMAX,
         norm="linear",
         cmap="coolwarm",
         cbar=True,
@@ -694,8 +704,8 @@ plot_rows(
     contour=contours,
     figsize=(10,10),
     **plot_dict | dict(
-        vmin=-4,
-        vmax=0,
+        vmin=ALPHA_VMIN,
+        vmax=ALPHA_VMAX,
         norm="linear",
         cmap="coolwarm",
         cbar=True,
