@@ -389,7 +389,7 @@ def plot_tiles_grid(
     margin_x = 0.02 * tile_size * cols
     margin_top = 0.1 * scale
     cbar_strip = 0.95 * scale
-    cbar_height = 0.14 * scale
+    cbar_height = 0.28 * scale
 
     fig_w = tile_size * cols
     grid_w = fig_w - 2 * margin_x
@@ -465,75 +465,6 @@ def plot_tiles_grid(
 
 # %%
 # ---------------------------------------------------------------------------
-# Per-tile maps: the 36 brightest sky tiles, shown as reference-frequency
-# brightness and spectral index on 6x6 grids.
-# ---------------------------------------------------------------------------
-import nifty.re as jft
-
-tiles = sky_mf.tiles[0]
-tiles_rf = tiles.ref_freq_model
-tiles_si = tiles.spectral_index
-
-tiles_rf_val = jft.mean(tuple((tiles_rf(s, map=False)) * CONV_FACTOR for s in samples_mf))
-tiles_si_val = jft.mean(tuple(tiles_si(s, map=False) for s in samples_mf))
-
-spc_0 = SignalSpace.build(shape=tiles_rf_val.shape[1:], fov=(2,2))
-spc_1 = SignalSpace.build(shape=tiles_rf_val.shape[1:], fov=(1,1))
-
-tiles_rf_val = map_signal(tiles_rf_val, spc_0, spc_1, order=1, vmap_sum=False)
-tiles_si_val = map_signal(tiles_si_val, spc_0, spc_1, order=1, vmap_sum=False)
-
-
-# tiles_rf_val = aim.map_signal(tiles.tiles.grid, tiles.tiles.grid/2)(tiles_rf_val)
-print("tiles plotting shape:", tiles_rf_val.shape)
-
-
-tiles_peak = np.array([np.max(t) for t in tiles_rf_val])
-print(np.sort(tiles_peak))
-tiles_peak_max = np.max(tiles_peak)
-tiles_order = np.argsort(tiles_peak)[::-1][:36]
-
-bright_tiles_rf_val = [tiles_rf_val[i] + 1e-10 for i in tiles_order]
-bright_tiles_si_val = [tiles_si_val[i] for i in tiles_order]
-bright_tiles_si_val = [np.where(rf > 1e-2, si, np.nan) for rf,si in zip(bright_tiles_rf_val, bright_tiles_si_val)]
-
-
-print("plotting tiles (6x6) ...")
-plot_tiles_grid(
-    arrays=bright_tiles_rf_val,
-    rows=6,
-    cols=6,
-    name="tiles_1053mhz",
-    odir=plot_dict["odir"],
-    dpi=plot_dict["dpi"],
-    vmin=1e-3,
-    vmax=tiles_peak_max,
-    norm="log",
-    cmap="inferno",
-    frame=False,
-    cbar_label="mJy / arcsec$^2$",
-)
-
-print("plotting tiles (6x6) ...")
-plot_tiles_grid(
-    arrays=bright_tiles_si_val,
-    rows=6,
-    cols=6,
-    name="tiles_alpha",
-    odir=plot_dict["odir"],
-    dpi=plot_dict["dpi"],
-    vmin=-4,
-    vmax=0,
-    norm="linear",
-    cmap="coolwarm",
-    frame=True,
-    cbar_label="spectral index",
-    contour_arrays=bright_tiles_rf_val,
-    contour_levels=[1e-2, 1e-1, 1],
-)
-
-# %%
-# ---------------------------------------------------------------------------
 # The `plot_column` helper: stack images in a single column, same width, with
 # one shared colorbar on the side.
 # ---------------------------------------------------------------------------
@@ -560,6 +491,7 @@ def plot_column(
     origin="lower",
     fig_width=5.0,
     hspace=0.025,
+    label_offset=-12,
     dpi=300,
 ):
     """
@@ -693,14 +625,14 @@ def plot_column(
         if lab:
             ax.annotate(
                 lab, xy=(0.97, 1.0), xycoords="axes fraction",
-                xytext=(0, -12), textcoords="offset points",
+                xytext=(0, label_offset), textcoords="offset points",
                 ha="right", va="top", color=label_color,
             )
 
         if txt:
             ax.annotate(
                 txt, xy=(0.03, 1.0), xycoords="axes fraction",
-                xytext=(0, -12), textcoords="offset points",
+                xytext=(0, label_offset), textcoords="offset points",
                 ha="left", va="top", color=text_color,
             )
 
@@ -828,6 +760,8 @@ flux_contours = [
     {"array": f, "levels": lvls, "colors": "black", "linewidths": 0.5}
     for f, lvls in zip(flux_comps, contour_levels)
 ]
+ALPHA_VMIN = float(min(np.nanmin(alpha_comps[0]), np.nanmin(alpha_comps[1])))
+ALPHA_VMAX = float(max(np.nanmax(alpha_comps[0]), np.nanmax(alpha_comps[1])))
 
 print("plotting mean of the sky brightness ...")
 plot_column(
@@ -836,7 +770,7 @@ plot_column(
     name="cs_1053mhz",
     cmap="inferno",
     norm="log",
-    vmin=1e-3,
+    vmin=6e-4,
     vmax=float(max(np.nanmax(f) for f in flux_comps)),
     cbar_label=r"mJy / arcsec$^2$",
     labels=galaxy_labels,
@@ -857,7 +791,9 @@ plot_column(
     contour=flux_contours,
     cbar_label="relative uncertainty",
     labels=galaxy_labels,
-    fig_width=10.0,
+    fig_width=5.0,
+    label_offset=-6,
+   
     dpi=plot_dict["dpi"],
 )
 
@@ -868,8 +804,8 @@ plot_column(
     name="cs_alpha",
     cmap="coolwarm",
     norm="linear",
-    vmin=-4,
-    vmax=0,
+    vmin=ALPHA_VMIN,
+    vmax=ALPHA_VMAX,
     frame=True,
     label_color="black",
     contour=flux_contours,
@@ -893,7 +829,9 @@ plot_column(
     contour=flux_contours,
     cbar_label="relative uncertainty",
     labels=galaxy_labels,
-    fig_width=10.0,
+    fig_width=5.0,
+    label_offset=-6,
+   
     dpi=plot_dict["dpi"],
 )
 
@@ -931,7 +869,9 @@ plot_column(
     contour=flux_contours,
     cbar_label=r"curvature uncertainty $\sigma_c$",
     labels=galaxy_labels,
-    fig_width=10.0,
+    fig_width=5.0,
+    label_offset=-6,
+   
     dpi=plot_dict["dpi"],
 )
 
@@ -957,34 +897,75 @@ plot_column(
     fig_width=10.0,
     dpi=plot_dict["dpi"],
 )
+
 # %%
-# ---------------------------------------------------------------------------
-# Sky zoom-in (central 40% of the FoV) across all 6 frequencies, as a 2x3 tile
-# grid with a single bottom colorbar.
-# ---------------------------------------------------------------------------
-sky_val_mf = samples_mf.mean(sky_mf) * CONV_FACTOR
-sky_val = crop_component(sky_val_mf, (0.4, 0.4), (0, 0))
 
-freq_labels = [f"{round(f * 1e-6)} MHz" for f in sky_mf.freq]
+# ---------------------------------------------------------------------------
+# Per-tile maps: the 36 brightest sky tiles, shown as reference-frequency
+# brightness and spectral index on 6x6 grids.
+# ---------------------------------------------------------------------------
+import nifty.re as jft
 
-print("plotting sky_mf zoom (2x3) ...")
+tiles = sky_mf.tiles[0]
+tiles_rf = tiles.ref_freq_model
+tiles_si = tiles.spectral_index
+
+tiles_rf_val = jft.mean(tuple((tiles_rf(s, map=False)) * CONV_FACTOR for s in samples_mf))
+tiles_si_val = jft.mean(tuple(tiles_si(s, map=False) for s in samples_mf))
+
+spc_0 = SignalSpace.build(shape=tiles_rf_val.shape[1:], fov=(2,2))
+spc_1 = SignalSpace.build(shape=tiles_rf_val.shape[1:], fov=(1,1))
+
+tiles_rf_val = map_signal(tiles_rf_val, spc_0, spc_1, order=1, vmap_sum=False)
+tiles_si_val = map_signal(tiles_si_val, spc_0, spc_1, order=1, vmap_sum=False)
+
+
+# tiles_rf_val = aim.map_signal(tiles.tiles.grid, tiles.tiles.grid/2)(tiles_rf_val)
+print("tiles plotting shape:", tiles_rf_val.shape)
+
+
+tiles_peak = np.array([np.max(t) for t in tiles_rf_val])
+print(np.sort(tiles_peak))
+tiles_peak_max = np.max(tiles_peak)
+tiles_order = np.argsort(tiles_peak)[::-1][:36]
+
+bright_tiles_rf_val = [tiles_rf_val[i] + 1e-10 for i in tiles_order]
+bright_tiles_si_val = [tiles_si_val[i] for i in tiles_order]
+bright_tiles_si_val = [np.where(rf > 1e-2, si, np.nan) for rf,si in zip(bright_tiles_rf_val, bright_tiles_si_val)]
+
+
+print("plotting tiles (6x6) ...")
 plot_tiles_grid(
-    arrays=list(sky_val),
-    rows=2,
-    cols=3,
-    name="sky_mf",
+    arrays=bright_tiles_rf_val,
+    rows=6,
+    cols=6,
+    name="tiles_1053mhz",
     odir=plot_dict["odir"],
     dpi=plot_dict["dpi"],
     vmin=1e-3,
-    vmax=float(np.nanmax(sky_val)),
+    vmax=tiles_peak_max,
     norm="log",
     cmap="inferno",
-    labels=freq_labels,
-    label_color="white",
-    label_fontsize=15,
-    tile_size=3.0,
-    space=0.02,
-    scale=2.0,
+    frame=False,
     cbar_label="mJy / arcsec$^2$",
 )
+
+print("plotting tiles (6x6) ...")
+plot_tiles_grid(
+    arrays=bright_tiles_si_val,
+    rows=6,
+    cols=6,
+    name="tiles_alpha",
+    odir=plot_dict["odir"],
+    dpi=plot_dict["dpi"],
+    vmin=ALPHA_VMIN,
+    vmax=ALPHA_VMAX,
+    norm="linear",
+    cmap="coolwarm",
+    frame=True,
+    cbar_label="spectral index",
+    contour_arrays=bright_tiles_rf_val,
+    contour_levels=[1e-2, 1e-1, 1],
+)
+
 # %%

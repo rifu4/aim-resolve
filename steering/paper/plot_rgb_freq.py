@@ -1189,7 +1189,7 @@ def plot_multi_color_grid(
         cbar_strip = 0.95 * scale
     else:
         cbar_strip = 0.1 * scale
-    cbar_height = 0.14 * scale
+    cbar_height = 0.28 * scale
 
     fig_w = tile_size * cols
     grid_w = fig_w - 2 * margin_x
@@ -1335,7 +1335,7 @@ print("markers:", [f"{k}: {len(v['x'])}" for k, v in markers_mf.items()])
 # references (brightness scale + hue) are reused by the component and tile plots
 # so all three share the same color mapping (see spectral_cube_to_rgb).
 # ---------------------------------------------------------------------------
-odir = "/scratch/users/rfuchs/packages/aim-resolve/steering/paper/rgb"
+odir = "/scratch/users/rfuchs/packages/aim-resolve/steering/paper/rgb_freq3"
 nu_idx = [1, 2, 3, 4, 5, 6]  # even channel indices for rendering: distinct hues
 # (real frequencies clump colors when the band has a gap; real freqs go on the
 # colorbar labels instead, with the gap-fade marking the missing band).
@@ -1345,9 +1345,9 @@ color_dict = dict(
     intensity_scale="log",
     range_min=0.0,
     range_max=100.0,
-    deslope=1.0,
+    deslope=1.5,
     normalize_spectrum_enabled=True,
-    normalize_spectrum_boost=8.0,
+    normalize_spectrum_boost=7.5,
     dynamic_range=1e4,
     lambda_min=400.0,
     lambda_max=700.0,
@@ -1368,12 +1368,12 @@ plot_multi_color(
     sky,
     nu_idx,
     odir=odir,
-    name="sky_rgb_freq_box",
+    name="sky_rgb_box",
     marker=markers_mf,
     cbar=True,
     cbar_nu=sky_mf.freq,   # real frequencies (Hz) for the colorbar labels
     cbar_freq_scale=1e-6,  # Hz -> MHz
-    cbar_gap=True,         # fade the bar where the frequency coverage has a gap
+    cbar_gap=False,         # fade the bar where the frequency coverage has a gap
     cbar_spectral=True,    # CIE spectral-locus colors (match the renderer)
     **color_dict,
 )
@@ -1401,13 +1401,13 @@ plot_multi_color_column(
     flux_comps,
     nu_idx,
     odir=odir,
-    name="cs_rgb_freq",
+    name="cs_rgb",
     labels=galaxy_labels,
     fig_width=10.0,
     cbar=True,
     cbar_nu=sky_mf.freq,
     cbar_freq_scale=1e-6,
-    cbar_gap=True,
+    cbar_gap=False,
     cbar_spectral=True,    # CIE spectral-locus colors (match the renderer)
     brightness_max=sky_brightness_max,  # match the full-sky brightness scale
     spectrum_ref=sky_spectrum_ref,      # match the full-sky hue normalization
@@ -1448,11 +1448,11 @@ plot_multi_color_grid(
     rows=6,
     cols=6,
     odir=odir,
-    name="tiles_rgb_freq",
+    name="tiles_rgb",
     cbar=True,
     cbar_nu=sky_mf.freq,
     cbar_freq_scale=1e-6,
-    cbar_gap=True,
+    cbar_gap=False,
     cbar_spectral=True,    # CIE spectral-locus colors (match the renderer)
     brightness_max=sky_brightness_max,  # match the full-sky brightness scale
     spectrum_ref=sky_spectrum_ref,      # match the full-sky hue normalization
