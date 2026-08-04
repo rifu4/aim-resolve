@@ -17,19 +17,19 @@ rerun: true
 # specify the data to be reconstructed and the background grid (space and field of view)
 data:
   fname: /scratch/users/rfuchs/data/eso_986-1137mhz.npz
-  fun: fast_radio
+  fun: radio
+
+likelihood:
+  mode: fast
+  noise:
+    parameters:
+      mode: 1.0
+      mean: 1.1
+    scaling: true
 
 grid_bg:
   space: [1024, 1024]
   fov: [2deg, 2deg]
-
-noise:
-  parameters:
-    mode: 1.0
-    mean: 1.1
-  scaling: true
-
-split: 512
 
 ---
 
@@ -130,7 +130,7 @@ base_trans:
 # overwrite the default segmentation parameters
 base_seg:
   seg_model:
-    name: unet1024_dice30
+    name: unet1024
     odir: train/runs/files
   transform:
     log: true
@@ -149,7 +149,7 @@ base_clu:
 
 # overwrite the default modelling settings
 base_model:
-  zoom: 4
+  zoom: 1
   masks:
     margin_fac: 0.2
     margin_min: 5

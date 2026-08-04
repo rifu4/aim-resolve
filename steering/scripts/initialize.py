@@ -20,9 +20,8 @@ def main():
 
     # adjust model yaml-file (opt, lh, and data section)
     odir = pipe_dct.pop("odir")
-    fun = pipe_dct["data"]["fun"]
     cfg.modify_sec("opt", base="base_opt", odir="->base_opt/odir + opt/0_rec")
-    cfg.modify_sec("lh.0", fun=fun)
+    cfg.modify_sec("lh.0", **pipe_dct.pop("likelihood"))
     cfg.modify_sec("data.0", **pipe_dct.pop("data"))
 
     # extract frequency channels if specified
@@ -38,19 +37,8 @@ def main():
     else:
         freq = [1.0]
 
-    # do split in fast-resolve convolution if specified
-    split = pipe_dct.pop("split", 0)
-
-    # add noise scaling configuration for the likelihood
-    if "noise" in pipe_dct:
-        cfg.modify_sec("lh.0", noise=pipe_dct.pop("noise"))
-
-    # get noise level for likelihood if fun is 'exp'
-    if "max_std" in cfg.sections["data.0"]:
-        cfg.modify_sec("lh.0", noise=dict(max_std=cfg.sections["data.0"]["max_std"]))
-
     # get correct kernels if fast-resolve is used
-    if "radio" in fun and "fast" in fun:
+    if cfg.sections["lh.0"]["mode"] == "fast":
         kernel_dir = "runs/kernels"
         os.makedirs(kernel_dir, exist_ok=True)
         kname = cfg.sections["data.0"]["fname"].split("/")[-1].split(".")[0]
@@ -58,7 +46,6 @@ def main():
         kfov = pipe_dct["grid_bg"]["fov"][0]
         cfg.modify_sec(
             sec_key="lh.0",
-            split=split,
             psf_kernel_fn=f"{kernel_dir}/pk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl",
             n_inv_kernel_fn=f"{kernel_dir}/nk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl",
         )

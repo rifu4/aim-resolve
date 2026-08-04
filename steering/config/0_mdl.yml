@@ -15,14 +15,15 @@ lh.0:
   sky: =sky.0
   data: =data.0
   noise:
+    prefix: nm.0
     parameters: {}
     scaling: false
     varcov: false
-  fun: _
+  mode: _
 
 data.0:
   fname: _
-  fun: _
+  mode: _
 
 sky.0:
   prefix: sky.0

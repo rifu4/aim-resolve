@@ -29,15 +29,12 @@ def main():
     mdl_yml, tra_pkl, base_yml, it = files
 
     # load model and base yaml-files and extract output directory
-    mdl_dct = yaml_load(mdl_yml)
     base_dct = yaml_load(base_yml)
     plt_dct = base_dct["base_plot"]
     odir = base_dct["base_opt"]["odir"]
 
     # initialize the sky model using the OptimizeKLConfig class
-    fun = mdl_dct[f"lh.{it}"]["fun"]
-    cfg_mode = "major" if "radio" in fun and "fast" in fun else "total"
-    cfg = OptimizeKLConfig.from_file([base_yml, mdl_yml], get_builders, cfg_mode)
+    cfg = OptimizeKLConfig.from_file([base_yml, mdl_yml], get_builders)
 
     # instantiate the sky models of the current iteration
     sky_mdl = cfg.instantiate_sec(f"sky.{it}")

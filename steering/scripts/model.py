@@ -41,8 +41,7 @@ def main():
     cfg.modify_sec(f"opt.{it}", base="base_opt.n")
 
     # update fast-resolve kernels depending on the new resolution
-    fun = cfg.sections[f"lh.{it}"]["fun"]
-    if "radio" in fun and "fast" in fun:
+    if cfg.sections[f"lh.{it}"]["mode"] == "fast":
         pkdir = "_".join(cfg.sections[f"lh.{it}"]["psf_kernel_fn"].split("_")[:-1])
         nkdir = "_".join(cfg.sections[f"lh.{it}"]["n_inv_kernel_fn"].split("_")[:-1])
         ksize = mdl_dct["zoom"] * base_dct["grid_bg"]["space"][0]
