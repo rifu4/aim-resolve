@@ -72,6 +72,9 @@ def main(config, cuda_device, plot_range):
         elif isinstance(dv, aim.Observation):
             aim.plot_arrays(dv.dirty_image(sky_models[0].grid), name=dk, odir=odir)
 
+    # import nifty.re as jft
+    # jft.check_model(sky_models[-1], sky_models[-1].init(jax.random.PRNGKey(4)))
+
     # Define a callback function to plot the results of the optimization after each iteration
     def callback(samples, state, *args):
         nit = args[0] if len(args) > 0 else state.nit
