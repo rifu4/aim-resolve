@@ -19,8 +19,8 @@ from nifty.re import (
     Samples,
     logger,
     static_cg,
-    static_newton_cg,
 )
+from nifty.re.optimize import _static_newton_cg
 
 from ..optimize.opt_kl import SMPL_MODE_GENERIC_TYP, _reduce, get_at_nit
 from ..optimize.samples import MySamples, get_samples
@@ -190,6 +190,19 @@ def fast_optimize_kl(
         kl_kwargs = dict(
             minimize_kwargs=dict(name="M", cg_kwargs=dict(name=None)),
         )
+
+    def add_static_update(fn_or_dict, update):
+            if fn_or_dict is None:
+                return update
+            if callable(fn_or_dict):
+                return lambda i: dict(fn_or_dict(i)) | update
+            return dict(fn_or_dict) | update
+
+    draw_linear_kwargs = add_static_update(draw_linear_kwargs, dict(cg=static_cg))
+    nonlinearly_update_kwargs = add_static_update(
+        nonlinearly_update_kwargs, dict(minimize=_static_newton_cg)
+    )
+
     if devices is not None:
 
         def add_static_update(fn_or_dict, update):
@@ -201,7 +214,7 @@ def fast_optimize_kl(
 
         draw_linear_kwargs = add_static_update(draw_linear_kwargs, dict(cg=static_cg))
         nonlinearly_update_kwargs = add_static_update(
-            nonlinearly_update_kwargs, dict(minimize=static_newton_cg)
+            nonlinearly_update_kwargs, dict(minimize=_static_newton_cg)
         )
         if residual_map == "lmap":
             residual_map = "vmap"
@@ -332,5 +345,7 @@ def fast_optimize_kl(
                     f.write(mj_msg + kl_msg)
             if callback is not None:
                 callback(MySamples.from_samples(samples), opt_vi_st, i_mj + 1)
+        
+        jax.clear_caches()
 
     return MySamples.from_samples(samples), opt_vi_st, n_major_iterations
