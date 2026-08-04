@@ -27,7 +27,6 @@ pre-commit = ">=4.0"
 
 [pypi-dependencies]
 jaxbind = "*"
-jax-finufft = "*"
 jax-tqdm = "*"
 nifty = ">=9.0.0,<10"
 nifty8 = ">=8.0.0,<9"
@@ -57,11 +56,16 @@ mkdocs-material = ">=9.5"
 mkdocstrings = { version = ">=0.25", extras = ["python"] }
 
 # ── CUDA feature (default environment) ───────────────────────────────
+# The whole CUDA jax stack comes from conda-forge so that jaxlib (GPU) and
+# jax-finufft (GPU) share one channel and a matching CUDA runtime. Mixing a pip
+# jax[cuda12] with a conda jax-finufft pulled in a conda jaxlib that shadowed
+# the pip CUDA jaxlib, making jax fall back to CPU. The PyPI jax-finufft wheel
+# is CPU-only anyway (no CUDA lowering for the `nufft2` primitive).
 [feature.cuda.dependencies]
 cuda-version = "12.6.*"
-
-[feature.cuda.pypi-dependencies]
-jax = { version = ">=0.4.30,!=0.6", extras = ["cuda12"] }
+jax = ">=0.4.30,!=0.6"
+jaxlib = { version = ">=0.4.30,!=0.6", build = "*cuda*" }
+jax-finufft = { version = "*", build = "cuda*" }
 
 [feature.cuda.system-requirements]
 cuda = "12.6"
@@ -69,8 +73,18 @@ cuda = "12.6"
 # ── CPU feature ──────────────────────────────────────────────────────
 [feature.cpu.pypi-dependencies]
 jax = ">=0.4.30,!=0.6"
+# CPU build of jax-finufft (the PyPI wheel ships CPU lowering rules).
+jax-finufft = "*"
+
+# ── casa feature (MeasurementSet I/O; conda-forge only) ──────────────
+# python-casacore is only needed to read .ms files (e.g. convert_sgra_ms.py);
+# kept out of the default/cpu environments and confined to the `casa` env.
+[feature.casa.dependencies]
+python-casacore = "*"
 
 # ── Environments ─────────────────────────────────────────────────────
 [environments]
 default = { features = ["cuda", "train", "pipeline", "radio", "docs"] }
 cpu = { features = ["cpu", "train", "pipeline", "radio", "docs"] }
+# MS -> observation conversion: casacore + classic resolve (radio) + cpu jax.
+casa = { features = ["casa", "radio", "cpu"] }

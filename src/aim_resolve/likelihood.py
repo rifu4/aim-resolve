@@ -100,7 +100,7 @@ def radio_likelihood(
     sky,
     data,
     noise=None,
-    wgridding=False,
+    wgridding=True,
 ):
     """Build a likelihood dictionary for radio visibility data.
 
@@ -131,7 +131,7 @@ def radio_likelihood(
     lh_dct = dict(
         data=data.vis,
         sky_model=sky,
-        sky_response=ComponentResponse(sky, data, wgridding),
+        sky_response=ComponentResponse(sky, data, True, wgridding),
         noise_cov_inv=lambda x: wgt_fac * data.weight * x,
         noise_std_inv=None,
         noise_model=noise_model,

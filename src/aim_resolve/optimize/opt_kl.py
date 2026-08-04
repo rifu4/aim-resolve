@@ -86,25 +86,30 @@ def build_lh(
     else:
         noise_std_inv = get_at_nit(noise_std_inv, 1)
 
+    # Zero-mean data space matching the residual's dtype: complex for radio
+    # visibilities, real for image data. A real 0.0 here would make NIFTy draw
+    # real white samples and mismatch a complex forward in the metric vjp.
+    data_space = jnp.broadcast_to(jnp.zeros((), data.dtype), data.shape)
+
     logger.setLevel(logging.ERROR)
     if noise_model and noise_model.scaling:
 
         def res(x):
             return noise_model(x) * noise_std_inv * (data - sky_response(x))
 
-        lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
+        lh = Gaussian(data_space).amend(res)
     elif noise_model and noise_model.varcov:
 
         def res(x):
             return (noise_std_inv * (data - sky_response(x)), noise_model(x))
 
-        lh = VariableCovarianceGaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
+        lh = VariableCovarianceGaussian(data_space).amend(res)
     else:
 
         def res(x):
             return noise_std_inv * (data - sky_response(x))
 
-        lh = Gaussian(jnp.broadcast_to(0.0, data.shape)).amend(res)
+        lh = Gaussian(data_space).amend(res)
     logger.setLevel(logging.DEBUG)
 
     return lh
