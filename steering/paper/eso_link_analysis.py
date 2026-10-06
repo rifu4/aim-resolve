@@ -443,7 +443,7 @@ def plot_link_profiles(name, brightness_std=False, curvature=False, ref_only=Fal
             dist, curv - curv_err, curv + curv_err, color=LINK_BLUE, alpha=0.2, lw=0,
         )
         ax_c.plot(dist, curv, color=LINK_BLUE, lw=1.0)
-        ax_c.set_ylabel(r"spectral curvature $c$")
+        ax_c.set_ylabel(r"spectral curvature $\beta$")
         ax_c.axvline(0.0, color="0.8", lw=0.8, zorder=0)
         ax_c.axhline(0.0, color="0.6", lw=0.8, zorder=0)
         # symmetric y-limits centred on zero (same |vmin| = |vmax|)

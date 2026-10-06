@@ -16,9 +16,13 @@ import pickle
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import LineCollection
+from matplotlib.patches import Ellipse, Polygon
+from matplotlib.ticker import MultipleLocator
 from jax import vmap
 from jax.scipy.ndimage import map_coordinates
 from scipy.ndimage import map_coordinates as ndi_map_coordinates
+from scipy.spatial import ConvexHull
 
 import aim_resolve as aim
 from aim_resolve.model.util import is_val, to_shape
@@ -360,15 +364,17 @@ def ref_maps(s):
 # Sample loop: for every GeoVI sample build the stripe profiles, then take the
 # mean and std ACROSS samples -- the correct posterior uncertainty (reduce each
 # sample to its stripe scalar, then spread over samples). Per stripe:
-#   alpha_wmean : flux-weighted mean spectral index (ref-freq brightness weights)
 #   flux_smean  : stripe-mean sky brightness at each of the 6 frequencies
-#   curv        : spectral curvature from a log-parabola fit of the stripe-mean
-#                 spectrum,  ln S = a + alpha * u + c * u^2,  u = ln(nu/nu_ref);
-#                 c > 0 flattening (blend), c < 0 steepening (single aged pop.).
+#   alpha_fit,  : spectral index (at nu_ref) and curvature from one log-parabola
+#   curv          fit of the stripe-mean spectrum,
+#                   ln S = a + alpha * u + beta * u^2,  u = ln(nu/nu_ref);
+#                 beta > 0 flattening (blend), beta < 0 steepening (aged pop.).
+#   alpha_wmean : stripe mean of the per-pixel spectral index, kept only as a
+#                 cross-check of alpha_fit.
 # ---------------------------------------------------------------------------
 u_freq = np.log(np.asarray(sky_mf.freq, dtype="float64") / sky_mf.freq[1])
 
-alpha_wmean_k, flux_smean_k, curv_k = [], [], []
+alpha_wmean_k, alpha_fit_k, flux_smean_k, curv_k = [], [], [], []
 for s in samples_mf:
     flux_cube, alpha_ref = ref_maps(s)
     flux_per_freq = [sample(flux_cube[fi]) for fi in range(len(freq_mhz))]
@@ -385,21 +391,30 @@ for s in samples_mf:
     else:
         alpha_wmean_k.append(alpha_k.mean(axis=1))
 
-    # spectral curvature from the stripe-mean spectrum.
+    # spectral index and curvature from one log-parabola fit of the
+    # stripe-mean spectrum.
     ln_s = np.log(np.clip(s_freq, 1e-12, None))
-    curv_k.append(np.polyfit(u_freq, ln_s, 2)[0])
+    beta_s, alpha_s, _ = np.polyfit(u_freq, ln_s, 2)
+    alpha_fit_k.append(alpha_s)
+    curv_k.append(beta_s)
 
 alpha_wmean_k = np.stack(alpha_wmean_k)   # (n_samples, n_slices)
+alpha_fit_k = np.stack(alpha_fit_k)       # (n_samples, n_slices)
 flux_smean_k = np.stack(flux_smean_k)     # (n_samples, nfreq, n_slices)
 curv_k = np.stack(curv_k)                 # (n_samples, n_slices)
 
 # Posterior mean and 1-sigma spread across the samples (ddof=1).
 alpha_wmean = alpha_wmean_k.mean(axis=0)
 alpha_wmean_err = alpha_wmean_k.std(axis=0, ddof=1)
+alpha_fit = alpha_fit_k.mean(axis=0)
+alpha_fit_err = alpha_fit_k.std(axis=0, ddof=1)
 flux_smean = flux_smean_k.mean(axis=0)          # (nfreq, n_slices)
 flux_smean_err = flux_smean_k.std(axis=0, ddof=1)
 curv = curv_k.mean(axis=0)
 curv_err = curv_k.std(axis=0, ddof=1)
+print(f"alpha_fit - alpha_wmean over stripes: median {np.median(alpha_fit - alpha_wmean):+.3f}, "
+      f"max |.| {np.max(np.abs(alpha_fit - alpha_wmean)):.3f} | median sigma_alpha {np.median(alpha_fit_err):.3f}, "
+      f"median sigma_beta {np.median(curv_err):.3f}")
 
 # Distance along the filament measured from the LEFT starting anchor: d = 0 at
 # the first stripe, which is where the cross (cutout) and the grey vertical lines
@@ -437,7 +452,8 @@ def zoom_to_filament(ax):
 
 # %%
 # ---------------------------------------------------------------------------
-# Plot 1: link profiles. Flux-weighted spectral index (mean +/- std) on top,
+# Plot 1: link profiles. Spectral index from the stripe-mean spectrum fit
+# (mean +/- std) on top,
 # stripe-mean sky brightness per frequency (mean only) below, and the link
 # cutout with the perpendicular slices on the right. All uncertainties are the
 # spread across the GeoVI samples.
@@ -493,12 +509,12 @@ def plot_link_profiles(name, brightness_std=False, curvature=False, ref_only=Fal
     ax_img.set_xticks([])
     ax_img.set_yticks([])
 
-    # spectral index (flux-weighted; mean +/- std across samples)
+    # spectral index (stripe-mean spectrum fit; mean +/- std across samples)
     ax_a.fill_between(
-        dist, alpha_wmean - alpha_wmean_err, alpha_wmean + alpha_wmean_err,
+        dist, alpha_fit - alpha_fit_err, alpha_fit + alpha_fit_err,
         color=LINK_RED, alpha=0.2, lw=0,
     )
-    ax_a.plot(dist, alpha_wmean, color=LINK_RED, lw=1.0)
+    ax_a.plot(dist, alpha_fit, color=LINK_RED, lw=1.0)
     ax_a.set_ylabel(r"spectral index $\alpha$")
     ax_a.axvline(0.0, color="0.8", lw=0.8, zorder=0)
     ax_a.tick_params(labelbottom=False)
@@ -509,7 +525,7 @@ def plot_link_profiles(name, brightness_std=False, curvature=False, ref_only=Fal
             dist, curv - curv_err, curv + curv_err, color=LINK_BLUE, alpha=0.2, lw=0,
         )
         ax_c.plot(dist, curv, color=LINK_BLUE, lw=1.0)
-        ax_c.set_ylabel(r"spectral curvature $c$")
+        ax_c.set_ylabel(r"spectral curvature $\beta$")
         ax_c.axvline(0.0, color="0.8", lw=0.8, zorder=0)
         ax_c.axhline(0.0, color="0.6", lw=0.8, zorder=0)
         # symmetric y-limits centred on zero (same |vmin| = |vmax|)
@@ -549,9 +565,141 @@ plot_link_profiles("c2_profiles.png", brightness_std=True)
 # %%
 # ---------------------------------------------------------------------------
 # Plot 2: same as Plot 1 but with an extra spectral-curvature panel (coolwarm
-# blue) between the spectral index and the brightness.  c > 0 flattening
-# (blend), c < 0 steepening (aged). Uncertainties are the spread over samples.
+# blue) between the spectral index and the brightness.  beta > 0 flattening
+# (blend), beta < 0 steepening (aged). Uncertainties are the spread over samples.
 # ---------------------------------------------------------------------------
 plot_link_profiles("c2_profiles_curvature.png", brightness_std=True, curvature=True)
 
 # %%
+# ---------------------------------------------------------------------------
+# Diagnosis plots (formerly `diagnosis.py`) in the stripe frame above:
+#   z : position along each perpendicular stripe [arcsec]; z = 0 on the ridge,
+#       z > 0 above the link in the cutout image.
+# Plot 3: posterior-mean sky brightness (reference frequency, top) and spectral
+#         index (bottom) vs z, one line per stripe, colour-coded by the distance
+#         along the link.
+# Plot 4: spectral curvature vs spectral index per stripe, both from the
+#         stripe-mean spectrum fit of the sample loop (mean +/- 1 sigma across
+#         the samples), drawn with error bars, 1-sigma ellipses and as a
+#         connected 1-sigma band.
+# ---------------------------------------------------------------------------
+KEY, NAME, Z_TICK = "c2", "ESO137-007", 20
+CMAP = "viridis_r"  # colour map for the distance along the link
+N_PERP_Z = 101      # samples across each stripe for the vs-z plot
+BAND_FILL = 0.18    # colour strength of the 1-sigma band (opaque, blended with white)
+dist_label = f"distance along {NAME} {_DIST_UNIT_LABEL}"
+
+alpha_c = crop_component(to_grid(samples_mf.mean(obj.spectral_index)), REL_FOV, CENTER)
+_, _, coords_z, _ = perp_slices(
+    link_anchors, HALF_WIDTH_ARCSEC, N_SLICES, N_PERP_Z, flux_c.shape, pix_arcsec,
+)
+z_arcsec = np.linspace(-HALF_WIDTH_ARCSEC, HALF_WIDTH_ARCSEC, N_PERP_Z)
+# Samples outside the crop are set to NaN (not edge-extended) and left out.
+outside_z = (
+    (coords_z[0] < 0) | (coords_z[0] > nx - 1) | (coords_z[1] < 0) | (coords_z[1] > ny - 1)
+).reshape(N_SLICES, N_PERP_Z)
+print(f"vs-z samples outside the crop: {outside_z.sum()} / {outside_z.size} "
+      f"in {outside_z.any(axis=1).sum()} stripes")
+
+
+def sample_z(arr):
+    vals = ndi_map_coordinates(
+        np.asarray(arr, dtype="float64"), coords_z, order=1, mode="nearest"
+    ).reshape(N_SLICES, N_PERP_Z)
+    return np.where(outside_z, np.nan, vals)
+
+
+def draw_vs_z(ax, values, ylabel, log=False, ymin=None):
+    """One line per stripe on `ax`: `values` against z, colour-coded by the distance along the link."""
+    keep = np.isfinite(values) & (values > 0 if log else True)
+    vals = np.where(keep, values, np.nan)  # NaN gaps are skipped by the lines
+    lines = LineCollection(
+        [np.column_stack([z_arcsec, vals[k]]) for k in range(len(vals))],
+        array=dist, cmap=CMAP, linewidths=0.7, alpha=0.75,
+    )
+    ax.add_collection(lines)
+    if log:
+        ax.set_yscale("log")
+    # add_collection does not autoscale; set the limits from the data.
+    lo, hi = np.nanmin(vals), np.nanmax(vals)
+    pad = (hi / lo) ** 0.04 if log else 0.04 * (hi - lo)
+    ax.set_ylim((lo / pad, hi * pad) if log else (lo - pad, hi + pad))
+    if ymin is not None:
+        ax.set_ylim(bottom=ymin)  # cut the faint wings off from below
+    ax.set_xlim(z_arcsec[0], z_arcsec[-1])
+    ax.axvline(0.0, color="0.6", lw=0.8, zorder=0)
+    ax.set_ylabel(ylabel)
+    ax.grid(alpha=0.2)
+    return lines
+
+
+# Plot 3: brightness (top) and alpha (bottom) vs z, shared z axis and one
+# colour bar spanning both panels.
+fig, (ax_f, ax_a) = plt.subplots(
+    2, 1, figsize=(6.6, 8.6), dpi=200, sharex=True, gridspec_kw={"hspace": 0.05},
+)
+lines = draw_vs_z(ax_f, sample_z(flux_c), r"sky brightness [mJy / arcsec$^2$]", log=True, ymin=1e-3)
+draw_vs_z(ax_a, sample_z(alpha_c), r"spectral index $\alpha$")
+ax_a.yaxis.set_major_locator(MultipleLocator(0.5))  # alpha ticks at -1.0, -1.5, ...
+ax_a.xaxis.set_major_locator(MultipleLocator(Z_TICK))
+ax_a.set_xlabel(f'distance across {NAME} ["]')
+pos_f, pos_a = ax_f.get_position(), ax_a.get_position()
+cax = fig.add_axes([pos_f.x1 + 0.015, pos_a.y0, 0.036, pos_f.y1 - pos_a.y0])
+fig.colorbar(lines, cax=cax).set_label(dist_label)
+fig.align_ylabels([ax_f, ax_a])
+fig.savefig(os.path.join(odir, f"{KEY}_flux_alpha_vs_z.png"), bbox_inches="tight")
+plt.close(fig)
+print(f"saved {KEY}_flux_alpha_vs_z.png")
+
+
+def plot_curvature_vs_alpha(name, style):
+    """Curvature vs spectral index per stripe; `style` sets how the 1 sigma is
+    drawn: "errorbar", "ellipses" (one 1-sigma ellipse per stripe) or "band"
+    (convex hulls of consecutive ellipses, drawn opaque so overlaps don't darken)."""
+    fig, ax = plt.subplots(figsize=(7.4, 5), dpi=200)
+    cmap = plt.get_cmap(CMAP)
+    norm = plt.Normalize(dist.min(), dist.max())
+    if style == "errorbar":
+        ax.errorbar(
+            alpha_fit, curv, xerr=alpha_fit_err, yerr=curv_err, fmt="none",
+            ecolor="0.8", elinewidth=0.6, capsize=0, zorder=1,
+        )
+    elif style == "ellipses":
+        for d, a, b, sa, sb in zip(dist, alpha_fit, curv, alpha_fit_err, curv_err):
+            ax.add_patch(Ellipse(
+                (a, b), 2 * sa, 2 * sb, facecolor=cmap(norm(d)), edgecolor="none", alpha=0.12, zorder=1,
+            ))
+    elif style == "band":
+        t = np.linspace(0, 2 * np.pi, 72, endpoint=False)
+
+        def ellipse(i):
+            return np.column_stack([alpha_fit[i] + alpha_fit_err[i] * np.cos(t), curv[i] + curv_err[i] * np.sin(t)])
+
+        for i in range(N_SLICES - 1):
+            pts = np.vstack([ellipse(i), ellipse(i + 1)])
+            col = np.array(cmap(norm(0.5 * (dist[i] + dist[i + 1]))))[:3]
+            ax.add_patch(Polygon(
+                pts[ConvexHull(pts).vertices], closed=True,
+                facecolor=1 - BAND_FILL * (1 - col), edgecolor="none", zorder=1,
+            ))
+    else:
+        raise ValueError("style must be 'errorbar', 'ellipses' or 'band'")
+    ax.plot(alpha_fit, curv, color="0.6", lw=0.6, zorder=2)
+    sc = ax.scatter(
+        alpha_fit, curv, c=dist, cmap=cmap, norm=norm, s=12, alpha=0.9,
+        edgecolors="none", zorder=3,
+    )
+    ax.axhline(0.0, color="0.6", lw=0.8, zorder=0.5)
+    ax.set_xlabel(r"spectral index $\alpha$")
+    ax.set_ylabel(r"spectral curvature $\beta$")
+    ax.grid(alpha=0.2)
+    ax.autoscale_view()
+    fig.colorbar(sc, ax=ax, pad=0.01).set_label(dist_label)
+    fig.savefig(os.path.join(odir, name), bbox_inches="tight")
+    plt.close(fig)
+    print(f"saved {name}")
+
+
+# Plot 4: one figure per uncertainty style.
+for style, suffix in [("errorbar", ""), ("ellipses", "_ellipses"), ("band", "_band")]:
+    plot_curvature_vs_alpha(f"{KEY}_curvature_vs_alpha{suffix}.png", style)

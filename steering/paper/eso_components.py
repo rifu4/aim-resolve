@@ -740,18 +740,18 @@ for comp in components:
     flux_c = crop(flux_mean)
     mask = flux_c > comp["flux_min"]
 
-    # Spectral curvature: mean from the posterior-mean cube, std sample-wise.
-    curv_mean = curvature_from_cube(crop(to_grid(samples_mf.mean(obj)) * CONV_FACTOR), u_freq)
+    # Spectral curvature: mean and std across samples (posterior of c).
     curv_k = np.stack(
         [curvature_from_cube(crop(to_grid(obj(s)) * CONV_FACTOR), u_freq) for s in samples_mf]
     )
+    curv_mean = curv_k.mean(axis=0)
 
     flux_comps.append(flux_c)
     rel_std_comps.append(crop(rel_std))
     alpha_comps.append(np.where(mask, crop(alpha), np.nan))
     alpha_std_comps.append(np.where(mask, crop(alpha_std), np.nan))
     curv_comps.append(np.where(mask, curv_mean, np.nan))
-    curv_std_comps.append(np.where(mask, curv_k.std(axis=0), np.nan))
+    curv_std_comps.append(np.where(mask, curv_k.std(axis=0, ddof=1), np.nan))
 
 # Black flux contours, used on every map. Per-component levels: c1 (upper
 # galaxy, ESO137-006) and c2 (ESO137-007, half the brightness scale).
@@ -789,7 +789,7 @@ plot_column(
     frame=True,
     label_color="black",
     contour=flux_contours,
-    cbar_label="relative uncertainty",
+    cbar_label=r"sky brightness uncertainty $\sigma_I / I$",
     labels=galaxy_labels,
     fig_width=5.0,
     label_offset=-6,
@@ -827,7 +827,7 @@ plot_column(
     frame=True,
     label_color="black",
     contour=flux_contours,
-    cbar_label="relative uncertainty",
+    cbar_label=r"spectral index uncertainty $\sigma_\alpha$",
     labels=galaxy_labels,
     fig_width=5.0,
     label_offset=-6,
@@ -850,7 +850,7 @@ plot_column(
     frame=True,
     label_color="black",
     contour=flux_contours,
-    cbar_label=r"spectral curvature $c$",
+    cbar_label=r"spectral curvature $\beta$",
     labels=galaxy_labels,
     fig_width=10.0,
     dpi=plot_dict["dpi"],
@@ -861,13 +861,14 @@ plot_column(
     curv_std_comps,
     odir=plot_dict["odir"],
     name="cs_curvature_std",
-    cmap="inferno",
+    cmap="coolwarm",
     norm="linear",
+    vmax=0.26,
     vmin=0,
     frame=True,
     label_color="black",
     contour=flux_contours,
-    cbar_label=r"curvature uncertainty $\sigma_c$",
+    cbar_label=r"spectral curvature uncertainty $\sigma_\beta$",
     labels=galaxy_labels,
     fig_width=5.0,
     label_offset=-6,
