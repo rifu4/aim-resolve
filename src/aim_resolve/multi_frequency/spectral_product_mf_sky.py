@@ -350,7 +350,13 @@ class SpectralProductSky(Model):
 
         deviations = 0.0
         if self.spectral_index_deviations is not None:
-            deviations = self.spectral_index_deviations(p)
+            # as in __call__: remove the slope of the deviations, which is degenerate
+            # with the spectral index
+            deviations = (
+                self.log_spectral_behavior.remove_degeneracy_of_spectral_deviations(
+                    self.spectral_index_deviations(p)
+                )
+            )
 
         spectral_fluc = self.log_spectral_behavior.fluctuations_with_frequencies(p)
         spectral_mean = self.log_spectral_behavior.mean_with_frequencies(p)
@@ -368,7 +374,9 @@ class SpectralProductSky(Model):
         if self.spectral_index_deviations is None:
             return 0.0
 
-        deviations = self.spectral_index_deviations(p)
+        deviations = self.log_spectral_behavior.remove_degeneracy_of_spectral_deviations(
+            self.spectral_index_deviations(p)
+        )
 
         def _interpolate_1d(times_series, times, target_time):
             return jnp.interp(target_time, times, times_series)
