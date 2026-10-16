@@ -131,10 +131,17 @@ def map_array(
         in_start = jnp.asarray(in_start)
         out_start = jnp.asarray(out_start)
 
+        ratio = zoom if zoom >= 1 else 1 / zoom
+        if not np.isclose(ratio, round(ratio)):
+            raise ValueError(
+                f"Resolution factors must be integer multiples of each other, got a ratio of {zoom}."
+            )
+        ratio = int(round(ratio))
+
         if zoom < 1 and in_shape == (1, 1):
-            in_array /= int(1 / zoom) ** 2
+            in_array /= ratio**2
         elif zoom < 1:
-            in_array = downsample(in_array, int(1 / zoom))
+            in_array = downsample(in_array, ratio)
 
         match (in_array.ndim, in_copies, out_copies):
             # (x, y) -> (x', y')
@@ -238,7 +245,7 @@ def map_array(
                 out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
 
         if zoom > 1:
-            out_array = upsample(out_array, int(zoom))
+            out_array = upsample(out_array, ratio)
 
         if np_type:
             return np.asarray(out_array)
@@ -322,32 +329,27 @@ def signal_slice_indices(in_grid, out_grid):
     """
     fac = min(in_grid.fac, out_grid.fac)
 
-    def indices(in_spc, in_cen, out_spc, out_cen, fac):
-        dif = (out_cen - in_cen) - (out_spc - in_spc) / 2
-        dif = dif.astype("int64")
-        in_start = jnp.maximum(dif, 0) * fac
-        out_start = jnp.maximum(-dif, 0) * fac
-        return in_start, out_start
-
     match (in_grid.n_copies, out_grid.n_copies):
-        case (1, 1):
-            return indices(in_grid.spc, in_grid.cen, out_grid.spc, out_grid.cen, fac)
-        case (1, n_out):
-            return vmap(indices, in_axes=(None, None, None, 0, None))(
-                in_grid.spc, in_grid.cen, out_grid.spc, out_grid.cen, fac
-            )
-        case (n_in, 1):
-            return vmap(indices, in_axes=(None, 0, None, None, None))(
-                in_grid.spc, in_grid.cen, out_grid.spc, out_grid.cen, fac
-            )
+        case (1, _) | (_, 1):
+            pass
         case (n_in, n_out) if n_in == n_out:
-            return vmap(indices, in_axes=(None, 0, None, 0, None))(
-                in_grid.spc, in_grid.cen, out_grid.spc, out_grid.cen, fac
-            )
+            pass
         case _:
             raise ValueError(
                 "Number of copies in input and output grids must match, or one of them must be 1."
             )
+
+    # Offset of the output's lower edge from the input's lower edge, in pixels
+    # at the common resolution ``fac`` (broadcasts over the grid copies). It must
+    # be an integer: a half-pixel offset cannot be represented by slicing.
+    dif = ((out_grid.cen - in_grid.cen) - (out_grid.spc - in_grid.spc) / 2) * fac
+    if not np.allclose(dif, np.round(dif)):
+        raise ValueError(
+            "Grids are not pixel-aligned at the common resolution "
+            f"(offset {dif.ravel()[:4]} pixels); check the parity of the grid spaces."
+        )
+    dif = np.round(dif).astype("int64")
+    return jnp.asarray(np.maximum(dif, 0)), jnp.asarray(np.maximum(-dif, 0))
 
 
 def point_slice_shapes(in_grid, out_grid):
@@ -400,8 +402,9 @@ def point_slice_indices(in_grid, out_grid):
     def indices(in_coos, out_spc, out_cen, fac):
         out_lims = out_cen - (out_spc - 1 / fac) / 2
         in_coos = jnp.floor(in_coos * fac) / fac + 0.5 / fac
-        out_start = (in_coos - out_lims) * fac
-        out_start = out_start.astype("int64")
+        # exact integer in theory; round instead of truncating floating-point noise
+        # (e.g. 162.99999999999994 must give 163, not 162)
+        out_start = jnp.round((in_coos - out_lims) * fac).astype("int64")
         in_start = jnp.zeros_like(out_start)
         return in_start, out_start
 
