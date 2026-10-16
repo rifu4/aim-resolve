@@ -8,6 +8,8 @@ from aim_resolve.fast_resolve.convolve import (
     build_fft_kernel,
     build_padder,
     build_slicer,
+    basic_downsampler,
+    basic_upsampler,
     build_split_kernel,
     downsample,
     fft_convolve,
@@ -225,6 +227,42 @@ class TestSplitFFTConvolve:
             padder_low,
             slicer_high,
             slicer_low,
-            factor=2,
+            basic_downsampler(shape_high, 2),
+            basic_upsampler(shape_low, 2),
         )
         assert result.shape == (16, 16)  # squeezed
+
+
+class TestSplitKernelCentring:
+    """The low-res part of the split kernel must not displace the convolution."""
+
+    @pytest.mark.parametrize("factor", [3, 5])
+    def test_split_matches_full_convolution_centroid(self, factor):
+        S, size = 30 * factor, 12
+        K, c = 2 * S, S  # kernel centre at K // 2
+        yy, xx = np.mgrid[:K, :K] - c
+        psf = np.exp(-((yy - 10 * factor) ** 2 + xx**2) / (2 * 4.0**2))[None]  # mostly in the low-res part
+
+        x = np.zeros((1, S, S))
+        x[0, 10 * factor : 11 * factor, 15 * factor : 16 * factor] = 1.0  # block-aligned source
+
+        full = build_fft_kernel(psf, psf.shape)
+        ref = np.asarray(build_slicer((c, c), (1, S, S))(fft_convolve(build_padder((1, S, S), full.shape)(x), full)))[0]
+
+        k_high, k_low = build_split_kernel(psf, (S, S), size, factor)
+        out = np.asarray(
+            split_fft_convolve(
+                x, k_high, k_low,
+                build_padder((1, S, S), k_high.shape),
+                build_padder((1, S // factor, S // factor), k_low.shape),
+                build_slicer((size // 2,) * 2, (1, S, S)),
+                build_slicer(tuple(k * (factor - 1) // (2 * factor) for k in psf.shape), (1, S // factor, S // factor)),
+                basic_downsampler(None, factor),
+                basic_upsampler(None, factor),
+            )
+        )  # single frequency: squeezed to (S, S)
+
+        grid = np.mgrid[:S, :S]
+        centroid = lambda a: np.array([(g * a).sum() / a.sum() for g in grid])
+        np.testing.assert_allclose(out.sum(), ref.sum(), rtol=1e-6)
+        np.testing.assert_allclose(centroid(out), centroid(ref), atol=1e-3)
