@@ -9,6 +9,7 @@ run: 1
 
 mode: zoom
 zoom: 3
+zoom_bg: true
 
 ---
 
@@ -18,7 +19,7 @@ opt.5:
   likelihood: =lh.5
 
 base_opt.5:
-  n_major_iterations: 10
+  n_major_iterations: 20
   n_minor_iterations: 1
   n_samples: 2
   draw_linear_kwargs:
@@ -42,7 +43,7 @@ base_opt.5:
       cg_kwargs:
         name: null
         miniter: 20
-      miniter: 20
+      miniter: 100
       maxiter: 200
       energy_reduction_factor: 1.e-3
   sample_mode: nonlinear_resample
