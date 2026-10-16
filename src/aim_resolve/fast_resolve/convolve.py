@@ -400,6 +400,16 @@ def build_split_kernel(kernel, shape, size, factor, dvol=1.0):
     fshape_low = (n_freq,) + tuple(k // factor for k in kernel.shape[-2:])
     kernel_low = np.array(kernel.copy())
     kernel_low[slices] = 0
+    # The low-res tap at the kernel centre k // 2 // factor stands for offset 0, so
+    # its block of `factor` fine pixels must be centred on offset 0. Blocks start at
+    # multiples of `factor`, i.e. at the centre pixel itself, so shift the kernel by
+    # (factor - 1) // 2 pixels (zero-filled) before averaging; otherwise the
+    # low-res part is displaced by -(factor - 1) / 2 fine pixels.
+    shift = (factor - 1) // 2
+    if shift:
+        shifted = np.zeros_like(kernel_low)
+        shifted[..., shift:, shift:] = kernel_low[..., :-shift, :-shift]
+        kernel_low = shifted
     kernel_low = basic_downsampler(kernel_low.shape, factor)(kernel_low)
     kernel_low = build_fft_kernel(kernel_low, fshape_low, dvol * (factor**2))
 
