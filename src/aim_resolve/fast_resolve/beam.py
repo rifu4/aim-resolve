@@ -56,6 +56,7 @@ def build_primary_beam(
     channel_average=True,
     n_channels=8,
     pointing_offset=(0.0, 0.0),
+    freq_bounds=None,
 ):
     """Primary beam (Stokes I) on ``grid`` for every model frequency.
 
@@ -82,14 +83,19 @@ def build_primary_beam(
         Number of evenly spaced data channels per bin used for the average.
     pointing_offset : tuple of float, optional
         Pointing centre relative to the phase centre [deg].
+    freq_bounds : array-like, optional
+        Explicit channel-bin bounds for ``channel_average``, the same as passed
+        to the response (see ``response.frequency_domain``). Default is None
+        (resolve's midpoint bins).
 
     Notes
     -----
     Assumes the same, time-invariant beam for all antennas (JimBeam is close to
     azimuthally symmetric) and Stokes I only.
     """
-    from resolve import IRGSpace
     from resolve.library.meerkat_beam import JimBeam
+
+    from .response import frequency_domain
 
     freq = np.atleast_1d(np.asarray(freq, dtype="float64"))
     model = default_beam_model(freq) if model is None else model
@@ -99,7 +105,7 @@ def build_primary_beam(
     if channel_average and obs is not None and freq.size > 1:
         ch_freq = np.asarray(obs.freq, dtype="float64")
         ch_wgt = _channel_weights(obs)
-        bounds = IRGSpace(freq).binbounds()
+        bounds = frequency_domain(freq, freq_bounds).binbounds()
         pb = np.empty((freq.size,) + grid.shape, dtype="float64")
         for i in range(freq.size):
             upper = ch_freq <= bounds[i + 1] if i == freq.size - 1 else ch_freq < bounds[i + 1]

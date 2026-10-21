@@ -91,6 +91,17 @@ class TestChannelAverage:
         np.testing.assert_allclose(pb[0], 0.75 * single[0] + 0.25 * single[1], rtol=1e-6)
         np.testing.assert_allclose(pb[1:], single[2:], rtol=1e-6)
 
+    def test_explicit_freq_bounds(self):
+        grid = _grid()
+        ch = [1.0e9, 1.09e9, 1.2e9, 1.4e9]
+        # default midpoint bounds put 1.09 GHz into the first bin, explicit bounds into the second
+        bounds = [0.9e9, 1.05e9, 1.3e9, 1.5e9]
+        pb = build_primary_beam(grid, FREQ, self._obs(ch, [1, 1, 1, 1]), freq_bounds=bounds)
+        single = build_primary_beam(grid, ch, channel_average=False)
+        np.testing.assert_allclose(pb[0], single[0], rtol=1e-6)
+        np.testing.assert_allclose(pb[1], 0.5 * single[1] + 0.5 * single[2], rtol=1e-6)
+        np.testing.assert_allclose(pb[2], single[3], rtol=1e-6)
+
 
 class TestBeamedSky:
     def test_output_is_beam_times_sky(self):

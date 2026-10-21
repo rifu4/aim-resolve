@@ -157,6 +157,7 @@ def fast_likelihood(
     noise=None,
     split=None,
     pb_correction=False,
+    freq_bounds=None,
 ):
     """Build a fast-resolve likelihood dictionary for radio data.
 
@@ -187,6 +188,12 @@ def fast_likelihood(
         options (``model``, ``channel_average``, ``n_channels``,
         ``pointing_offset``). The beam is computed once here; PSF and noise
         kernels do not depend on it. Default is ``False``.
+    freq_bounds : list of float, optional
+        Explicit channel-bin bounds [Hz] for the model frequencies, shape
+        ``(n_freq + 1,)``, used by the response and the primary beam. This
+        decouples the binning from the model frequencies, e.g. fixed bins with
+        the model frequencies at their effective (weighted mean) frequency.
+        Default is None (resolve's bins: midpoints between model frequencies).
 
     Returns
     -------
@@ -205,7 +212,7 @@ def fast_likelihood(
 
     print("sky model shape:", sky.target.shape)
 
-    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq)
+    R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq, freq_bounds)
 
     N_inv = makeOp(obs.weight)
     data = R.adjoint(N_inv(obs.vis)).val
@@ -214,7 +221,7 @@ def fast_likelihood(
     sky_app = sky
     if pb_correction:
         pb_opts = {} if pb_correction is True else dict(pb_correction)
-        beam = build_primary_beam(sky.grid, sky.freq, obs, **pb_opts)
+        beam = build_primary_beam(sky.grid, sky.freq, obs, freq_bounds=freq_bounds, **pb_opts)
         sky_app = BeamedSky(sky, beam)
         pb_axes = tuple(range(beam.ndim - 2, beam.ndim))
         print(
