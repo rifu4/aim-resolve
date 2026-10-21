@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from nifty8 import makeOp
 
+from .fast_resolve.beam import BeamedSky, build_primary_beam
 from .fast_resolve.convolve import NInvConvolve, PSFConvolve
 from .fast_resolve.response import build_exact_responses
 from .model.noise import NoiseModel
@@ -101,6 +102,7 @@ def radio_likelihood(
     data,
     noise=None,
     wgridding=True,
+    pb_correction=False,
 ):
     """Build a likelihood dictionary for radio visibility data.
 
@@ -115,6 +117,8 @@ def radio_likelihood(
         weights. Default uses ``wgt_fac=1.0``.
     wgridding : bool, optional
         Whether to use w-gridding for the sky response. Default is False.
+    pb_correction : bool or dict, optional
+        Not supported in radio mode (raises if set); see ``fast_likelihood``.
 
     Returns
     -------
@@ -123,6 +127,11 @@ def radio_likelihood(
         ``sky_response``, ``noise_cov_inv``, ``noise_std_inv`` and
         ``noise_model``.
     """
+    if pb_correction:
+        raise NotImplementedError(
+            "pb_correction is only implemented for mode: fast. The radio response "
+            "maps each sky component on its own grid and would need per-component beams."
+        )
     if noise is None:
         noise = {"wgt_fac": 1.0, "parameters": {}}
     wgt_fac = noise.get("wgt_fac", 1.0)
@@ -147,6 +156,7 @@ def fast_likelihood(
     n_inv_kernel_fn="",
     noise=None,
     split=None,
+    pb_correction=False,
 ):
     """Build a fast-resolve likelihood dictionary for radio data.
 
@@ -170,12 +180,20 @@ def fast_likelihood(
     split : dict, optional
         Kernel-splitting parameters (``size`` and ``factor``). Default is
         ``{}`` (no splitting).
+    pb_correction : bool or dict, optional
+        Include the primary beam in the forward model: the response sees the
+        apparent sky ``beam * sky`` while ``sky`` stays the intrinsic sky.
+        ``True`` uses the defaults of ``build_primary_beam``; a dict sets its
+        options (``model``, ``channel_average``, ``n_channels``,
+        ``pointing_offset``). The beam is computed once here; PSF and noise
+        kernels do not depend on it. Default is ``False``.
 
     Returns
     -------
     lh_dct : dict
         Likelihood dictionary with keys ``data``, ``sky_model``,
-        ``sky_response``, ``noise_model`` and ``RNR``.
+        ``sky_response``, ``noise_model`` and ``RNR`` (and ``sky_app``, the
+        beam-attenuated sky, if ``pb_correction`` is set).
     """
     if noise is None:
         noise = {"parameters": {}}
@@ -193,8 +211,19 @@ def fast_likelihood(
     data = R.adjoint(N_inv(obs.vis)).val
     print("dirty image shape:", data.shape)
 
+    sky_app = sky
+    if pb_correction:
+        pb_opts = {} if pb_correction is True else dict(pb_correction)
+        beam = build_primary_beam(sky.grid, sky.freq, obs, **pb_opts)
+        sky_app = BeamedSky(sky, beam)
+        pb_axes = tuple(range(beam.ndim - 2, beam.ndim))
+        print(
+            "primary beam:", pb_opts or "defaults",
+            "| min PB per frequency:", np.round(np.min(beam, axis=pb_axes), 4).tolist(),
+        )
+
     psf_conv = PSFConvolve.build(
-        sky=sky,
+        sky=sky_app,
         RNR_l=RNR_l,
         psf_kernel_fn=psf_kernel_fn,
         split=split,
@@ -214,6 +243,8 @@ def fast_likelihood(
         noise_model=sky_response.noise_model,
         RNR=RNR,
     )
+    if pb_correction:
+        lh_dct["sky_app"] = sky_app
     return lh_dct
 
 

@@ -291,7 +291,8 @@ def fast_optimize_kl(
                 raise ValueError("No valid likelihood found for major iteration.")
 
         if opt_vi_st.nit > 0:
-            old_rec = MySamples.from_samples(samples).mean(lh_i["sky_model"])
+            # apparent sky (beam-attenuated) if the primary beam is in the forward model
+            old_rec = MySamples.from_samples(samples).mean(lh_i.get("sky_app", lh_i["sky_model"]))
             residual_data = lh_i["data"] - apply_exact_response(lh_i["RNR"], old_rec)
         else:
             residual_data = lh_i["data"]
