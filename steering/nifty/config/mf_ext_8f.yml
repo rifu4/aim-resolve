@@ -16,6 +16,11 @@ ref_freq_index: 1  # 1029.7 MHz
 
 ---
 
+opt:
+  # map the KL over the samples sequentially (lax.scan) instead of vmap: ~2.5x less peak GPU memory
+  # at about the same speed (synthetic test); merged into the generated opt section (odir, resume kept)
+  kl_map: smap
+
 opt.6:
   base: base_opt.6
   likelihood: =lh.6
