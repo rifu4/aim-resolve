@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import vmap
-from jax.lax import dynamic_slice, dynamic_update_slice, fori_loop
+from jax.lax import dynamic_slice, dynamic_update_slice
 
 from .grid import PointGrid, SignalGrid
 
@@ -143,6 +143,14 @@ def map_array(
         elif zoom < 1:
             in_array = downsample(in_array, ratio)
 
+        # The copies are placed without a sequential loop: copies that share one output
+        # image are added with a single scatter-add (add_copies_2d), copies with their own
+        # output slot are mapped with vmap. A fori_loop that carries the full output image
+        # is cheap in the forward pass, but its derivatives pass over the whole image once
+        # per copy (e.g. ~400 points on a 3072^2 grid).
+        in_start = clamp_start(in_start, in_array.shape[-2:], in_shape)
+        out_start = clamp_start(out_start, out_shape, in_shape)
+        vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
         match (in_array.ndim, in_copies, out_copies):
             # (x, y) -> (x', y')
             case (2, 1, 1):
@@ -153,96 +161,56 @@ def map_array(
             # (x, y) -> (n_out, x', y')
             case (2, 1, n_out):
                 out_array = jnp.zeros((n_out,) + out_shape, dtype=in_array.dtype)
-
-                def loop_over_n_out(i, o):
-                    return o.at[i].set(
-                        map_array_2d(
-                            in_array, o[i], in_start[i], out_start[i], in_shape
-                        )
-                    )
-
-                out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
-
+                out_array = vmap(map_array_2d, in_axes=(None, 0, 0, 0, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (n/f, x, y) -> (n/f, x', y')
             case (3, 1, 1):
                 n = in_array.shape[0]
                 out_array = jnp.zeros((n,) + out_shape, dtype=in_array.dtype)
-                out_array = vmap(map_array_2d, in_axes=(0, 0, None, None, None))(
+                out_array = vmap_over_f(
                     in_array, out_array, in_start, out_start, in_shape
                 )
             # (n_in, x, y) -> (x', y')
             case (3, n_in, 1):
                 out_array = jnp.zeros(out_shape, dtype=in_array.dtype)
-
-                def loop_over_n_in(i, o):
-                    return map_array_2d(
-                        in_array[i], o, in_start[i], out_start[i], in_shape
-                    )
-
-                out_array = fori_loop(0, n_in, loop_over_n_in, out_array)
+                out_array = add_copies_2d(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (n_in, x, y) -> (n_out, x', y') if n_in == n_out
             case (3, n_in, n_out) if n_in == n_out:
                 out_array = jnp.zeros((n_out,) + out_shape, dtype=in_array.dtype)
-
-                def loop_over_n_out(i, o):
-                    return o.at[i].set(
-                        map_array_2d(
-                            in_array[i], o[i], in_start[i], out_start[i], in_shape
-                        )
-                    )
-
-                out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
+                out_array = vmap(map_array_2d, in_axes=(0, 0, 0, 0, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (f, x, y) -> (n_out, f, x, y)
             case (3, 1, n_out):
                 f = in_array.shape[0]
                 out_array = jnp.zeros((n_out, f) + out_shape, dtype=in_array.dtype)
-                vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-
-                def loop_over_n_out(i, o):
-                    return o.at[i].set(
-                        vmap_over_f(in_array, o[i], in_start[i], out_start[i], in_shape)
-                    )
-
-                out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
-
+                out_array = vmap(vmap_over_f, in_axes=(None, 0, 0, 0, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (n, f, x, y) -> (n, f, x', y')
             case (4, 1, 1):
                 n, f = in_array.shape[:2]
                 out_array = jnp.zeros((n, f) + out_shape, dtype=in_array.dtype)
-                vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-
-                def loop_over_n(i, o):
-                    return o.at[i].set(
-                        vmap_over_f(in_array[i], o[i], in_start, out_start, in_shape)
-                    )
-
-                out_array = fori_loop(0, n, loop_over_n, out_array)
+                out_array = vmap(vmap_over_f, in_axes=(0, 0, None, None, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (n_in, f, x, y) -> (f, x', y')
             case (4, n_in, 1):
                 f = in_array.shape[1]
                 out_array = jnp.zeros((f,) + out_shape, dtype=in_array.dtype)
-                vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-
-                def loop_over_n_in(i, o):
-                    return vmap_over_f(
-                        in_array[i], o, in_start[i], out_start[i], in_shape
-                    )
-
-                out_array = fori_loop(0, n_in, loop_over_n_in, out_array)
+                out_array = vmap(add_copies_2d, in_axes=(1, 0, None, None, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
             # (n_in, f, x, y) -> (n_out, f, x', y') if n_in == n_out
             case (4, n_in, n_out) if n_in == n_out:
                 f = in_array.shape[1]
                 out_array = jnp.zeros((n_out, f) + out_shape, dtype=in_array.dtype)
-                vmap_over_f = vmap(map_array_2d, in_axes=(0, 0, None, None, None))
-
-                def loop_over_n_out(i, o):
-                    return o.at[i].set(
-                        vmap_over_f(
-                            in_array[i], o[i], in_start[i], out_start[i], in_shape
-                        )
-                    )
-
-                out_array = fori_loop(0, n_out, loop_over_n_out, out_array)
+                out_array = vmap(vmap_over_f, in_axes=(0, 0, 0, 0, None))(
+                    in_array, out_array, in_start, out_start, in_shape
+                )
 
         if zoom > 1:
             out_array = upsample(out_array, ratio)
@@ -279,6 +247,67 @@ def map_array_2d(in_array, out_array, in_start, out_start, in_shape):
     in_slice += dynamic_slice(out_array, out_start, in_shape)
     out_array = dynamic_update_slice(out_array, in_slice, out_start)
     return out_array
+
+
+def clamp_start(start, dims, shape):
+    """Start indices as dynamic_slice / dynamic_update_slice use them.
+
+    Negative starts count from the end of the axis, then the start is clamped so that a
+    slice of ``shape`` lies inside an array of shape ``dims``. Applying this up front keeps
+    every index in bounds, which matters for the batched (vmap) slices: the derivative of
+    a batched dynamic_slice drops out-of-bounds indices instead of clamping them.
+
+    Parameters
+    ----------
+    start : array-like
+        Start indices, shape ``(2,)`` or ``(n_copies, 2)``.
+    dims : tuple of int
+        Shape of the (last two axes of the) sliced array.
+    shape : tuple of int
+        Shape of the slice.
+
+    Returns
+    -------
+    jax.Array
+        Start indices inside the valid range.
+    """
+    start, dims = jnp.asarray(start), jnp.asarray(dims)
+    start = jnp.where(start < 0, start + dims, start)
+    return jnp.clip(start, 0, dims - jnp.asarray(shape))
+
+
+def add_copies_2d(in_array, out_array, in_start, out_start, in_shape):
+    """Add a slice of every copy of a stacked input into one 2-D output array.
+
+    Equivalent to calling :func:`map_array_2d` for every copy in turn (including the
+    clamping of the start indices at the array edges), but done with one gather and
+    one scatter-add, so that the derivatives do not pass over the output once per copy.
+
+    Parameters
+    ----------
+    in_array : jax.Array
+        Input array of shape ``(n_copies, x, y)``.
+    out_array : jax.Array
+        2-D output array to add to.
+    in_start : array-like
+        Start indices in the input arrays, shape ``(n_copies, 2)``.
+    out_start : array-like
+        Start indices in the output array, shape ``(n_copies, 2)``.
+    in_shape : tuple of int
+        Shape of the slice to transfer.
+
+    Returns
+    -------
+    jax.Array
+        Output array with the slices of all copies added.
+    """
+    in_start = clamp_start(in_start, in_array.shape[-2:], in_shape)
+    out_start = clamp_start(out_start, out_array.shape, in_shape)
+    dx = jnp.arange(in_shape[0])[None, :, None]
+    dy = jnp.arange(in_shape[1])[None, None, :]
+    copy = jnp.arange(in_array.shape[0])[:, None, None]
+    vals = in_array[copy, in_start[:, 0, None, None] + dx, in_start[:, 1, None, None] + dy]
+    return out_array.at[out_start[:, 0, None, None] + dx, out_start[:, 1, None, None] + dy].add(vals)
 
 
 def signal_slice_shapes(in_grid, out_grid):
