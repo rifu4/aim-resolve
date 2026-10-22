@@ -20,7 +20,22 @@ import click
 @click.option(
     "--plot_range", default=None, help="Brigthness range for plotting the sky models"
 )
-def main(base, config, cuda_device, plot_range):
+@click.option(
+    "--gpu_allocator",
+    type=click.Choice(["bfc", "platform", "cuda_async"]),
+    default=None,
+    help="XLA GPU allocator: bfc (pool, JAX default), platform (no pool, no fragmentation) or cuda_async",
+)
+@click.option(
+    "--gpu_preallocate", is_flag=True, help="Reserve the GPU memory pool up front (bfc only)"
+)
+@click.option(
+    "--gpu_mem_fraction",
+    type=float,
+    default=None,
+    help="Fraction of the GPU memory for the pool (bfc only), e.g. 0.8",
+)
+def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, gpu_mem_fraction):
     """Start a reconstruction run from base and config YAML files.
 
     Parameters
@@ -33,12 +48,28 @@ def main(base, config, cuda_device, plot_range):
         CUDA device identifier, empty string for CPU.
     plot_range : float or None
         Brightness range for plotting the sky models.
+    gpu_allocator : str or None
+        XLA GPU allocator (XLA_PYTHON_CLIENT_ALLOCATOR): "bfc" (memory pool, JAX default), "platform"
+        (allocated and freed directly, avoids out-of-memory errors from pool fragmentation) or "cuda_async"
+        (CUDA's asynchronous allocator). None keeps the environment setting.
+    gpu_preallocate : bool
+        Reserve the memory pool at the start (XLA_PYTHON_CLIENT_PREALLOCATE); by default it grows on demand.
+    gpu_mem_fraction : float or None
+        Size (preallocated) or upper limit of the memory pool as a fraction of the GPU memory
+        (XLA_PYTHON_CLIENT_MEM_FRACTION).
     """
     if str(cuda_device) == "":
         os.environ["JAX_PLATFORM_NAME"] = "cpu"
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_device)
-        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+        # GPU memory: the options override the environment; by default the pool grows on demand
+        if gpu_allocator is not None:
+            os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = gpu_allocator
+        if gpu_preallocate:
+            os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "true"
+        os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+        if gpu_mem_fraction is not None:
+            os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(gpu_mem_fraction)
 
     import jax
     import numpy as np
