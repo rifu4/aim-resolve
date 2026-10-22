@@ -1,0 +1,107 @@
+---
+
+odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
+base: base.yml
+file: 4_pre.yml
+run: 3  # zoom stage with the new single-frequency model (stage 4 = old model is loaded)
+
+---
+
+mode: zoom
+zoom: 3
+zoom_bg: true
+
+---
+
+
+opt:
+  # map the KL over the samples sequentially (lax.scan): less GPU memory at about the same speed
+  kl_map: smap
+
+# single-frequency version of the multi-frequency (ubik) model: same parameters as params_mf, so the
+# later frequency transition (mode: freq) copies the sky exactly; spectral entries are not needed here
+params_sf_ubik:
+  zero_mode: [1, 1]
+  spatial_amplitude:
+    fluctuations: [5, 1]
+    loglogavgslope: [-2, 0.5]
+    flexibility: [1.2, 0.4]
+    asperity: [0.2, 0.2]
+
+# new model for the diffuse components and tiles of the zoomed stage; the zoom transition re-fits them to
+# the reconstruction of stage 4 (old model). The point sources keep their model (params_ps).
+sky_bg.5:
+  params: {base: params_sf_ubik}
+sky_o0.5:
+  params: {base: params_sf_ubik}
+sky_o1.5:
+  params: {base: params_sf_ubik}
+sky_o2.5:
+  params: {base: params_sf_ubik}
+sky_o3.5:
+  params: {base: params_sf_ubik}
+sky_t0.5:
+  params: {base: params_sf_ubik}
+
+opt.5:
+  base: base_opt.5
+  likelihood: =lh.5
+
+base_opt.5:
+  n_major_iterations: 20
+  n_minor_iterations: 1
+  n_samples: 4
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 1000
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 100
+      maxiter: 200
+      energy_reduction_factor: 1.e-3
+  sample_mode: linear_resample
+
+base_trans:
+  n_total_iterations: 20
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 0.001
+  sample_mode: linear_resample

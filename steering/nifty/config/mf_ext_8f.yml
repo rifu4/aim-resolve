@@ -1,0 +1,67 @@
+---
+
+odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
+base: base.yml
+file: 4_pre_3z_2.yml
+run: 2
+
+---
+
+mode: freq
+# 8 model frequencies: 4 equal-width bins per band (see lh.6 freq_bounds), each at the effective
+# frequency sum(w nu) / sum(w) of its bin (real weights and flags of eso_961-1503mhz.npz)  [Hz]
+freq: [984757891.1934514, 1029677467.721749, 1075635105.5233858, 1122234710.7358599, 1322404953.383301,
+    1372793041.7603908, 1425424518.4562416, 1476717653.9905522]
+ref_freq_index: 1  # 1029.7 MHz
+
+---
+
+opt.6:
+  base: base_opt.6
+  likelihood: =lh.6
+
+lh.6:
+  data: =data.6
+  mode: fast
+  split:
+    size: 768
+    factor: 3
+  pb_correction: true  # MeerKAT primary beam in the forward model (sky model = intrinsic sky)
+  # fixed bins: 4 equal-width bins per band (961.4-1145.1 MHz, 1294.4-1503.5 MHz), the bound between
+  # the bands lies in the gap without channels; 55 / 55 / 55 / 55 / 62 / 63 / 61 / 62 channels  [Hz]
+  freq_bounds: [961432617.1875, 1007354462.890625, 1053276308.59375, 1099198154.296875, 1219745000.0,
+    1346641878.4120858, 1398913756.8241715, 1451185635.2362576, 1503457513.6483433]
+
+data.6:
+  fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
+  mode: radio
+
+base_opt.6:
+  n_major_iterations: 30
+  n_minor_iterations: 1
+  n_samples: 4
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 2*[1000]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 2*[1000] + [2000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 1.e-4
+      cg_kwargs:
+        name: null
+      miniter: 10*[0] + [10]
+      maxiter: 10*[10] + [20]
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.e-10
+      cg_kwargs:
+        name: null
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + [100]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + [200]
+      energy_reduction_factor: 1.e-3
+  sample_mode: linear_resample

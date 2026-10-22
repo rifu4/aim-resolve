@@ -3,7 +3,7 @@
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
 file: 4_pre.yml
-run: 1
+run: 2
 
 ---
 
@@ -46,4 +46,33 @@ base_opt.5:
       miniter: 100
       maxiter: 200
       energy_reduction_factor: 1.e-3
-  sample_mode: nonlinear_resample
+  sample_mode: linear_resample
+
+base_trans:
+  n_total_iterations: 20
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [100]
+      maxiter: 4*[100] + 4*[200] + 4*[350] + 4*[500] + [1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+        miniter: 4*[5] + 4*[10] + [20]
+      miniter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [10]
+      maxiter: 4*[5] + 4*[10] + 4*[20] + 4*[35] + [50]
+      energy_reduction_factor: 0.001
+  sample_mode: linear_resample
