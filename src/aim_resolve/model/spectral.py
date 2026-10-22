@@ -102,7 +102,7 @@ def spectral_ubik_model(
     freq,
     zero_mode,
     spatial_amplitude,
-    spectral_index,
+    spectral_index=None,
     spectral_amplitude=None,
     deviations=None,
     spectral_curvature=None,
@@ -120,13 +120,17 @@ def spectral_ubik_model(
     grid : SignalGrid
         The signal grid for the model.
     freq : np.ndarray
-        The frequencies of the model (must have at least two entries).
+        The frequencies of the model. With a single frequency the model is the
+        reference-frequency field only, with exactly the parameters (names and
+        parametrisation) of the multi-frequency model, so that a frequency
+        transition carries the sky over unchanged; the spectral settings are
+        then ignored.
     zero_mode : dict
         Zero-mode configuration for the spectral sky.
     spatial_amplitude : dict
         Spatial amplitude configuration.
-    spectral_index : dict
-        Spectral index configuration.
+    spectral_index : dict, optional
+        Spectral index configuration (needed for several frequencies).
     spectral_amplitude : dict, optional
         Spectral amplitude configuration. Default is None.
     deviations : dict, optional
@@ -146,8 +150,15 @@ def spectral_ubik_model(
     model : Model or VModel
         The initialized ubik spectral model.
     """
-    if freq.size == 1:
-        raise ValueError("Need at least two frequencies for spectral ubik model.")
+    single = freq.size == 1
+    if single:
+        # reference-frequency field only: the spectral parts are not part of the
+        # model (SpectralProductSky); placeholder settings for the unused index
+        spectral_index = dict(mean=(0.0, 1.0), fluctuations=(1.0, 1.0))
+        spectral_amplitude = deviations = spectral_curvature = None
+        ref_freq_index = 0
+    elif not spectral_index:
+        raise ValueError("Need spectral_index parameters for a multi-frequency ubik model.")
 
     log_freq = np.log(freq)
     ref_freq_index = (
@@ -168,6 +179,10 @@ def spectral_ubik_model(
         spectral_curvature_settings=spectral_curvature,
         nonlinearity=nonlinearity,
     )
+    if single:
+        # SpectralProductSky keeps a frequency axis of length 1; single-frequency models are (*shape)
+        mf_model = model
+        model = Model(lambda x: mf_model(x)[0], domain=mf_model.domain, init=mf_model.init)
 
     if n_copies > 1:
         return VModel(model, n_copies)
