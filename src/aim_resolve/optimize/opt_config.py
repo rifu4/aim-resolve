@@ -126,7 +126,11 @@ class OptimizeKLConfig:
 
         self.opt_params = dict(
             n_iter=["n_total_iterations"],
-            static=["odir", "position_or_samples", "key", "resume"],
+            # `kl_map` / `residual_map` (optional): how the samples are mapped in the KL
+            # minimisation / sampling instead of the default vectorisation (jax.vmap), e.g.
+            # kl_map: "smap" (one after another via jax.lax.scan, less GPU memory; the KL
+            # value and gradient are jit-compiled, so not "lmap", a Python loop)
+            static=["odir", "position_or_samples", "key", "resume", "kl_map", "residual_map"],
             needed_dyn=[
                 "likelihood",
                 "n_samples",
