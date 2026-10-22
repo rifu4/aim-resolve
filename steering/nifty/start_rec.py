@@ -24,7 +24,7 @@ import click
     "--gpu_allocator",
     type=click.Choice(["bfc", "platform", "cuda_async"]),
     default=None,
-    help="XLA GPU allocator: bfc (pool, JAX default), platform (no pool, no fragmentation) or cuda_async",
+    help="XLA GPU allocator: platform (default; no pool, no fragmentation), bfc (pool, JAX's default) or cuda_async",
 )
 @click.option(
     "--gpu_preallocate", is_flag=True, help="Reserve the GPU memory pool up front (bfc only)"
@@ -49,9 +49,10 @@ def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, 
     plot_range : float or None
         Brightness range for plotting the sky models.
     gpu_allocator : str or None
-        XLA GPU allocator (XLA_PYTHON_CLIENT_ALLOCATOR): "bfc" (memory pool, JAX default), "platform"
-        (allocated and freed directly, avoids out-of-memory errors from pool fragmentation) or "cuda_async"
-        (CUDA's asynchronous allocator). None keeps the environment setting.
+        XLA GPU allocator (XLA_PYTHON_CLIENT_ALLOCATOR): "platform" (allocated and freed directly, avoids
+        out-of-memory errors from pool fragmentation), "bfc" (memory pool, JAX's default) or "cuda_async"
+        (CUDA's asynchronous allocator). None: the environment setting if there is one, else "platform"
+        ("bfc" if gpu_preallocate or gpu_mem_fraction is given, which only apply to the pool).
     gpu_preallocate : bool
         Reserve the memory pool at the start (XLA_PYTHON_CLIENT_PREALLOCATE); by default it grows on demand.
     gpu_mem_fraction : float or None
@@ -62,9 +63,13 @@ def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, 
         os.environ["JAX_PLATFORM_NAME"] = "cpu"
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(cuda_device)
-        # GPU memory: the options override the environment; by default the pool grows on demand
+        # GPU memory: the options override the environment; default allocator "platform" (no pool, so
+        # no out-of-memory errors from fragmentation), the pool ("bfc") if it is configured
         if gpu_allocator is not None:
             os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = gpu_allocator
+        else:
+            pool = gpu_preallocate or gpu_mem_fraction is not None
+            os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "bfc" if pool else "platform")
         if gpu_preallocate:
             os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "true"
         os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
