@@ -1,5 +1,7 @@
 """Extension utilities for multi-frequency and zoom workflows."""
 
+import numpy as np
+
 from .model.grid import PointGrid, SignalGrid
 from .optimize.set_config import SetupKLConfig
 from .optimize.yml import yaml_load
@@ -51,6 +53,7 @@ def freq_extension(
     base="base.yml",
     ref_freq_index=1,
     run=0,
+    flux_scale=1.0,
     **kwargs,
 ):
     """Create a multi-frequency extension configuration.
@@ -73,8 +76,14 @@ def freq_extension(
         Index of the reference frequency in *freq*. Default is 1.
     run : int, optional
         Run number to append to the output directory name. Default is 0 (no run number).
+    flux_scale : float, optional
+        Factor by which the transferred sky is scaled at the transition, e.g. 2.0 when the
+        single-frequency data are on half the flux scale of the multi-frequency data. Added as
+        ln(flux_scale) to the offsets of all sky components of the new iteration (see
+        `scale_sky_offsets`). Default is 1.0 (no scaling).
     **kwargs
-        Additional section overrides applied before writing.
+        Additional section overrides applied before writing (after the flux scaling, so an
+        explicitly given offset is used as it is).
 
     Returns
     -------
@@ -140,6 +149,7 @@ def freq_extension(
         mode="freq",
     )
     cfg.modify_sec(f"opt.{cfg.it}", base="base_opt.0", transitions=f"=trans.{cfg.it}")
+    scale_sky_offsets(cfg, cfg.it, flux_scale)
 
     for key, val in kwargs.items():
         cfg.modify_sec(key, **val)
@@ -319,6 +329,35 @@ def iter_extension(
     cfg.to_file(ext_file)
 
     return base, ext_file
+
+
+def scale_sky_offsets(cfg, it, flux_scale):
+    """Scale the sky of iteration `it` by `flux_scale` via the component offsets.
+
+    With the exponential nonlinearity (the default) a component is exp(model(x)) * exp(offset),
+    so adding ln(flux_scale) to the offset of every sky component (sections ``sky_*.it``)
+    scales the sky at an unchanged latent position by exactly `flux_scale`. Offsets may be
+    scalars or lists (points, tiles); a missing offset counts as 0.
+
+    Parameters
+    ----------
+    cfg : SetupKLConfig
+        Configuration that is modified in place.
+    it : int
+        Iteration whose sky sections are scaled.
+    flux_scale : float
+        Positive scaling factor; 1 leaves the configuration unchanged.
+    """
+    if flux_scale == 1:
+        return cfg
+    if not flux_scale > 0:
+        raise ValueError(f"`flux_scale` has to be positive, got {flux_scale}.")
+    shift = float(np.log(flux_scale))
+    for sec in list(cfg.sections):
+        if sec.startswith("sky_") and sec.endswith(f".{it}"):
+            off = np.asarray(cfg.sections[sec].get("offset", 0.0), dtype="float64") + shift
+            cfg.sections[sec]["offset"] = off.tolist() if off.ndim else float(off)
+    return cfg
 
 
 def fun2mode(cfg):

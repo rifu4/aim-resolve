@@ -15,6 +15,9 @@ mode: freq
 freq: [992835436.8252982, 1053577478.5430002, 1115089356.2923512, 1331190293.0786908, 1398345163.05089,
     1465667761.324496]
 ref_freq_index: 1
+# the single-frequency data (eso_986-1137mhz.npz) are on half the flux scale of the multi-frequency data
+# (V_SF = 0.5 V_MF on identical baselines): the transferred sky is scaled by 2 (ln 2 added to all offsets)
+flux_scale: 2.0
 
 ---
 
