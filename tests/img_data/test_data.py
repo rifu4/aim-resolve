@@ -64,3 +64,13 @@ class TestImageData:
         val = np.ones(grid.shape)
         data = ImageData(val, grid)
         np.testing.assert_array_equal(data.maps, np.zeros_like(val))
+
+
+class TestAddNoiseMultiFrequency:
+    def test_independent_noise_per_frequency(self, grid):
+        val = np.ones((3,) + tuple(grid.shape))
+        d = ImageData(val, grid)
+        d.add_noise(key=3, max_std=0.1)
+        assert d.noisy_val.shape == val.shape
+        noise = d.noisy_val - val
+        assert not np.allclose(noise[0], noise[1])

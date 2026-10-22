@@ -302,7 +302,9 @@ class ImageData:
         """
         key = random.PRNGKey(key) if isinstance(key, int) else key
         n_std = max_std * np.max(self.val)
-        noise = n_std * random.normal(key, self.grid.shape)
+        # shape of the data, not of the grid: independent noise per frequency for
+        # multi-frequency images (identical to before for 2D images)
+        noise = n_std * random.normal(key, self.val.shape)
         self.noisy_val = self.val + noise
 
     def save(self, name, odir="", dtype="float64"):
