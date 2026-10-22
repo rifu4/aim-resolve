@@ -221,6 +221,16 @@ def fits2array(file_name):
     return arr
 
 
+def jy_pix_to_mjy_arcsec2(file_name):
+    """Image in Jy/pixel (uSARA / AIRI, Dabbech et al. 2022) -> mJy/arcsec^2,
+    with the pixel area from the FITS header (1.68" x 1.68" = 2.82 arcsec^2)."""
+    import astropy.io.fits as pyfits
+
+    h = pyfits.getheader(file_name)
+    pix_area = abs(h["CDELT1"] * h["CDELT2"]) * 3600**2  # [arcsec^2]
+    return fits2array(file_name) * 1e3 / pix_area
+
+
 def map2component(nifty_array, usara_array, airi_array, rel_fov, center):
     rel_fov = np.array(rel_fov)
 
@@ -292,20 +302,20 @@ print("markers:", [f"{k}: {len(v['x'])}" for k, v in markers_mf.items()])
 # Load the reference reconstructions (uSARA and AIRI, Dabbech et al. 2022) at
 # 1053 and 1399 MHz from FITS, and their two-frequency spectral index.
 # ---------------------------------------------------------------------------
-usara_1053mhz = fits2array("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1053MHz_uSARA.fits") * 1e3 / 3.6
+usara_1053mhz = jy_pix_to_mjy_arcsec2("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1053MHz_uSARA.fits")
 print("uSARA @1053 MHz shape:", usara_1053mhz.shape)
 
-usara_1399mhz = fits2array("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1399MHz_uSARA.fits") * 1e3 / 3.6
+usara_1399mhz = jy_pix_to_mjy_arcsec2("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1399MHz_uSARA.fits")
 print("uSARA @1399 MHz shape:", usara_1399mhz.shape)
 
 usara_alpha = compute_spectral_index(usara_1399mhz, usara_1053mhz, 1399e6, 1053e6)
 print("uSARA alpha shape:", usara_alpha.shape)
 
 
-airi_1053mhz = fits2array("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1053MHz_AIRI.fits") * 1e3 / 3.6
+airi_1053mhz = jy_pix_to_mjy_arcsec2("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1053MHz_AIRI.fits")
 print("AIRIs @1053 MHz shape:", airi_1053mhz.shape)
 
-airi_1399mhz = fits2array("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1399MHz_AIRI.fits") * 1e3 / 3.6
+airi_1399mhz = jy_pix_to_mjy_arcsec2("/scratch/users/rfuchs/packages/aim-resolve/steering/paper/fits/ESO137_1399MHz_AIRI.fits")
 print("AIRIs @1399 MHz shape:", airi_1399mhz.shape)
 
 airi_alpha = compute_spectral_index(airi_1399mhz, airi_1053mhz, 1399e6, 1053e6)

@@ -47,11 +47,14 @@ from aim_resolve.plot.util import plot_figure
 dir = "/scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b"
 mf_rec = "4_rec_3z_4_6f_1_it_1_it_1"
 
+PB_CORRECTION = True  # plot the primary-beam corrected products of save_fits.py
+
 PREFIX = "eso137"
-fits_dir = f"{dir}/opt/{mf_rec}/fits"
-odir = f"{dir}/opt/{mf_rec}/paper_new"
+fits_dir = f"{dir}/opt/{mf_rec}/fits" + ("_pbcor" if PB_CORRECTION else "")
+odir = f"{dir}/opt/{mf_rec}/paper_new" + ("_pbcor" if PB_CORRECTION else "")
 paper_dir = "/scratch/users/rfuchs/packages/aim-resolve/steering/paper"  # uSARA / AIRI FITS, regions.yml
 REF_IDX = 1  # reference-frequency index (nu_ref = 1054 MHz)
+TILES_ORDER_FILE = None  # tiles_order.npy of another run, for side-by-side comparisons (None: brightest tiles of this run)
 
 os.makedirs(odir, exist_ok=True)
 
@@ -235,6 +238,16 @@ def fits2array(file_name):
     if arr.dtype.byteorder == ">":
         arr = arr.byteswap().view(arr.dtype.newbyteorder("="))
     return arr
+
+
+def jy_pix_to_mjy_arcsec2(file_name):
+    """Image in Jy/pixel (uSARA / AIRI, Dabbech et al. 2022) -> mJy/arcsec^2,
+    with the pixel area from the FITS header (1.68" x 1.68" = 2.82 arcsec^2)."""
+    import astropy.io.fits as pyfits
+
+    h = pyfits.getheader(file_name)
+    pix_area = abs(h["CDELT1"] * h["CDELT2"]) * 3600**2  # [arcsec^2]
+    return fits2array(file_name) * 1e3 / pix_area
 
 
 def map2component(nifty_array, usara_array, airi_array, rel_fov, center):
@@ -2340,6 +2353,12 @@ plot_column(
 # vmax = 95th percentile over both galaxies.
 std_vmax = lambda comps: float(np.nanpercentile(np.concatenate([c.ravel() for c in comps]), 95))
 plot_column(
+    alpha_comps, odir=odir, name="cs_alpha", cmap=ALPHA_CMAP, norm="linear",
+    vmin=ALPHA_VMIN, vmax=ALPHA_VMAX, cbar_ticks=ALPHA_TICKS,
+    frame=True, label_color="black", contour=flux_contours,
+    cbar_label=r"spectral index $\alpha$", labels=galaxy_labels, fig_width=10.0, dpi=300,
+)
+plot_column(
     alpha_std_comps, odir=odir, name="cs_alpha_std", cmap="RdYlBu_r", norm="linear",
     vmin=0, vmax=std_vmax(alpha_std_comps), cbar_ticks=np.arange(0, std_vmax(alpha_std_comps) + 1e-9, 0.05),
     frame=True, label_color="black", contour=flux_contours,
@@ -2372,6 +2391,10 @@ tiles_si_val = np.asarray(map_signal(tiles_si_val, spc_0, spc_1, order=1, vmap_s
 tiles_avg_val = np.asarray(map_signal(tile_cube("mean").mean(axis=1), spc_0, spc_1, order=1, vmap_sum=False))
 tiles_peak = np.array([np.max(t) for t in tiles_avg_val])
 tiles_order = np.argsort(tiles_peak)[::-1][:36]
+if TILES_ORDER_FILE:  # same tiles in the same order as another run (identical tile layout required)
+    tiles_order = np.load(TILES_ORDER_FILE)
+    print("tile order from:", TILES_ORDER_FILE)
+np.save(os.path.join(odir, "tiles_order.npy"), tiles_order)
 bright_tiles_rf_val = [tiles_rf_val[i] + 1e-10 for i in tiles_order]
 bright_tiles_si_val = [np.where(rf > 1e-2, tiles_si_val[i], np.nan) for rf, i in zip(bright_tiles_rf_val, tiles_order)]
 
@@ -2404,40 +2427,69 @@ plot_tiles_grid(
 # ===========================================================================
 # 2) Spectral index compared to uSARA / AIRI (as eso_compare.py).
 # ===========================================================================
-usara_1053mhz = fits2array(f"{paper_dir}/fits/ESO137_1053MHz_uSARA.fits") * 1e3 / 3.6
-usara_1399mhz = fits2array(f"{paper_dir}/fits/ESO137_1399MHz_uSARA.fits") * 1e3 / 3.6
-usara_alpha = compute_spectral_index(usara_1399mhz, usara_1053mhz, 1399e6, 1053e6)
-airi_1053mhz = fits2array(f"{paper_dir}/fits/ESO137_1053MHz_AIRI.fits") * 1e3 / 3.6
-airi_1399mhz = fits2array(f"{paper_dir}/fits/ESO137_1399MHz_AIRI.fits") * 1e3 / 3.6
-airi_alpha = compute_spectral_index(airi_1399mhz, airi_1053mhz, 1399e6, 1053e6)
+COMPARE_FITS = [f"{paper_dir}/fits/ESO137_{nu}MHz_{alg}.fits" for nu in (1053, 1399) for alg in ("uSARA", "AIRI")]
+if not all(os.path.exists(f) for f in COMPARE_FITS):
+    print("skipping c1_alpha / c2_alpha: uSARA / AIRI FITS not found in", f"{paper_dir}/fits")
+else:
+    usara_1053mhz = jy_pix_to_mjy_arcsec2(f"{paper_dir}/fits/ESO137_1053MHz_uSARA.fits")
+    usara_1399mhz = jy_pix_to_mjy_arcsec2(f"{paper_dir}/fits/ESO137_1399MHz_uSARA.fits")
+    airi_1053mhz = jy_pix_to_mjy_arcsec2(f"{paper_dir}/fits/ESO137_1053MHz_AIRI.fits")
+    airi_1399mhz = jy_pix_to_mjy_arcsec2(f"{paper_dir}/fits/ESO137_1399MHz_AIRI.fits")
+    if PB_CORRECTION:
+        # The uSARA / AIRI images of Dabbech et al. 2022 are not primary-beam corrected
+        # (no beam in their measurement operator, no correction in the paper). Divide
+        # each band by the same MeerKAT beam as in save_fits.py (clipped at PB_MIN) on
+        # their grid (pointing centre at the 0-based pixel N / 2, CRPIX = N / 2 + 1),
+        # so that their spectral index is corrected consistently:
+        # alpha = alpha_app - ln(PB_1399 / PB_1053) / ln(1399 / 1053).
+        from resolve.library.meerkat_beam import JimBeam
 
-panel_labels = ["aim-resolve", "AIRI (from Dabbech et al. 22)", "uSARA (from Dabbech et al. 22)"]
-compare_dict = dict(norm="linear", cmap=ALPHA_CMAP, cbar=True, cbar_kwargs={"loc": "right"}, ticks=0, dpi=300)
+        PB_MIN = 0.1
 
-nifty_sky = [to_grid(cube("mean", c["name"])[REF_IDX], c["name"]) for c in COMPONENTS]
-nifty_alpha = [to_grid(layer("alpha", "mean", c["name"]), c["name"]) for c in COMPONENTS]
+        def dabbech_beam(fname):
+            h = pyfits.getheader(fname)
+            n1, n2 = h["NAXIS1"], h["NAXIS2"]
+            x = (np.arange(n1) + 1 - h["CRPIX1"]) * h["CDELT1"]  # offsets [deg], axis 0 -> RA
+            y = (np.arange(n2) + 1 - h["CRPIX2"]) * h["CDELT2"]
+            xx, yy = np.meshgrid(x, y, indexing="ij")
+            pb = JimBeam("MKAT-AA-L-JIM-2020").I(xx, yy, h["CRVAL3"] / 1e6)
+            return np.maximum(pb, PB_MIN)
 
-compare_alpha = []
-for comp, sky_ref, alpha in zip(COMPONENTS, nifty_sky, nifty_alpha):
-    kw = dict(rel_fov=comp["rel_fov"], center=comp["center"])
-    n_1053, u_1053, a_1053 = map2component(sky_ref, usara_1053mhz, airi_1053mhz, **kw)
-    n_alpha, u_alpha, a_alpha = map2component(alpha, usara_alpha, airi_alpha, **kw)
-    f_min = comp["flux_min"]
-    compare_alpha.append(dict(
-        alpha=[np.where(n_1053 > f_min, n_alpha, np.nan), np.where(a_1053 > f_min, a_alpha, np.nan),
-               np.where(u_1053 > f_min, u_alpha, np.nan)],
-        flux=[n_1053, a_1053, u_1053],
-    ))
+        pb_1053 = dabbech_beam(f"{paper_dir}/fits/ESO137_1053MHz_uSARA.fits")
+        pb_1399 = dabbech_beam(f"{paper_dir}/fits/ESO137_1399MHz_uSARA.fits")
+        usara_1053mhz, airi_1053mhz = usara_1053mhz / pb_1053, airi_1053mhz / pb_1053
+        usara_1399mhz, airi_1399mhz = usara_1399mhz / pb_1399, airi_1399mhz / pb_1399
+        del pb_1053, pb_1399
+    usara_alpha = compute_spectral_index(usara_1399mhz, usara_1053mhz, 1399e6, 1053e6)
+    airi_alpha = compute_spectral_index(airi_1399mhz, airi_1053mhz, 1399e6, 1053e6)
 
-for key, c, lvls, hspace in zip(["c1", "c2"], compare_alpha, contour_levels, [-0.95, -1.0]):
-    print(f"plotting {key}_alpha ...")
-    plot_rows(
-        array=c["alpha"], odir=odir, name=f"{key}_alpha", cbar_label=r"spectral index $\alpha$",
-        labels=panel_labels, label_color="black", frame=True,
-        contour=[{"array": f, "levels": lvls, "colors": "black", "linewidths": 0.5} for f in c["flux"]],
-        figsize=(10, 10), vmin=ALPHA_VMIN, vmax=ALPHA_VMAX, cbar_ticks=ALPHA_TICKS, grid_kwargs=dict(hspace=hspace, wspace=0),
-        **compare_dict,
-    )
+    panel_labels = ["aim-resolve", "AIRI (from Dabbech et al. 22)", "uSARA (from Dabbech et al. 22)"]
+    compare_dict = dict(norm="linear", cmap=ALPHA_CMAP, cbar=True, cbar_kwargs={"loc": "right"}, ticks=0, dpi=300)
+
+    nifty_sky = [to_grid(cube("mean", c["name"])[REF_IDX], c["name"]) for c in COMPONENTS]
+    nifty_alpha = [to_grid(layer("alpha", "mean", c["name"]), c["name"]) for c in COMPONENTS]
+
+    compare_alpha = []
+    for comp, sky_ref, alpha in zip(COMPONENTS, nifty_sky, nifty_alpha):
+        kw = dict(rel_fov=comp["rel_fov"], center=comp["center"])
+        n_1053, u_1053, a_1053 = map2component(sky_ref, usara_1053mhz, airi_1053mhz, **kw)
+        n_alpha, u_alpha, a_alpha = map2component(alpha, usara_alpha, airi_alpha, **kw)
+        f_min = comp["flux_min"]
+        compare_alpha.append(dict(
+            alpha=[np.where(n_1053 > f_min, n_alpha, np.nan), np.where(a_1053 > f_min, a_alpha, np.nan),
+                   np.where(u_1053 > f_min, u_alpha, np.nan)],
+            flux=[n_1053, a_1053, u_1053],
+        ))
+
+    for key, c, lvls, hspace in zip(["c1", "c2"], compare_alpha, contour_levels, [-0.95, -1.0]):
+        print(f"plotting {key}_alpha ...")
+        plot_rows(
+            array=c["alpha"], odir=odir, name=f"{key}_alpha", cbar_label=r"spectral index $\alpha$",
+            labels=panel_labels, label_color="black", frame=True,
+            contour=[{"array": f, "levels": lvls, "colors": "black", "linewidths": 0.5} for f in c["flux"]],
+            figsize=(10, 10), vmin=ALPHA_VMIN, vmax=ALPHA_VMAX, cbar_ticks=ALPHA_TICKS, grid_kwargs=dict(hspace=hspace, wspace=0),
+            **compare_dict,
+        )
 
 # %%
 # ===========================================================================
@@ -2541,7 +2593,11 @@ def link_profiles(cfg):
     for t in SAMPLE_TAGS:
         flux_cube = crop(to_grid(cube(t, n), n))
         s_freq = np.stack([sample(flux_cube[fi]).mean(axis=1) for fi in range(len(FREQ_MHZ))])
-        beta_s, alpha_s, _ = np.polyfit(u_freq, np.log(np.clip(s_freq, 1e-12, None)), 2)
+        # curvature: quadratic term of the log-parabola fit to the stripe spectrum
+        beta_s = np.polyfit(u_freq, np.log(np.clip(s_freq, 1e-12, None)), 2)[0]
+        # spectral index: the model's alpha map, weighted by the nu_ref brightness of the sample
+        w_ref = np.clip(sample(flux_cube[REF_IDX]), 0.0, None)
+        alpha_s = np.sum(w_ref * sample(crop(to_grid(layer("alpha", t, n), n))), axis=1) / np.sum(w_ref, axis=1)
         flux_smean_k.append(s_freq)
         alpha_k.append(alpha_s)
         curv_k.append(beta_s)
@@ -2558,7 +2614,7 @@ def link_profiles(cfg):
 
     return dict(
         cfg=cfg, flux_c=flux_c, centers=centers, seg_ends=seg_ends, center=center, dist=dist, unit=unit,
-        alpha_fit=alpha_k.mean(axis=0), alpha_fit_err=std(alpha_k),
+        alpha=alpha_k.mean(axis=0), alpha_err=std(alpha_k),
         curv=curv_k.mean(axis=0), curv_err=std(curv_k),
         flux_smean=flux_smean_k.mean(axis=0), flux_smean_err=std(flux_smean_k),
         z_arcsec=np.linspace(-cfg["half_width"], cfg["half_width"], N_PERP_Z),
@@ -2600,9 +2656,8 @@ def plot_link_profiles(p, name, brightness_std=True, curvature=True):
     ax_img.set_xticks([])
     ax_img.set_yticks([])
 
-    ax_a.fill_between(dist, p["alpha_fit"] - p["alpha_fit_err"], p["alpha_fit"] + p["alpha_fit_err"],
-                      color=LINK_RED, alpha=0.2, lw=0)
-    ax_a.plot(dist, p["alpha_fit"], color=LINK_RED, lw=1.0)
+    ax_a.fill_between(dist, p["alpha"] - p["alpha_err"], p["alpha"] + p["alpha_err"], color=LINK_RED, alpha=0.2, lw=0)
+    ax_a.plot(dist, p["alpha"], color=LINK_RED, lw=1.0)
     ax_a.set_ylabel(r"spectral index $\alpha$")
     ax_a.axvline(0.0, color="0.8", lw=0.8, zorder=0)
     ax_a.tick_params(labelbottom=False)
@@ -2679,7 +2734,7 @@ def plot_flux_alpha_vs_z(p, name):
 
 def plot_curvature_vs_alpha_band(p, name):
     """Curvature vs spectral index per stripe with the connected 1-sigma band."""
-    dist, a, b, sa, sb = p["dist"], p["alpha_fit"], p["curv"], p["alpha_fit_err"], p["curv_err"]
+    dist, a, b, sa, sb = p["dist"], p["alpha"], p["curv"], p["alpha_err"], p["curv_err"]
     fig, ax = plt.subplots(figsize=(7.4, 5), dpi=200)
     cmap = plt.get_cmap(CMAP)
     norm = plt.Normalize(dist.min(), dist.max())
@@ -2719,20 +2774,40 @@ plot_curvature_vs_alpha_band(profiles["c2"], "c2_curvature_vs_alpha.png")
 # ===========================================================================
 nu_idx = [1, 2, 3, 4, 5, 6]  # even channel positions -> distinct hues; real freqs on the colorbar
 color_dict = dict(
-    nu_axis_scale="linear", intensity_scale="log", range_min=0.0, range_max=100.0, deslope=1.5,
+    nu_axis_scale="linear", intensity_scale="log", range_min=0.0, range_max=100.0, deslope=0.3,
     normalize_spectrum_enabled=True, normalize_spectrum_boost=7.5, dynamic_range=1e4,
     lambda_min=400.0, lambda_max=700.0,
 )
+HUE_REF_ALPHA = -1.0  # hue reference: power law with this spectral index (None: full-sky mean spectrum)
 
-sky = cube("mean", "PRIMARY")  # total sky (sum of all components)
-sky_brightness_max = float(np.sum(np.maximum(sky, 0.0), axis=0).max())
-sky_spectrum_ref = np.mean(sky, axis=(1, 2))
+sky = np.nan_to_num(cube("mean", "PRIMARY"))  # total sky (sum of all components); NaN (PB-masked) -> 0
+# Colour reference shared by all RGB images: hue = spectrum / reference spectrum
+# (full-sky mean), brightness relative to the full-sky maximum. With the primary-
+# beam correction the full-sky mean is dominated by the boosted field edge, which
+# would shift every hue; use the reference of the uncorrected sky instead, so the
+# corrected images share the colour scale of the uncorrected ones (paper_new/).
+ref_sky = sky
+if PB_CORRECTION:
+    ref_sky = np.stack([
+        np.asarray(pyfits.getdata(f"{dir}/opt/{mf_rec}/fits/{PREFIX}_{m}MHz_posterior_mean.fits", ext=0)[0, 0].T, dtype="float64")
+        for m in FREQ_MHZ
+    ])
+sky_brightness_max = float(np.sum(np.maximum(ref_sky, 0.0), axis=0).max())
+sky_spectrum_ref = np.mean(ref_sky, axis=(1, 2))
+if HUE_REF_ALPHA is not None:
+    # Fixed power-law hue reference, so the colours mean the same spectral index
+    # in every run (only its shape matters for the hue).
+    sky_spectrum_ref = sky_spectrum_ref[REF_IDX] * (freq_hz / freq_hz[REF_IDX]) ** HUE_REF_ALPHA
+del ref_sky
 
-plot_multi_color(sky, nu_idx, odir=odir, name="sky_rgb_box", marker=box_markers(), **color_dict)
+plot_multi_color(
+    sky, nu_idx, odir=odir, name="sky_rgb_box", marker=box_markers(),
+    brightness_max=sky_brightness_max, spectrum_ref=sky_spectrum_ref, **color_dict,
+)
 del sky
 
 flux_rgb = [
-    np.asarray(crop_component(to_grid(cube("mean", c["name"]), c["name"]), c["rel_fov"], c["center"]))
+    np.nan_to_num(np.asarray(crop_component(to_grid(cube("mean", c["name"]), c["name"]), c["rel_fov"], c["center"])))
     for c in COMPONENTS
 ]
 plot_multi_color_column(
@@ -2740,7 +2815,7 @@ plot_multi_color_column(
     brightness_max=sky_brightness_max, spectrum_ref=sky_spectrum_ref, **color_dict,
 )
 
-tiles_cube = tile_cube("mean")  # (n_tiles, nfreq, tx, ty)
+tiles_cube = np.nan_to_num(tile_cube("mean"))  # (n_tiles, nfreq, tx, ty)
 nt, nf, tx, ty = tiles_cube.shape
 tiles_cube = np.asarray(
     map_signal(tiles_cube.reshape(nt * nf, tx, ty), spc_0, spc_1, order=1, vmap_sum=False)
