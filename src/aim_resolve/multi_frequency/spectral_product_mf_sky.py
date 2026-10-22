@@ -40,6 +40,7 @@ from .spectral_product_utils.spectral_behavior import (
     HarmonicLogSpectralBehavior,
     SingleHarmonicLogSpectralBehavior,
     SpectralIndex,
+    SpectralIndexCurvature,
 )
 
 
@@ -161,6 +162,7 @@ class SpectralProductSky(Model):
         if logfreqs.shape[0] == 1:
             self.spectral_amplitude = None
             self.spectral_index_distribution = None
+            self.spectral_curvature_distribution = None
             self.spectral_deviations_distribution = None
             self.spectral_distribution = None
 
@@ -312,6 +314,11 @@ class SpectralProductSky(Model):
                 self._hdvol * self._ht(amplitude[self._pd] * spectral_fluc)
                 + spectral_mean
             )
+        if isinstance(self.log_spectral_behavior, SpectralIndexCurvature):
+            return (
+                self._hdvol * self._ht(amplitude[self._pd] * spectral_fluc[0])
+                + spectral_mean[0]
+            )
 
         return jnp.array(
             [
@@ -321,6 +328,21 @@ class SpectralProductSky(Model):
                 )
             ]
         )
+
+    def spectral_curvature_distribution(self, p):
+        """Convenience method to retrieve the model's spectral curvature (the
+        coefficient of u^2, see `SpectralIndexCurvature`); None without a
+        curvature term."""
+        if not isinstance(self.log_spectral_behavior, SpectralIndexCurvature):
+            return None
+        if self.spectral_amplitude is None:
+            amplitude = self.spatial_amplitude(p)
+        else:
+            amplitude = self.spectral_amplitude(p)
+        amplitude = amplitude.at[0].set(0.0)
+        curv_mean = self.log_spectral_behavior.mean(p)[1]
+        curv_fluc = self.log_spectral_behavior.fluctuations(p)[1]
+        return self._hdvol * self._ht(amplitude[self._pd] * curv_fluc) + curv_mean
 
     def spectral_deviations_distribution(self, p):
         """Convenience method to retrieve the model's spectral deviations."""
@@ -417,6 +439,19 @@ class SpectralProductSky(Model):
             p, relative_log_frequency
         )
 
+        if isinstance(self.log_spectral_behavior, SpectralIndexCurvature):
+            q = self.log_spectral_behavior.curvature_basis_at(relative_log_frequency)
+            (alpha_mean, curv_mean), (alpha_fluc, curv_fluc) = spectral_index_mean, spectral_index_fluc
+            return (
+                self._hdvol
+                * self._ht(
+                    amplitude[self._pd]
+                    * (alpha_fluc * relative_log_frequency + curv_fluc * q + deviations)
+                )
+                + alpha_mean * relative_log_frequency
+                + curv_mean * q
+            )
+
         return (
             self._hdvol
             * self._ht(
@@ -468,6 +503,7 @@ def build_simple_spectral_sky(
     spectral_index_fluctuations: Model | None = None,
     spectral_amplitude_settings: dict | None = None,
     deviations_settings: dict | None = None,
+    spectral_curvature_settings: dict | None = None,
     log_reference_frequency_mean_model: Model | None = None,
     spatial_amplitude_model: str = "non_parametric",
     spectral_amplitude_model: str = "non_parametric",
@@ -536,6 +572,15 @@ def build_simple_spectral_sky(
         - process: wiener (default)
         - sigma: callable or parameters
              for default (lognormal prior)
+    spectral_curvature_settings: dict, opt
+        Settings for the spectral curvature priors (see
+        `SpectralIndexCurvature`). If None (default) the model has no curvature
+        term (`SpectralIndex`). Should contain the following keys:
+        - mean: callable or parameters
+             for default (normal prior)
+        - fluctuations: callable or parameters
+             for default (lognormal prior)
+        With a curvature, the deviations carry neither slope nor curvature.
     log_reference_frequency_mean_model: Model
         Model for the distribution of the log mean of the
         reference frequency.
@@ -594,12 +639,30 @@ def build_simple_spectral_sky(
             shape=shape,
         )
 
-    log_spectral_behavior = SpectralIndex(
-        log_frequencies=log_frequencies,
-        mean=spectral_index_mean,
-        spectral_scaled_excitations=spectral_index_fluctuations,
-        reference_frequency_index=reference_frequency_index,
-    )
+    if spectral_curvature_settings is None:
+        log_spectral_behavior = SpectralIndex(
+            log_frequencies=log_frequencies,
+            mean=spectral_index_mean,
+            spectral_scaled_excitations=spectral_index_fluctuations,
+            reference_frequency_index=reference_frequency_index,
+        )
+    else:
+        log_spectral_behavior = SpectralIndexCurvature(
+            log_frequencies=log_frequencies,
+            mean=spectral_index_mean,
+            spectral_scaled_excitations=spectral_index_fluctuations,
+            curvature_mean=build_distribution_or_default(
+                spectral_curvature_settings["mean"],
+                f"{prefix.strip()} beta mean",
+                normal_prior,
+            ),
+            curvature_scaled_excitations=build_scaled_excitations(
+                prefix=f"{prefix.strip()} beta",
+                fluctuations_settings=spectral_curvature_settings["fluctuations"],
+                shape=shape,
+            ),
+            reference_frequency_index=reference_frequency_index,
+        )
 
     if spectral_amplitude is not None:
         logger.info(

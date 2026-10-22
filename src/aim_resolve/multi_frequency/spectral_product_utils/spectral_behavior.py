@@ -142,6 +142,122 @@ class SpectralIndex(SingleHarmonicLogSpectralBehavior):
         return None
 
 
+class SpectralIndexCurvature(HarmonicLogSpectralBehavior):
+    def __init__(
+        self,
+        log_frequencies: ArrayLike,
+        mean: Model,
+        spectral_scaled_excitations: ScaledExcitations,
+        curvature_mean: Model,
+        curvature_scaled_excitations: ScaledExcitations,
+        reference_frequency_index: int,
+    ):
+        """Spectral index and spectral curvature, anchored at the reference
+        frequency. Extends `SpectralIndex` by a curvature term:
+
+        .. math::
+            \\log F(\\nu) = A^{spec.} * \\left\\{ \\mathrm{fluc.}^\\alpha \\xi^\\alpha u
+            + \\mathrm{fluc.}^\\beta \\xi^\\beta q(u) \\right\\}
+            + \\mathrm{mean}^\\alpha u + \\mathrm{mean}^\\beta q(u),
+
+        with :math:`u = \\log(\\nu / \\nu_\\mathrm{ref})` and
+        :math:`q(u) = u^2 - (\\sum u^3 / \\sum u^2)\\, u`, i.e. :math:`u^2`
+        orthogonalised against :math:`u` over the model frequencies. Both basis
+        functions vanish at the reference frequency, so the reference-frequency
+        map is unchanged; since :math:`q \\perp u`, :math:`\\alpha` is the slope
+        of the line through the reference point (as in `SpectralIndex`) and
+        :math:`\\beta` is the coefficient of :math:`u^2` (the curvature).
+        Spectral deviations are made orthogonal to both :math:`u` and
+        :math:`q` (`remove_degeneracy_of_spectral_deviations`), so they carry
+        neither slope nor curvature and stay zero at the reference frequency.
+
+        Parameters
+        ----------
+        log_frequencies: ArrayLike
+            The log of the frequencies (at least three).
+        mean: Model
+            Mean of the spectral index.
+        spectral_scaled_excitations: ScaledExcitations
+            Fluctuations of the spectral index applied to the xis.
+        curvature_mean: Model
+            Mean of the spectral curvature.
+        curvature_scaled_excitations: ScaledExcitations
+            Fluctuations of the spectral curvature applied to the xis.
+        reference_frequency_index: int
+            The index of the reference frequency.
+        """
+        if len(log_frequencies) < 3:
+            raise ValueError("A spectral curvature needs at least three frequencies.")
+        target_shape = spectral_scaled_excitations.target.shape
+        if curvature_scaled_excitations.target.shape != target_shape:
+            raise ValueError("spectral index and curvature fluctuations need the same shape.")
+        slicing_tuple = (slice(None),) + (None,) * len(target_shape)
+
+        u = jnp.asarray(log_frequencies - log_frequencies[reference_frequency_index])
+        q = u**2 - jnp.sum(u**3) / jnp.sum(u**2) * u
+        self._relative_log_frequencies = u[slicing_tuple]
+        self._curvature_basis = q[slicing_tuple]
+        self._denominator = 1 / jnp.sum(u**2)
+        self._curvature_denominator = 1 / jnp.sum(q**2)
+
+        self._mean = mean
+        self.spectral_scaled_excitations = spectral_scaled_excitations
+        self._curvature_mean = curvature_mean
+        self.curvature_scaled_excitations = curvature_scaled_excitations
+
+        domain = reduce(
+            lambda a, b: a | b,
+            [
+                (m.domain.tree if isinstance(m.domain, Vector) else m.domain)
+                for m in (mean, spectral_scaled_excitations, curvature_mean, curvature_scaled_excitations)
+            ],
+        )
+        super().__init__(domain=domain)
+
+    @property
+    def relative_log_frequencies(self):
+        return self._relative_log_frequencies
+
+    @property
+    def curvature_basis(self):
+        """:math:`q(u)` at the model frequencies, shaped like `relative_log_frequencies`."""
+        return self._curvature_basis
+
+    def curvature_basis_at(self, relative_log_frequency):
+        """:math:`q(u)` at arbitrary relative log frequencies (same orthogonalisation constant)."""
+        u = self.relative_log_frequencies.reshape(-1)
+        return relative_log_frequency**2 - jnp.sum(u**3) / jnp.sum(u**2) * relative_log_frequency
+
+    def mean(self, p) -> list[ArrayLike]:
+        """Means of the spectral index and the spectral curvature."""
+        return [self._mean(p), self._curvature_mean(p)]
+
+    def fluctuations(self, p) -> list[ArrayLike]:
+        """Scaled excitations of the spectral index and the spectral curvature."""
+        return [self.spectral_scaled_excitations(p), self.curvature_scaled_excitations(p)]
+
+    def fluctuations_with_frequencies(self, p) -> ArrayLike:
+        return (
+            self.spectral_scaled_excitations(p) * self.relative_log_frequencies
+            + self.curvature_scaled_excitations(p) * self.curvature_basis
+        )
+
+    def mean_with_frequencies(self, p) -> ArrayLike:
+        return self._mean(p) * self.relative_log_frequencies + self._curvature_mean(p) * self.curvature_basis
+
+    def remove_degeneracy_of_spectral_deviations(
+        self, deviations: ArrayLike
+    ) -> ArrayLike:
+        """Remove the components of the deviations along :math:`u` and :math:`q(u)`."""
+        dev_slope = jnp.sum(deviations * self.relative_log_frequencies, axis=0) * self._denominator
+        dev_curv = jnp.sum(deviations * self.curvature_basis, axis=0) * self._curvature_denominator
+        return deviations - dev_slope * self.relative_log_frequencies - dev_curv * self.curvature_basis
+
+    def __call__(self, p):
+        # NOTE : only needed for instantiation of the model (as SpectralIndex)
+        return None
+
+
 class SpectralPolynomial(HarmonicLogSpectralBehavior):
     def __init__(
         self,

@@ -9,6 +9,7 @@ import numpy as np
 from jax.typing import ArrayLike
 from nifty.re import Model, Vector, VModel
 
+from ..multi_frequency.spectral_product_utils.spectral_behavior import SpectralIndexCurvature
 from ..optimize.samples import domain_tree, model_init
 from .grid import PointGrid, SignalGrid
 from .map import map_signal
@@ -209,6 +210,25 @@ class SignalModel(Model):
         )
 
     @property
+    def has_spectral_curvature(self):
+        """Whether the (multi-frequency) model has a spectral curvature term."""
+        if self.freq.size < 2:
+            return False
+        model = self.model.model if isinstance(self.model, VModel) else self.model
+        if isinstance(model, MultiFrequencyModel):
+            return model.beta is not None
+        behavior = getattr(model, "log_spectral_behavior", None)
+        return isinstance(behavior, SpectralIndexCurvature)
+
+    @property
+    def spectral_curvature(self):
+        """Return the spectral curvature model (only for models with a
+        ``spectral_curvature`` term, see ``SpectralIndexCurvature``)."""
+        return self._spectral_property(
+            "beta", "spectral_curvature_distribution", 0, None, None
+        )
+
+    @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
         return self._spectral_property(
@@ -251,15 +271,24 @@ class SignalModel(Model):
                 n_copies = model.target.shape[0]
                 model = model.model
             if isinstance(model, MultiFrequencyModel):
-                if mfm_attr in ("alpha", "deviations"):
+                if mfm_attr == "beta" and model.beta is None:
+                    raise ValueError("the model has no spectral curvature.")
+                if mfm_attr in ("alpha", "beta"):
                     prop = getattr(model, mfm_attr)
+                elif mfm_attr == "deviations":
+                    # the deviations as they enter the model (without slope / curvature)
+                    prop = Model(
+                        model.projected_deviations,
+                        domain=model.deviations.domain,
+                        init=model.deviations.init,
+                    )
                 elif mfm_attr == "i0":
                     prop = MultiFrequencyModel(
                         model.i0, None, None, None, self.nonlinearity
                     )
                 else:
                     prop = MultiFrequencyModel(
-                        None, model.log_freq, model.alpha, model.deviations, None
+                        None, model.log_freq, model.alpha, model.deviations, None, beta=model.beta
                     )
             else:
                 prop = Model(
@@ -269,7 +298,7 @@ class SignalModel(Model):
                 )
             if n_copies > 1:
                 prop = VModel(prop, n_copies)
-            freq = np.ones((1,)) if mfm_attr in ("i0", "alpha") else self.freq
+            freq = np.ones((1,)) if mfm_attr in ("i0", "alpha", "beta") else self.freq
             sig = SignalModel(
                 self.grid, freq, prop, self.prefix, offset, nonlinearity, gaussian
             )

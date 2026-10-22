@@ -19,12 +19,13 @@ UBIK_KEYS = {
     "zero_mode",
     "spatial_amplitude",
     "spectral_index",
+    "spectral_curvature",
     "spectral_amplitude",
     "deviations",
     "nonlinearity",
     "ref_freq_index",
 }
-MF_KEYS = {"i0", "alpha", "deviations", "nonlinearity", "ref_freq_index"}
+MF_KEYS = {"i0", "alpha", "beta", "deviations", "nonlinearity", "ref_freq_index"}
 
 
 def spectral_model(
@@ -104,6 +105,7 @@ def spectral_ubik_model(
     spectral_index,
     spectral_amplitude=None,
     deviations=None,
+    spectral_curvature=None,
     nonlinearity=jnp.exp,
     ref_freq_index=None,
     n_copies=1,
@@ -129,6 +131,9 @@ def spectral_ubik_model(
         Spectral amplitude configuration. Default is None.
     deviations : dict, optional
         Deviations configuration. Default is None.
+    spectral_curvature : dict, optional
+        Spectral curvature configuration (``mean``, ``fluctuations``), see
+        ``SpectralIndexCurvature``. Default is None (no curvature term).
     nonlinearity : callable, optional
         Nonlinearity function. Default is ``jnp.exp``.
     ref_freq_index : int, optional
@@ -160,6 +165,7 @@ def spectral_ubik_model(
         spectral_index,
         spectral_amplitude_settings=spectral_amplitude,
         deviations_settings=deviations,
+        spectral_curvature_settings=spectral_curvature,
         nonlinearity=nonlinearity,
     )
 
@@ -176,6 +182,7 @@ def spectral_prior_model(
     freq=None,
     i0,
     alpha=None,
+    beta=None,
     deviations=None,
     nonlinearity=jnp.exp,
     ref_freq_index=None,
@@ -196,6 +203,9 @@ def spectral_prior_model(
         Prior model parameters for the reference frequency distribution.
     alpha : dict, optional
         Prior model parameters for the spectral index. Default is None.
+    beta : dict, optional
+        Prior model parameters for the spectral curvature (see
+        ``MultiFrequencyModel``). Default is None (no curvature term).
     deviations : dict, optional
         Spectral deviations configuration. Default is None.
     nonlinearity : callable, optional
@@ -228,6 +238,8 @@ def spectral_prior_model(
             raise ValueError("Need alpha parameters to build multi-frequency model.")
 
         alpha, _ = prior_model(f"{prefix}alpha ", grid, **alpha)
+        if beta:
+            beta, _ = prior_model(f"{prefix}beta ", grid, **beta)
 
         if deviations:
             deviations = build_frequency_deviations_model_with_degeneracies(
@@ -238,7 +250,7 @@ def spectral_prior_model(
                 prefix=f"{prefix}dev ",
             )
 
-        model = MultiFrequencyModel(i0, log_freq, alpha, deviations, nonlinearity)
+        model = MultiFrequencyModel(i0, log_freq, alpha, deviations, nonlinearity, beta=beta or None)
 
     if n_copies > 1:
         return VModel(model, n_copies)
@@ -247,47 +259,87 @@ def spectral_prior_model(
 
 
 class MultiFrequencyModel(Model):
-    """Model combining reference frequency, spectral index, and deviations.
+    r"""Model combining reference frequency, spectral index, curvature and deviations.
+
+    .. math::
+        \log S(\nu) = i_0 + \alpha\, u + \beta\, q(u) + \delta_\perp(u),
+
+    with the relative log-frequencies :math:`u = \log(\nu / \nu_\mathrm{ref})`
+    (``log_freq``) and :math:`q(u) = u^2 - (\sum u^3 / \sum u^2)\, u`, i.e.
+    :math:`u^2` orthogonalised against :math:`u` (as in
+    ``SpectralIndexCurvature``). The deviations are projected onto the
+    complement of :math:`u` (and of :math:`q` with a curvature), so they carry
+    no slope (curvature) that is degenerate with :math:`\alpha` (:math:`\beta`);
+    as both basis functions vanish at the reference frequency, :math:`i_0` stays
+    the reference-frequency map.
 
     Parameters
     ----------
     i0 : Model or None, optional
         Reference frequency distribution model. Default is None.
     log_freq : np.ndarray or None, optional
-        Log-frequencies array. Default is None.
+        Relative log-frequencies array. Default is None.
     alpha : Model or None, optional
         Spectral index model. Default is None.
     deviations : Model or None, optional
         Spectral deviations model. Default is None.
     nonlinearity : callable or None, optional
         Nonlinearity applied after summation. Default is ``jnp.exp``.
+    beta : Model or None, optional
+        Spectral curvature model (needs at least three frequencies). Default is
+        None.
     """
 
     def __init__(
-        self, i0=None, log_freq=None, alpha=None, deviations=None, nonlinearity=jnp.exp
+        self, i0=None, log_freq=None, alpha=None, deviations=None, nonlinearity=jnp.exp, beta=None
     ):
         check_type(i0, (Model, type(None)))
         check_type(log_freq, (np.ndarray, type(None)))
         check_type(alpha, (Model, type(None)))
+        check_type(beta, (Model, type(None)))
         check_type(deviations, (Model, type(None)))
         check_type(nonlinearity, (Callable, type(None)))
+        if beta is not None and (log_freq is None or log_freq.size < 3):
+            raise ValueError("A spectral curvature needs at least three frequencies.")
 
         self.shape = (
             i0.target.shape
             if i0
             else alpha.target.shape
             if alpha
+            else beta.target.shape
+            if beta
             else deviations.target.shape
         )
         self.i0 = i0
         self.log_freq = log_freq
         self.alpha = alpha
+        self.beta = beta
         self.deviations = deviations
         self.nonlinearity = nonlinearity
+        if log_freq is not None and log_freq.size > 1:
+            u = np.asarray(log_freq, dtype="float64")
+            self.curvature_basis = u**2 - np.sum(u**3) / np.sum(u**2) * u
+        else:
+            self.curvature_basis = None
         super().__init__(
-            domain=domain_tree((self.i0, self.alpha, self.deviations), error=False),
-            init=model_init((self.i0, self.alpha, self.deviations), error=False),
+            domain=domain_tree((self.i0, self.alpha, self.beta, self.deviations), error=False),
+            init=model_init((self.i0, self.alpha, self.beta, self.deviations), error=False),
         )
+
+    def _outer(self, basis, field):
+        return jnp.outer(basis, field).reshape(basis.shape + field.shape)
+
+    def projected_deviations(self, x):
+        """Deviations without their components along u (and q with a curvature)."""
+        dev = self.deviations(x)
+        if self.log_freq is None or self.log_freq.size < 2:
+            return dev
+        shp = (-1,) + (1,) * (dev.ndim - 1)
+        for b in ([self.log_freq, self.curvature_basis] if self.beta is not None else [self.log_freq]):
+            b = jnp.asarray(b).reshape(shp)
+            dev = dev - jnp.sum(dev * b, axis=0) / jnp.sum(b**2) * b
+        return dev
 
     def __call__(self, x):
         """Evaluate the multi-frequency model.
@@ -306,11 +358,11 @@ class MultiFrequencyModel(Model):
         if self.i0:
             res += self.i0(x)
         if self.alpha:
-            res += jnp.outer(self.log_freq, self.alpha(x)).reshape(
-                self.log_freq.shape + self.alpha.target.shape
-            )
+            res += self._outer(self.log_freq, self.alpha(x))
+        if self.beta:
+            res += self._outer(self.curvature_basis, self.beta(x))
         if self.deviations:
-            res += self.deviations(x)
+            res += self.projected_deviations(x)
         if self.nonlinearity:
             res = self.nonlinearity(res)
         return res

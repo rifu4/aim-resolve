@@ -183,6 +183,16 @@ class ComponentModel(Model):
         return self._spectral_property("spectral_index")
 
     @property
+    def has_spectral_curvature(self):
+        """Whether every component has a spectral curvature term."""
+        return all(m.has_spectral_curvature for m in self.models)
+
+    @property
+    def spectral_curvature(self):
+        """Return the spectral curvature model (all components need a curvature term)."""
+        return self._spectral_property("spectral_curvature")
+
+    @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
         return self._spectral_property("spectral_deviations")

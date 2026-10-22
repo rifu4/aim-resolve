@@ -181,6 +181,18 @@ class PointModel(Model):
         )
 
     @property
+    def has_spectral_curvature(self):
+        """Whether the point-source model has a spectral curvature term."""
+        return self.points.has_spectral_curvature
+
+    @property
+    def spectral_curvature(self):
+        """Return the spectral curvature model."""
+        return PointModel(
+            self.grid, np.ones((1,)), self.points.spectral_curvature, self.prefix
+        )
+
+    @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
         return PointModel(

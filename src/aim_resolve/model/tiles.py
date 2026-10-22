@@ -205,6 +205,18 @@ class TileModel(Model):
         )
 
     @property
+    def has_spectral_curvature(self):
+        """Whether the tile model has a spectral curvature term."""
+        return self.tiles.has_spectral_curvature
+
+    @property
+    def spectral_curvature(self):
+        """Return the spectral curvature model."""
+        return TileModel(
+            self.grid, np.ones((1,)), self.tiles.spectral_curvature, self.prefix, None
+        )
+
+    @property
     def spectral_deviations(self):
         """Return the spectral deviations model."""
         return TileModel(
