@@ -329,7 +329,12 @@ def fast_optimize_kl(
         kl_nm = "OPTIMIZE_KL"
         for _i in range(last_mn, get_at_nit(n_minor_iterations, i_mj)):
             logger.info(f"{kl_nm}: Starting {opt_vi_st.nit + 1:04d}")
-            samples, opt_vi_st = opt_vi.update(samples, opt_vi_st)
+            # hand the samples over without keeping a reference here: `update` draws new
+            # samples first, and the old ones (a full sample set from the second iteration
+            # on) can only be freed during the KL minimisation if nothing else holds them
+            samples_box = [samples]
+            del samples
+            samples, opt_vi_st = opt_vi.update(samples_box.pop(), opt_vi_st)
             kl_msg = opt_vi.get_status_message(samples, opt_vi_st, name=kl_nm)
             logger.info(mj_msg + kl_msg)
             if odir:
