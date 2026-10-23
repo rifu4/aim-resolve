@@ -2,8 +2,10 @@
 
 odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b
 base: base.yml
-file: 4_pre_3z_2.yml
-run: 2
+# start from the zoom stage with the new single-frequency (ubik) model: same parameters as params_mf,
+# so the frequency transition carries the sky over exactly
+file: 4_pre_3z_3.yml
+run: 3
 
 ---
 
@@ -44,16 +46,18 @@ data.6:
   fname: /scratch/users/rfuchs/data/eso_961-1503mhz.npz
   mode: radio
 
+# faster ramp as in the synthetic tests (runs/synth_05deg_comp/sf15_mf20, base_opt_synth_mf): more CG and KL
+# steps from the first iteration on, 20 multi-frequency iterations
 base_opt.6:
-  n_major_iterations: 30
+  n_major_iterations: 20
   n_minor_iterations: 1
   n_samples: 4
   draw_linear_kwargs:
     cg_name: SL
     cg_kwargs:
       absdelta: 1.e-11
-      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 2*[1000]
-      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 2*[1000] + [2000]
+      miniter: 2*[200] + 3*[500] + [1000]
+      maxiter: 2*[200] + 3*[500] + [1000]
   nonlinearly_update_kwargs:
     minimize_kwargs:
       name: SN
@@ -69,7 +73,32 @@ base_opt.6:
       cg_kwargs:
         name: null
         miniter: 2*[5] + 2*[10] + [20]
-      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + [100]
-      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + [200]
+      miniter: 5*[50] + [100]
+      maxiter: 5*[50] + [200]
       energy_reduction_factor: 1.e-3
   sample_mode: linear_resample
+
+# spectral model with explicit curvature (ln S = ln I0 + alpha u + beta q(u) + delta), merged into the
+# generated sky sections of the multi-frequency stage: beta field for the diffuse components and tiles,
+# beta per point source (priors 0 +- 0.5)
+sky_bg.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_o0.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_o1.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_o2.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_o3.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_t0.6:
+  params:
+    spectral_curvature: {mean: [0.0, 0.5], fluctuations: [1.0, 0.5]}
+sky_p0.6:
+  params:
+    beta: {mean: 0.0, std: 0.5}
