@@ -8,7 +8,7 @@ from ..optimize.samples import domain_tree, model_init
 from .grid import SignalGrid
 from .map import map_signal
 from .prior import prior_model
-from .signal import SignalModel
+from .signal import SignalModel, log_twin
 from .spectral import spectral_model
 from .util import check_type, extend_shape, to_shape
 
@@ -135,7 +135,8 @@ class TileModel(Model):
                 f"{prefix} gm ", tile_grid, tile_grid.n_copies, **gaussian
             )
 
-        tiles = SignalModel(tile_grid, freq, model, prefix, offset, nonlinearity)
+        log_model = log_twin(f"{prefix} ", model_grid, freq, nonlinearity, tile_grid.n_copies, **params)
+        tiles = SignalModel(tile_grid, freq, model, prefix, offset, nonlinearity, log_model=log_model)
 
         return cls(grid, freq, tiles, prefix, gaussian)
 
@@ -180,6 +181,15 @@ class TileModel(Model):
         )
         self.tiles.offset = to_shape(offset, offset_shape, "float64")
         return
+
+    def log(self, x):
+        """Logarithm of every tile in its own array, ``(n_copies, ...)`` (no mapping);
+        see ``SignalModel.log``. The tile gaussian enters as ``log`` (added)."""
+        res = self.tiles.log(x)
+        if self.gaussian:
+            gsm = jnp.log(jnp.maximum(self.gaussian(x), jnp.finfo(jnp.float64).tiny))
+            res = res + (gsm[:, None] if res.ndim == gsm.ndim + 1 else gsm)
+        return res
 
     def copy(self):
         """Return a shallow copy of the tile model."""

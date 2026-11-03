@@ -18,6 +18,21 @@ from .spectral import MultiFrequencyModel, spectral_model
 from .util import check_type, extend_shape, to_shape
 
 
+def identity(x):
+    """Identity nonlinearity (log twin of a model with an exp nonlinearity)."""
+    return x
+
+
+def log_twin(prefix, grid, freq, nonlinearity, n_copies=1, **params):
+    """The spectral model with the identity instead of the exp nonlinearity (same parameters).
+
+    Returns None unless the nonlinearity is ``jnp.exp``: then ``log(model(x)) == twin(x)``.
+    """
+    if nonlinearity is not jnp.exp:
+        return None
+    return spectral_model(prefix, grid, freq, identity, n_copies, **params)
+
+
 class SignalModel(Model):
     """Signal model combining spatial and spectral components.
 
@@ -37,6 +52,7 @@ class SignalModel(Model):
         offset=0,
         nonlinearity=jnp.exp,
         gaussian=None,
+        log_model=None,
     ):
         check_type(grid, (SignalGrid, PointGrid))
         check_type(freq, np.ndarray)
@@ -53,6 +69,7 @@ class SignalModel(Model):
         self.offset = offset
         self.nonlinearity = nonlinearity
         self.gaussian = gaussian
+        self.log_model = log_model  # spectral model without the exp nonlinearity (see `log`)
         self.map_function = lambda x: x
         super().__init__(
             domain=Vector(domain_tree((self.model, self.gaussian), error=False)),
@@ -141,13 +158,39 @@ class SignalModel(Model):
             nonlinearity = getattr(jnp, nonlinearity, None)
 
         model = spectral_model(f"{prefix} ", grid, freq, nonlinearity, **params)
+        log_model = log_twin(f"{prefix} ", grid, freq, nonlinearity, **params)
 
         offset = to_shape(offset, (), "float64")
 
         if gaussian is not None and isinstance(grid, SignalGrid):
             gaussian, _ = prior_model(f"{prefix} gm ", grid, **gaussian)
 
-        return cls(grid, freq, model, prefix, offset, nonlinearity, gaussian)
+        return cls(grid, freq, model, prefix, offset, nonlinearity, gaussian, log_model)
+
+    def log(self, x):
+        """Logarithm of the signal on its own grid (no mask, no mapping).
+
+        With the exp nonlinearity this is computed without the exponential,
+        ``log S = field + offset (+ log gaussian)``, so it stays finite and keeps its
+        gradient where the signal itself is tiny. Otherwise it is ``log`` of the signal.
+
+        Parameters
+        ----------
+        x : dict
+            Latent parameter dictionary.
+
+        Returns
+        -------
+        jnp.ndarray
+            ``log`` of the signal, of the shape of ``self(x)``.
+        """
+        if self.log_model is None:
+            return jnp.log(jnp.maximum(self(x), jnp.finfo(jnp.float64).tiny))
+        res = self.log_model(x) + self.offset
+        if self.gaussian:
+            gsm = jnp.log(jnp.maximum(self.gaussian(x), jnp.finfo(jnp.float64).tiny))
+            res = res + (gsm[None] if res.ndim == gsm.ndim + 1 else gsm)
+        return res
 
     def set_out_grid(self, out_grid):
         """Set the output grid and configure the map function.
@@ -188,6 +231,7 @@ class SignalModel(Model):
             self.offset,
             self.nonlinearity,
             self.gaussian,
+            self.log_model,
         )
 
     @property

@@ -6,7 +6,7 @@ from nifty.re import Model
 
 from .grid import PointGrid, SignalGrid
 from .map import map_signal
-from .signal import SignalModel
+from .signal import SignalModel, log_twin
 from .spectral import spectral_model
 from .util import check_type, extend_shape, to_shape
 
@@ -114,7 +114,8 @@ class PointModel(Model):
         offset_shape = extend_shape(point_grid.n_copies, freq, (1, 1), offset=True)
         offset = to_shape(offset, offset_shape, "float64")
 
-        points = SignalModel(point_grid, freq, model, prefix, offset, nonlinearity)
+        log_model = log_twin(f"{prefix} ", model_grid, freq, nonlinearity, point_grid.n_copies, **params)
+        points = SignalModel(point_grid, freq, model, prefix, offset, nonlinearity, log_model=log_model)
 
         return cls(grid, freq, points, prefix)
 
@@ -161,6 +162,11 @@ class PointModel(Model):
         )
         self.points.offset = to_shape(offset, offset_shape, "float64")
         return
+
+    def log(self, x):
+        """Logarithm of every point source in its own array, ``(n_copies, ...)`` (no
+        mapping); see ``SignalModel.log``."""
+        return self.points.log(x)
 
     def copy(self):
         """Return a shallow copy of the point model."""

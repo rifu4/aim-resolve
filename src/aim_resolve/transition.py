@@ -9,13 +9,16 @@ import os
 import pickle
 from functools import partial
 
+import jax
+import jax.numpy as jnp
+import nifty.re as jft
 import numpy as np
 from jax import random
 from nifty.re import Model, Vector, random_like
 
 from .mask import masks_from_model, masks_to_boxes, remove_freq_axis
 from .model.components import ComponentModel
-from .model.map import map_signal
+from .model.map import map_signal, upsample
 from .model.noise import NoiseModel
 from .model.points import PointModel
 from .model.signal import SignalModel
@@ -407,6 +410,9 @@ def transition_zoom(
     odir=None,
     noise=None,
     plot_dct=None,
+    fit="kl",
+    log_map=None,
+    own_kl=None,
     **kwargs,
 ):
     """Transfer parameters to a higher-resolution (zoomed) grid.
@@ -435,6 +441,26 @@ def transition_zoom(
         ``max_std=1e-5``.
     plot_dct : dict, optional
         Plotting parameters. Default is ``{'norm': 'log'}``.
+    fit : {'kl', 'own_kl', 'log_map', 'log_kl'}, optional
+        How the components on a new grid are fitted to the old reconstruction:
+        ``'kl'`` (default): KL fit (``opt_dct``) of the new component, mapped onto the
+        full sky grid, to the old one; ``'own_kl'``: as ``'kl'``, but tiles and point
+        sources in their own space, per copy (see ``own_kl_fit``); ``'log_map'``: MAP fit in log space of every
+        component in its own space, per copy (each tile and each point source in its
+        own array, no superposition; see ``log_map_fit``); ``'log_kl'``: the
+        same log-space fit of every component in its own space, but optimised with the
+        KL (``opt_dct``, with samples) instead of MAP (see ``log_kl_fit``). Components on
+        an unchanged grid with matching parameters are copied in all cases.
+    log_map : dict, optional
+        Keyword arguments of ``log_map_fit`` for ``fit='log_map'`` (``sigma``,
+        ``rel``, ``maxiter``, ``cg_maxiter``), of ``log_kl_fit`` for ``fit='log_kl'``
+        (``sigma``, ``rel``).
+    own_kl : dict, optional
+        Start help of ``own_kl_fit`` for ``fit='own_kl'``: ``level`` (default True) and
+        ``taper`` (default False) as in ``own_kl_fit``, ``taper_rel`` for the tiles (default
+        1, the brightest pixel), and ``signals``: prefixes of signal components (e.g.
+        ``[o0, o1]``) that are also fitted with ``own_kl_fit`` (default none), with
+        ``signal_taper_rel`` (default 0.01).
 
     Returns
     -------
@@ -459,12 +485,61 @@ def transition_zoom(
     ptree = {}
     keys = list(random.split(key, len(sky_new.models) + 1))
 
+    if fit not in ("kl", "own_kl", "log_map", "log_kl"):
+        raise ValueError(f"Unknown fit `{fit}` of the zoom transition, use `kl`, `own_kl`, `log_map` or `log_kl`.")
+    log_map = {} if log_map is None else dict(log_map)
+    own_kl = {} if own_kl is None else dict(own_kl)
+    own_signals = {str(p) for p in own_kl.pop("signals", ())}
+    taper_rel = dict(tiles=own_kl.pop("taper_rel", 1.0), signals=own_kl.pop("signal_taper_rel", 0.01))
+
     # copy over matching model components
     for sky_oi, sky_ni in zip(sky_old.models, sky_new.models, strict=False):
         if sky_ni.grid not in sky_oi.grid and sky_oi.grid in sky_ni.grid:
             raise ValueError("Old and new sky model components have to match.")
         rec_oi = map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
-        if sky_ni.grid == sky_oi.grid:
+        copied = {
+            k.replace(sky_oi.prefix, sky_ni.prefix)
+            for k in domain_keys(samples)
+            if k.startswith(sky_oi.prefix)
+        }
+        same_params = copied == set(domain_keys(sky_ni))
+        own_signal = isinstance(sky_ni, SignalModel) and sky_ni.prefix.split(".")[0] in own_signals
+        own = fit == "own_kl" and (isinstance(sky_ni, (TileModel, PointModel)) or own_signal)
+        if own and not (sky_ni.grid == sky_oi.grid and same_params):
+            data_ni = own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
+            print(f"zoom transition: KL fit of {sky_ni.prefix} in its own space {data_ni.shape}")
+            pos_ci = own_kl_fit(
+                keys.pop(),
+                sky_ni,
+                data_ni,
+                opt_dct,
+                max_std=noise.get("max_std", 1e-5),
+                taper_rel=taper_rel["signals" if own_signal else "tiles"],
+                **own_kl,
+            )
+            pos_ci = optimize_and_plot(  # plot only (no opt_dct)
+                key=key,
+                sky=sky_ni,
+                data=rec_oi,
+                pos=pos_ci,
+                plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+            )
+        elif fit in ("log_map", "log_kl") and not (sky_ni.grid == sky_oi.grid and same_params):
+            data_ni = own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
+            how = "MAP" if fit == "log_map" else "KL"
+            print(f"zoom transition: log-space {how} fit of {sky_ni.prefix} in its own space {data_ni.shape}")
+            if fit == "log_map":
+                pos_ci = log_map_fit(keys.pop(), sky_ni, data_ni, **log_map)
+            else:
+                pos_ci = log_kl_fit(keys.pop(), sky_ni, data_ni, opt_dct, **log_map)
+            pos_ci = optimize_and_plot(  # plot only (no opt_dct)
+                key=key,
+                sky=sky_ni,
+                data=rec_oi,
+                pos=pos_ci,
+                plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+            )
+        elif sky_ni.grid == sky_oi.grid:
             pos_ci = {
                 k.replace(sky_oi.prefix, sky_ni.prefix): v
                 for k, v in domain_tree(samples).items()
@@ -520,6 +595,362 @@ def transition_zoom(
     samples_new = MySamples(pos=pos_new, samples=None, keys=None)
 
     return samples_new, None
+
+
+def component_own(model, x):
+    """A sky component in its own space: tiles and point sources per copy, ``(n_copies, ...)``,
+    without the mapping onto the sky grid; other components on their own grid."""
+    if isinstance(model, (TileModel, PointModel)):
+        return model(x, map=False)
+    return model(x)
+
+
+def own_to_new(old, new, values):
+    """Map a component, given in its own space (``component_own``), from the old to the
+    new (zoomed) component's own space.
+
+    Signal components are mapped with ``map_signal``; tiles are zoomed per tile (same
+    tile centres, integer resolution ratio); every refined point source takes the value
+    of the old point source in whose coarse pixel it lies.
+    """
+    values = np.asarray(values)
+    if isinstance(new, TileModel):
+        check_type(old, TileModel)
+        go, gn = old.tiles.grid, new.tiles.grid
+        if go.n_copies != gn.n_copies:
+            raise ValueError("The tiles of the old and new model have to match.")
+        ratio = gn.fac / go.fac
+        if ratio < 1 or not np.isclose(ratio, round(ratio)):
+            raise ValueError(f"Tiles can only be zoomed by an integer factor, got {ratio}.")
+        res = upsample(values, int(round(ratio)))
+        if res.shape[-2:] != tuple(gn.shape[-2:]):
+            raise ValueError(f"Zoomed old tiles {res.shape} do not match the new tiles {gn.shape}.")
+        return res
+    if isinstance(new, PointModel):
+        check_type(old, PointModel)
+        co = np.asarray(old.points.grid.coos).reshape(-1, 2)
+        cn = np.asarray(new.points.grid.coos).reshape(-1, 2)
+        parent = {tuple(c): i for i, c in enumerate(np.floor(co).astype(int).tolist())}
+        try:
+            idx = np.array([parent[tuple(c)] for c in np.floor(cn).astype(int).tolist()])
+        except KeyError as e:
+            raise ValueError(f"A new point source has no old point source in its coarse pixel {e}.") from e
+        return values[idx]
+    return np.asarray(map_signal(old.grid, new.grid)(values))
+
+
+def _log_target(model, data, rel, floor=False):
+    """Log data and log model of ``log_map_fit`` / ``log_kl_fit``, with the threshold ``rel`` times
+    the maximum (per copy for tiles and point sources). ``floor=False``: only pixels above the
+    threshold are kept (mask). ``floor=True``: all pixels, with the threshold ``f`` added to data
+    and model, ``log(S + f)`` against ``log(d + f)``: above ``f`` as before, below ``f`` a model
+    brighter than ``f`` is penalised, a fainter one is free (no flux is added)."""
+    data = np.asarray(data, dtype="float64")
+    shape = np.asarray(jax.eval_shape(model.log, model.init(random.PRNGKey(0))).shape)
+    if tuple(shape) != data.shape:
+        raise ValueError(f"The data {data.shape} do not match the component's own space {tuple(shape)}.")
+    if isinstance(model, (TileModel, PointModel)):
+        dmax = data.reshape(data.shape[0], -1).max(axis=1).reshape((-1,) + (1,) * (data.ndim - 1))
+    else:
+        dmax = data.max()
+    if floor:
+        log_f = jnp.asarray(np.log(np.broadcast_to(rel * dmax, data.shape)))
+        log_d = jnp.logaddexp(jnp.asarray(np.log(np.maximum(data, np.finfo(np.float64).tiny))), log_f)
+        return log_d, Model(lambda x: jnp.logaddexp(model.log(x), log_f), domain=model.domain, init=model.init)
+    mask = jnp.asarray(data > rel * dmax, dtype="float64")
+    log_d = jnp.asarray(np.log(np.maximum(data, np.finfo(np.float64).tiny))) * mask
+    return log_d, Model(lambda x: model.log(x) * mask, domain=model.domain, init=model.init)
+
+
+def _per_copy(model, a):
+    """``a`` as ``(n_copies, -1)``: per tile / point source, one copy for other components."""
+    a = np.asarray(a, dtype="float64")
+    return a.reshape(a.shape[0] if isinstance(model, (TileModel, PointModel)) else 1, -1)
+
+
+def start_taper(model, data, pos, frac=0.5, rel=1.0, steps=np.arange(31.0)):
+    """Widen the Gaussian taper at the start until it is at least ``frac`` of its maximum at every
+    pixel of the target above ``rel`` times its maximum (default: the brightest pixel), per tile
+    for tiles: an off-centre source is visible from the start. The excitations of ``cov_x`` and
+    ``cov_y`` are raised together in ``steps``; the prior is unchanged. Returns ``pos``
+    unchanged if the model has no taper.
+    """
+    gm = getattr(model, "gaussian", None)
+    keys = [k for k in pos.tree if k.endswith("cov_x") or k.endswith("cov_y")]
+    if gm is None or len(keys) != 2:
+        return pos
+    d = _per_copy(model, data)
+    n = d.shape[0]
+    src = d >= rel * d.max(axis=1, keepdims=True)
+    tree = dict(pos.tree)
+    base = {k: np.asarray(tree[k]) for k in keys}
+    best = np.full(n, steps[-1])
+    for e in steps[::-1]:  # smallest step that reaches frac, per copy
+        g = _per_copy(model, gm(Vector(dict(tree, **{k: base[k] + e for k in keys}))))
+        g = g / g.max(axis=1, keepdims=True)
+        reach = np.where(src, g, np.inf).min(axis=1) >= frac
+        best = np.where(reach, e, best)
+    for k in keys:
+        tree[k] = jnp.asarray(base[k] + best.reshape(base[k].shape))
+    return Vector(tree)
+
+
+def start_level(key, model, data, pos=None, factor=0.01, clip=10.0):
+    """Start position for the fit of tiles or point sources to ``data`` (own space, per copy)
+    with the flux of every copy at the level of its target.
+
+    The zero mode of every copy (domain key ending in ``zeromode``) is shifted such that
+    ``sum(model)`` equals ``sum(data)`` per copy; the change of ``log(sum(model))`` per unit
+    zero mode is measured, not assumed. A copy that starts far below its target has a
+    vanishing gradient in a linear-space fit (``d S / d x = S``) and is never fitted.
+
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Key of the random start (``factor`` times a prior draw) if ``pos`` is None.
+    model : TileModel or PointModel
+        The component.
+    data : array-like
+        Target in the component's own space, ``(n_copies, ...)``.
+    pos : Vector, optional
+        Start position to shift. Default is None.
+    factor : float, optional
+        Scale of the random start. Default is 0.01.
+    clip : float, optional
+        Bound of the zero-mode excitations. Default is 10.
+
+    Returns
+    -------
+    Vector
+        The start position (unchanged if the model has no zero mode).
+    """
+    if pos is None:
+        pos = Vector(jax.tree_util.tree_map(lambda a: factor * a, dict(model.init(key))))
+    elif not isinstance(pos, Vector):
+        pos = Vector(dict(pos))
+    zm = [k for k in pos.tree if k.endswith("zeromode")]
+    if len(zm) != 1:
+        return pos
+    zm = zm[0]
+
+    def log_flux(x):
+        return np.log(np.maximum(_per_copy(model, component_own(model, x)).sum(axis=1), 1e-300))
+
+    tree = dict(pos.tree)
+    step = dict(tree, **{zm: tree[zm] + 1.0})
+    slope = log_flux(Vector(step)) - log_flux(pos)
+    target = np.log(np.maximum(_per_copy(model, data).sum(axis=1), 1e-300))
+    shift = np.where(slope > 0, (target - log_flux(pos)) / np.where(slope > 0, slope, 1.0), 0.0)
+    tree[zm] = jnp.clip(tree[zm] + shift.reshape(np.shape(tree[zm])), -clip, clip)
+    return Vector(tree)
+
+
+def own_kl_fit(
+    key, model, data, opt_dct, pos=None, max_std=1e-5, level=True, taper=False, taper_rel=1.0, callback=None
+):
+    """KL fit of tiles or point sources to ``data`` in their own space, per copy (also usable for a
+    signal component on its own grid, one copy).
+
+    The KL fit of the zoom transition (``fit='kl'``: Gaussian likelihood with noise std
+    ``max_std`` times the maximum, one noise realisation added to the data, schedule
+    ``opt_dct``), but on ``model(x, map=False)``, shape ``(n_copies, ...)``, instead of the
+    full sky grid, and with the maximum of every copy: no superposition of tiles and the
+    same relative weighting for faint and bright tiles.
+
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Key of the noise realisation and the KL optimisation.
+    model : TileModel or PointModel
+        The component.
+    data : array-like
+        Target in the component's own space (``component_own``).
+    opt_dct : dict
+        Optimisation schedule of ``optimize_kl``.
+    pos : Vector, optional
+        Start position. Default is None (``optimize_kl`` default).
+    max_std : float, optional
+        Noise std relative to the maximum of every copy. Default is 1e-5.
+    level : bool, optional
+        Start with the flux of every copy at its target (``start_level``). Default is True.
+    taper : bool, optional
+        Start with the taper (of every tile) wide enough for the target (``start_taper``,
+        before the flux level). Default is False.
+    taper_rel : float, optional
+        ``rel`` of ``start_taper``: the taper covers the pixels above ``taper_rel`` times the
+        maximum. Default is 1 (the brightest pixel).
+    callback : callable, optional
+        Passed to ``optimize_kl`` (``callback(samples, opt_state)``). Default is None.
+
+    Returns
+    -------
+    Vector
+        The fitted position (latent mean).
+    """
+    if not isinstance(model, (TileModel, PointModel, SignalModel)):
+        raise TypeError(f"own_kl_fit fits tiles, point sources and signal components, got {type(model).__name__}.")
+    data = np.asarray(data, dtype="float64")
+    shape = jax.eval_shape(partial(component_own, model), model.init(random.PRNGKey(0))).shape
+    if tuple(shape) != data.shape:
+        raise ValueError(f"The data {data.shape} do not match the component's own space {tuple(shape)}.")
+    dmax = _per_copy(model, data).max(axis=1)
+    noise_std = max_std * np.broadcast_to(dmax.reshape((-1,) + (1,) * (data.ndim - 1)) if dmax.size > 1 else dmax[0], data.shape)
+    k_n, k_o, k_p = random.split(key, 3)
+    if taper:
+        if pos is None:
+            pos = Vector(jax.tree_util.tree_map(lambda a: 0.01 * a, dict(model.init(k_p))))
+        pos = start_taper(model, data, pos, rel=taper_rel)
+    if level:
+        pos = start_level(k_p, model, data, pos)
+    data = data + noise_std * np.asarray(random.normal(k_n, data.shape))
+    lh_dct = dict(
+        data=data,
+        sky_response=Model(partial(component_own, model), domain=model.domain, init=model.init),
+        noise_cov_inv=None,
+        noise_std_inv=jnp.asarray(1.0 / noise_std),
+        noise_model=None,
+    )
+    samples, _ = optimize_kl(
+        lh_dct, key=k_o, position_or_samples=pos, callback=callback, **callable_optimize_dict(opt_dct)
+    )
+    return samples.pos
+
+
+def log_kl_fit(key, model, data, opt_dct, pos=None, sigma=0.1, rel=1e-4, floor=True):
+    """KL fit of a sky component to ``data`` in log space, in the component's own space.
+
+    The likelihood of ``log_map_fit`` (Gaussian in ``log S`` with std ``sigma``, threshold
+    ``rel`` times the maximum, per copy for tiles and point sources), optimised with
+    ``optimize_kl`` and the schedule ``opt_dct`` (with samples) instead of MAP. The samples
+    keep the amplitudes of the correlated fields in check. By default all pixels enter with
+    the threshold as floor (``floor``): with a mask, the samples and the amplitude are free
+    outside it and the KL puts flux there.
+
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Key of the KL optimisation.
+    model : SignalModel, TileModel or PointModel
+        The component; ``model.log(x)`` must have the shape of ``data``.
+    data : array-like
+        Target in the component's own space (``component_own``), positive.
+    opt_dct : dict
+        Optimisation schedule of ``optimize_kl``.
+    pos : Vector, optional
+        Start position. Default is None (``optimize_kl`` default).
+    sigma : float, optional
+        Standard deviation in log space (relative deviation). Default is 0.1.
+    rel : float, optional
+        Threshold relative to the maximum. Default is 1e-4.
+    floor : bool, optional
+        Fit ``log(S + f)`` to ``log(d + f)`` on all pixels, ``f = rel * max`` (default),
+        instead of leaving out the pixels below ``f``.
+
+    Returns
+    -------
+    Vector
+        The fitted position (latent mean).
+    """
+    log_d, log_s = _log_target(model, data, rel, floor)
+    lh_dct = dict(data=log_d, sky_response=log_s, noise_cov_inv=None, noise_std_inv=1.0 / sigma, noise_model=None)
+    samples, _ = optimize_kl(lh_dct, key=key, position_or_samples=pos, **callable_optimize_dict(opt_dct))
+    return samples.pos
+
+
+HYPER_KEYS = ("fluctuations", "flexibility", "asperity", "sigma")
+
+
+def log_map_fit(
+    key,
+    model,
+    data,
+    pos=None,
+    sigma=0.1,
+    rel=1e-4,
+    maxiter=100,
+    cg_maxiter=200,
+    miniter=10,
+    xtol=1e-8,
+    hyper_std=0.3,
+    hyper_keys=HYPER_KEYS,
+):
+    """MAP fit of a sky component to ``data`` in log space, in the component's own space.
+
+    Minimises ``0.5 * sum_mask ((log S(x) - log data) / sigma)^2 + 0.5 * |x / s|^2`` with
+    Newton-CG (Gauss-Newton metric), where ``log S`` is ``model.log`` (without the
+    exponential, see ``SignalModel.log``). Relative deviations count the same for faint
+    and bright structure. Only pixels above ``rel`` times the maximum enter the
+    likelihood, per copy for tiles and point sources, otherwise of the whole component.
+
+    The prior std ``s`` is 1 except for the amplitude hyperparameters (``hyper_keys``),
+    where it is ``hyper_std``. A MAP fit trades excitations for amplitude (amplitude
+    times xi is degenerate, a large amplitude with small xi is cheaper under the prior);
+    the samples of the following KL then scale with that amplitude and the sky overflows.
+    The tighter prior keeps the amplitudes near the prior median.
+
+    Parameters
+    ----------
+    key : jax.random.PRNGKey
+        Key for the start position (``0.1`` times a prior draw) if ``pos`` is None.
+    model : SignalModel, TileModel or PointModel
+        The component; ``model.log(x)`` must have the shape of ``data``.
+    data : array-like
+        Target in the component's own space (``component_own``), positive.
+    pos : Vector, optional
+        Start position.
+    sigma : float, optional
+        Standard deviation in log space (relative deviation). Default is 0.1.
+    rel : float, optional
+        Pixels below ``rel`` times the maximum are left out. Default is 1e-4.
+    maxiter : int, optional
+        Maximum number of Newton steps. Default is 100.
+    cg_maxiter : int, optional
+        Maximum number of CG steps per Newton step. Default is 200.
+    miniter : int, optional
+        Minimum number of Newton steps. Default is 10.
+    xtol : float, optional
+        Convergence threshold of the Newton step per parameter (Newton-CG stops when
+        the step norm is below ``xtol`` times the number of parameters). Default is
+        1e-8; NIFTy's default of 1e-5 stops large components (e.g. a 3072^2
+        background, ~1e7 parameters) after the first step.
+    hyper_std : float, optional
+        Prior std of the excitations of the amplitude hyperparameters. Default is 0.3;
+        1 is the standard prior.
+    hyper_keys : tuple of str, optional
+        Domain keys whose last word is in ``hyper_keys`` get the prior std ``hyper_std``.
+        Default: ``fluctuations``, ``flexibility``, ``asperity`` (correlated fields) and
+        ``sigma`` (spectral deviations).
+
+    Returns
+    -------
+    Vector
+        The fitted position.
+    """
+    log_d, log_s = _log_target(model, data, rel)
+    lh = jft.Gaussian(log_d, noise_std_inv=lambda r: r / sigma).amend(log_s)
+
+    hyper = set(hyper_keys)
+    prec = Vector({k: 1.0 / hyper_std**2 if k.split()[-1] in hyper else 1.0 for k in model.domain})
+
+    def energy(x):
+        return lh(x) + 0.5 * jft.vdot(x, prec * x)
+
+    def hessp(x, v):  # Gauss-Newton metric of the likelihood + prior precision
+        return lh.metric(x, v) + prec * v
+
+    if pos is None:
+        pos = Vector(jax.tree_util.tree_map(lambda a: 0.1 * a, dict(model.init(key))))
+    return jft.newton_cg(
+        fun_and_grad=jax.jit(jax.value_and_grad(energy)),
+        x0=pos,
+        hessp=jax.jit(hessp),
+        maxiter=maxiter,
+        miniter=min(miniter, maxiter),
+        xtol=xtol,
+        name=f"LOGMAP {getattr(model, 'prefix', '')}".strip(),
+        cg_kwargs=dict(name=None, maxiter=cg_maxiter),
+        energy_reduction_factor=1e-3,
+    )
 
 
 def optimize_and_plot(
