@@ -57,7 +57,7 @@ class ComponentModel(Model):
         return res
 
     @classmethod
-    def build(cls, *, background, prefix="cm", **components):
+    def build(cls, *, background, prefix="cm", grid=None, **components):
         """
         Build a ComponentModel from the given parameters.
 
@@ -67,6 +67,10 @@ class ComponentModel(Model):
             Model for the background signal.
         prefix : str, optional
             Prefix for the model, by default 'cm'.
+        grid : dict, optional
+            Signal grid parameters of the output grid (see ``SignalGrid``), e.g.
+            the full field for a single object as the only component. By
+            default the grid of the background.
         components : keyword arguments
             Key/Value pairs containing the component models ({'key': model}).
         """
@@ -85,7 +89,9 @@ class ComponentModel(Model):
                 )
             # TODO: ensure that ref_freq_indices are the same
 
-        if len(models) == 1:
+        if grid is not None:
+            grid = SignalGrid.build(**grid)
+        elif len(models) == 1:
             grid = background.grid
         else:
             factor = max([m.grid.factor for m in models])
