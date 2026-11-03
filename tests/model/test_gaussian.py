@@ -118,3 +118,59 @@ class TestGaussianModel:
             n_copies=3,
         )
         assert isinstance(model, VModel)
+
+
+class TestCovPrior:
+    def _model(self, cov_prior):
+        return gaussian_model(
+            prefix="gm ",
+            shape=np.array([16, 16]),
+            distances=np.array([1.0, 1.0]),
+            cov_x=(0.3, 0.1),
+            cov_y=(0.3, 0.1),
+            cov_prior=cov_prior,
+        )
+
+    def test_normal_collapses_lognormal_stays_positive(self):
+        """At -4 sigma the normal width (0.3 - 0.4) has crossed 0, the lognormal one is still positive."""
+        from aim_resolve.model.gaussian import lognormal_prior, normal_prior
+
+        assert normal_prior(0.3, 0.1)(-4.0) < 0
+        assert 0 < lognormal_prior(0.3, 0.1)(-4.0) < 0.3
+        assert lognormal_prior(0.3, 0.1)(-10.0) > 0
+
+    def test_lognormal_mean_and_std(self):
+        from aim_resolve.model.gaussian import lognormal_prior
+
+        v = np.asarray(lognormal_prior(0.3, 0.1)(jax.random.normal(jax.random.PRNGKey(1), (200000,))))
+        np.testing.assert_allclose([v.mean(), v.std()], [0.3, 0.1], rtol=0.02)
+
+    def test_lognormal_model_is_finite_at_extreme_excitations(self):
+        model = self._model("lognormal")
+        x = {k: jnp.asarray(-8.0) for k in model.domain}
+        result = np.asarray(model(x))
+        assert np.all(np.isfinite(result)) and result.max() > 0
+
+    def test_default_is_normal(self):
+        a = self._model("normal")
+        b = gaussian_model(prefix="gm ", shape=np.array([16, 16]), distances=np.array([1.0, 1.0]),
+                           cov_x=(0.3, 0.1), cov_y=(0.3, 0.1))
+        x = a.init(jax.random.PRNGKey(2))
+        np.testing.assert_array_equal(a(x), b(x))
+
+    def test_unknown_prior_raises(self):
+        with pytest.raises(ValueError, match="cov_prior"):
+            self._model("uniform")
+
+    def test_tile_config_accepts_cov_prior(self):
+        from aim_resolve.model.tiles import TileModel
+
+        tm = TileModel.build(
+            grid=dict(space=[32, 32], fov=[0.02, 0.02]),
+            tile_grid=dict(space=[8, 8], center=[[-8, -8], [8, 8]], n_copies=2, fov=[0.005, 0.005]),
+            params=dict(zero_mode=[1, 1], spatial_amplitude=dict(fluctuations=[1, 0.5], loglogavgslope=[-3, 0.5],
+                                                                 flexibility=[1.2, 0.4], asperity=[0.2, 0.2])),
+            prefix="t0", offset=[9.0, 7.0], gaussian=dict(cov_x=[0.3, 0.1], cov_y=[0.3, 0.1], cov_prior="lognormal"),
+        )
+        x = {k: (jnp.full(v.shape, -8.0) if "gm" in k else jnp.zeros(v.shape)) for k, v in tm.domain.tree.items()}
+        assert np.all(np.isfinite(np.asarray(tm(x, map=False))))

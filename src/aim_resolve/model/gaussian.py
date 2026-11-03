@@ -25,6 +25,7 @@ def gaussian_model(
     scale: tuple | float = 1.0,
     theta: tuple | float = 0.0,
     n_copies: int = 1,
+    cov_prior: str = "normal",
 ) -> Model:
     """
     Define a Gaussian model with the given parameters.
@@ -51,6 +52,10 @@ def gaussian_model(
         The angle of the field. Default is 0.
     n_copies : int, optional
         The number of copies of the model. Default is 1.
+    cov_prior : {'normal', 'lognormal'}, optional
+        Prior of ``cov_x`` and ``cov_y`` given as ``(mean, std)``. ``'normal'`` (default)
+        reaches 0 at ``mean / std`` sigma, below which the taper collapses; ``'lognormal'``
+        (same mean and std) stays positive.
 
     Returns
     -------
@@ -58,9 +63,12 @@ def gaussian_model(
         A NIFTy Model (or VModel if n_copies > 1) representing the
         Gaussian spatial profile.
     """
+    priors = {"normal": normal_prior, "lognormal": lognormal_prior}
+    if cov_prior not in priors:
+        raise ValueError(f"Unknown cov_prior `{cov_prior}`, use `normal` or `lognormal`.")
     ptree = {}
-    cov_x = prior_or_const(cov_x, ptree, prefix + "cov_x", normal_prior)
-    cov_y = prior_or_const(cov_y, ptree, prefix + "cov_y", normal_prior)
+    cov_x = prior_or_const(cov_x, ptree, prefix + "cov_x", priors[cov_prior])
+    cov_y = prior_or_const(cov_y, ptree, prefix + "cov_y", priors[cov_prior])
     scale = prior_or_const(scale, ptree, prefix + "scale", normal_prior)
     theta = prior_or_const(theta, ptree, prefix + "theta", normal_prior)
 
