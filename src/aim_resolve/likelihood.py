@@ -9,7 +9,7 @@ from nifty8 import makeOp
 
 from .fast_resolve.beam import BeamedSky, build_primary_beam
 from .fast_resolve.convolve import NInvConvolve, PSFConvolve
-from .fast_resolve.response import build_exact_responses
+from .fast_resolve.response import ChannelResidual, PaddedRNR, build_exact_responses
 from .model.noise import NoiseModel
 from .resolve.model import ComponentResponse
 from .resolve.observation import Observation
@@ -158,6 +158,8 @@ def fast_likelihood(
     split=None,
     pb_correction=False,
     freq_bounds=None,
+    psf_from_n_inv=False,
+    channel_residual=False,
 ):
     """Build a fast-resolve likelihood dictionary for radio data.
 
@@ -194,6 +196,19 @@ def fast_likelihood(
         decouples the binning from the model frequencies, e.g. fixed bins with
         the model frequencies at their effective (weighted mean) frequency.
         Default is None (resolve's bins: midpoints between model frequencies).
+    psf_from_n_inv : bool or 'padded', optional
+        Use the inverse-noise kernel as the PSF as well (circular convolution
+        on the sky grid, no PSF kernel, ``split`` is ignored): the linear term
+        of the fast energy is then the exact one, which the padded PSF
+        together with the unpadded noise kernel does not give. ``'padded'``:
+        kernel, residual data and noise model on the 2x padded grid (no
+        wrap-around within the field; the kernel from the padded RNR).
+        Default is ``False``.
+    channel_residual : bool, optional
+        Compute the residual of a major iteration with the sky and the primary
+        beam per data channel (``ChannelResidual``) instead of per model bin.
+        Needs several model frequencies.
+        Default is ``False``.
 
     Returns
     -------
@@ -215,7 +230,8 @@ def fast_likelihood(
     R, R_l, RNR, RNR_l = build_exact_responses(obs, sky.grid, sky.freq, freq_bounds)
 
     N_inv = makeOp(obs.weight)
-    data = R.adjoint(N_inv(obs.vis)).val
+    padded = psf_from_n_inv == "padded"
+    data = (R_l if padded else R).adjoint(N_inv(obs.vis)).val
     print("dirty image shape:", data.shape)
 
     sky_app = sky
@@ -229,18 +245,22 @@ def fast_likelihood(
             "| min PB per frequency:", np.round(np.min(beam, axis=pb_axes), 4).tolist(),
         )
 
-    psf_conv = PSFConvolve.build(
-        sky=sky_app,
-        RNR_l=RNR_l,
-        psf_kernel_fn=psf_kernel_fn,
-        split=split,
-    )
+    psf_conv = None
+    if not psf_from_n_inv:
+        psf_conv = PSFConvolve.build(
+            sky=sky_app,
+            RNR_l=RNR_l,
+            psf_kernel_fn=psf_kernel_fn,
+            split=split,
+        )
 
     sky_response = NInvConvolve.build(
         psf_conv=psf_conv,
-        RNR=RNR,
+        RNR=RNR_l if padded else RNR,
         n_inv_kernel_fn=n_inv_kernel_fn,
         noise=noise,
+        sky=sky_app,
+        padded=padded,
     )
 
     lh_dct = dict(
@@ -248,10 +268,14 @@ def fast_likelihood(
         sky_model=sky,
         sky_response=sky_response,
         noise_model=sky_response.noise_model,
-        RNR=RNR,
+        RNR=PaddedRNR(RNR, RNR_l) if padded else RNR,
     )
     if pb_correction:
         lh_dct["sky_app"] = sky_app
+    if channel_residual:
+        if sky.freq.size < 2:
+            raise ValueError("channel_residual needs several model frequencies.")
+        lh_dct["channel_residual"] = ChannelResidual(obs, sky.grid, sky.freq, R_l if padded else R, freq_bounds)
     return lh_dct
 
 

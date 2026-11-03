@@ -168,6 +168,50 @@ class PSFSplitConvolve(Model):
         return res
 
 
+class KernelConvolve(Model):
+    """Circular convolution with the inverse-noise kernel in place of the PSF.
+
+    Created via ``NInvConvolve.build`` with ``psf_conv=None``. With the PSF
+    replaced by the noise kernel ``K``, the fast energy
+    ``0.5 ||K^-1/2 (K (s - old_rec) - res_data)||^2`` has the exact linear
+    term ``-(s - old_rec) . res_data``, so the fixed point of the major
+    iterations is the optimum of the exact likelihood; ``K`` only
+    approximates the curvature.
+
+    With ``padded`` the kernel lives on the 2x padded grid: the sky is
+    zero-padded centrally (the layout of the padded exact response), so
+    the convolution has no wrap-around within the field, and the
+    residual data must be given on the padded grid as well.
+
+    Parameters
+    ----------
+    sky : Model
+        Sky model providing the signal to convolve.
+    n_inv_kernel : np.ndarray
+        Fourier-space inverse-noise kernel of the sky's target shape
+        (``padded``: of the padded shape).
+    padded : bool, optional
+        Kernel on the 2x padded grid. Default is ``False``.
+    """
+
+    fft_kernel: Any = dataclasses.field(metadata=dict(static=False))
+
+    def __init__(self, sky, n_inv_kernel, padded=False):
+        self.sky = sky
+        self.grid = sky.grid
+        self.fft_kernel = jnp.asarray(n_inv_kernel)
+        shp = sky.target.shape
+        self.pad_width = [(0, 0)] * (len(shp) - 2) + [(s // 2, s - s // 2) for s in shp[-2:]] if padded else None
+        print("psf from the n inv kernel, shape:", self.fft_kernel.shape)
+        super().__init__(domain=sky.domain, init=sky.init)
+
+    def __call__(self, x, old_rec=0):
+        res = self.sky(x) - old_rec
+        if self.pad_width is not None:
+            res = jnp.pad(res, self.pad_width)
+        return fft_convolve(res, self.fft_kernel)
+
+
 class NInvConvolve(Model):
     """Convolution with the inverse-noise kernel using FFTs.
 
@@ -203,7 +247,7 @@ class NInvConvolve(Model):
         return res
 
     @classmethod
-    def build(cls, *, psf_conv, RNR, n_inv_kernel_fn="", noise=None):
+    def build(cls, *, psf_conv, RNR, n_inv_kernel_fn="", noise=None, sky=None, padded=False):
         """Build an inverse-noise convolution operator.
 
         Loads or creates the inverse-noise kernel and wraps it together
@@ -211,8 +255,9 @@ class NInvConvolve(Model):
 
         Parameters
         ----------
-        psf_conv : PSFConvolve or PSFSplitConvolve
-            PSF convolution model.
+        psf_conv : PSFConvolve or PSFSplitConvolve or None
+            PSF convolution model. None: the noise kernel is used as the
+            PSF as well (``KernelConvolve`` of *sky*).
         RNR : Operator
             RNR operator for kernel construction (when no cached file
             is available).
@@ -220,6 +265,11 @@ class NInvConvolve(Model):
             Path to load/save the noise kernel. Default is ``''``.
         noise : dict or None, optional
             Noise configuration forwarded to ``NoiseModel.build``.
+        sky : Model, optional
+            Sky model (apparent sky) for ``psf_conv=None``.
+        padded : bool, optional
+            With ``psf_conv=None``: kernel on the 2x padded grid (*RNR* is
+            then the padded RNR). Default is ``False``.
 
         Returns
         -------
@@ -240,11 +290,15 @@ class NInvConvolve(Model):
                 with open(n_inv_kernel_fn, "wb") as f:
                     pickle.dump(n_inv_kernel, f)
 
-        nk_shape = psf_conv.target.shape
+        nk_shape = (sky if psf_conv is None else psf_conv).target.shape
+        if psf_conv is None and padded:
+            nk_shape = nk_shape[:-2] + tuple(2 * s for s in nk_shape[-2:])
         if n_inv_kernel.shape != nk_shape:
             raise ValueError(
                 f"n inv kernel has wrong shape, expected {nk_shape}, got {n_inv_kernel.shape}."
             )
+        if psf_conv is None:
+            psf_conv = KernelConvolve(sky, n_inv_kernel, padded)
 
         noise_model = NoiseModel.build(shape=psf_conv.target.shape, **noise)
 

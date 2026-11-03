@@ -155,3 +155,98 @@ def apply_exact_response(RNR, val):
         Response-applied array.
     """
     return RNR(ift.makeField(RNR.domain, np.array(val))).val
+
+
+class PaddedRNR:
+    """Exact padded RNR for a sky on the normal grid.
+
+    The sky is zero-padded centrally to the 2x padded grid (the field at
+    the centre, as the padded response sees it) and ``RNR_l`` is applied:
+    the residual of a padded fast likelihood (``KernelConvolve`` with
+    ``padded``). Usable with ``apply_exact_response``.
+
+    Parameters
+    ----------
+    RNR : Operator
+        Normal-grid RNR operator (defines the domain).
+    RNR_l : Operator
+        Padded RNR operator.
+    """
+
+    def __init__(self, RNR, RNR_l):
+        self.domain = RNR.domain
+        self.target = RNR_l.target
+        self.RNR_l = RNR_l
+
+    def __call__(self, x):
+        val = np.asarray(x.val)
+        pad = [(0, 0)] * (val.ndim - 2) + [(s // 2, s - s // 2) for s in val.shape[-2:]]
+        return self.RNR_l(ift.makeField(self.RNR_l.domain, np.pad(val, pad)))
+
+
+class ChannelResidual:
+    """Exact dirty image of the sky evaluated per data channel.
+
+    The model has one image per frequency bin, the data one sky per channel.
+    Within a bin the sky is extrapolated from the bin image with the local
+    spectral slope of the model cube, ``s_k (nu / nu_k)^a_k``, and multiplied
+    by the primary beam of the channel. Used instead of ``RNR`` in the
+    residual of a major iteration, the inner fit (bins) stays as it is, but
+    its fixed point is the optimum of the per-channel likelihood.
+
+    Parameters
+    ----------
+    obs : resolve.Observation
+        Radio observation (double precision).
+    grid : SignalGrid
+        Spatial grid of the sky model.
+    freq : array-like
+        Model frequencies [Hz], ascending.
+    freq_bounds : array-like, optional
+        Explicit channel-bin bounds (see ``frequency_domain``).
+    R_adjoint : Operator or None
+        Response whose adjoint gives the dirty image (the binned ``R``); None
+        if only per-channel responses are needed.
+    nthreads : int, optional
+        Threads of the per-channel responses. Default is 16.
+    """
+
+    def __init__(self, obs, grid, freq, R_adjoint, freq_bounds=None, nthreads=16):
+        self.obs = obs
+        self.grid = grid
+        self.freq = np.asarray(freq, dtype="float64")
+        self.R = R_adjoint
+        self.nthreads = nthreads
+        bounds = frequency_domain(self.freq, freq_bounds).binbounds()
+        self.nu = np.asarray(obs.freq, dtype="float64")
+        self.chan_bin = np.clip(np.searchsorted(bounds, self.nu, side="right") - 1, 0, self.freq.size - 1)
+        self.N_inv = ift.makeOp(obs.weight)
+
+    def _response(self, c):
+        import resolve as rve
+
+        oc = self.obs.get_freqs_by_slice(slice(c, c + 1))
+        sdom = ift.RGSpace(self.grid.shape, distances=self.grid.dis / self.grid.fac)
+        dom = rve.default_sky_domain(sdom=sdom, fdom=rve.IRGSpace(oc.freq))
+        R = rve.InterferometryResponse(oc, dom, True, 1e-9, verbosity=0, nthreads=self.nthreads)
+        return R @ ift.DomainChangerAndReshaper(R.domain[3], R.domain)
+
+    def predict(self, sky):
+        """Model visibilities (row, channel) of the intrinsic sky cube ``sky``."""
+        from .beam import build_primary_beam
+
+        sky = np.asarray(sky, dtype="float64")
+        slope = np.gradient(np.log(np.clip(sky, 1e-300, None)), np.log(self.freq), axis=0)
+        vis = np.zeros(self.obs.vis.shape[1:], dtype="complex128")
+        for c, nu in enumerate(self.nu):
+            k = self.chan_bin[c]
+            s_c = sky[k] * (nu / self.freq[k]) ** slope[k]
+            s_c = s_c * np.asarray(build_primary_beam(self.grid, [nu], channel_average=False), dtype="float64")
+            R = self._response(c)
+            vis[:, c] = np.asarray(R(ift.makeField(R.domain, s_c)).val).reshape(-1)
+        return vis
+
+    def __call__(self, sky):
+        """Dirty image ``R^+ N^-1 R(sky per channel)`` on the bins of ``R``."""
+        v = ift.makeField(self.R.target, self.predict(sky)[None])
+        return np.asarray(self.R.adjoint(self.N_inv(v)).val)

@@ -293,16 +293,26 @@ def fast_optimize_kl(
         if opt_vi_st.nit > 0:
             # apparent sky (beam-attenuated) if the primary beam is in the forward model
             old_rec = MySamples.from_samples(samples).mean(lh_i.get("sky_app", lh_i["sky_model"]))
-            residual_data = lh_i["data"] - apply_exact_response(lh_i["RNR"], old_rec)
+            if "channel_residual" in lh_i:
+                sky_mean = MySamples.from_samples(samples).mean(lh_i["sky_model"])
+                residual_data = lh_i["data"] - lh_i["channel_residual"](sky_mean)
+            else:
+                residual_data = lh_i["data"] - apply_exact_response(lh_i["RNR"], old_rec)
         else:
             residual_data = lh_i["data"]
-            old_rec = jnp.zeros(residual_data.shape, dtype=residual_data.dtype)
+            sky_shape = lh_i.get("sky_app", lh_i["sky_model"]).target.shape
+            old_rec = jnp.zeros(sky_shape, dtype=residual_data.dtype)
 
         if plot_residuals and odir:
             from ..plot import plot_arrays
 
+            # residual on the padded grid (psf_from_n_inv='padded'): the field at its centre
+            res_plot = residual_data[
+                (...,) + tuple(slice((r - s) // 2, (r - s) // 2 + s)
+                               for r, s in zip(residual_data.shape[-2:], old_rec.shape[-2:], strict=True))
+            ]
             plot_arrays(
-                array=[old_rec, residual_data],
+                array=[old_rec, res_plot],
                 rows=1,
                 norm="log",
                 odir=f"{odir}/residuals",
