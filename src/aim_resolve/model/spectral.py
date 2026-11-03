@@ -168,7 +168,7 @@ def spectral_ubik_model(
     model = build_simple_spectral_sky(
         prefix,
         grid.shape,
-        grid.distances,
+        tuple(d / grid.factor for d in grid.distances),  # pixel size of the refined grid
         log_freq,
         ref_freq_index,
         zero_mode,

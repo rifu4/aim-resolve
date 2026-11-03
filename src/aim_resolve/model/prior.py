@@ -18,7 +18,7 @@ CFM_KEYS = {
 }
 NM_KEYS = {"mean", "std"}
 IGM_KEYS = {"alpha", "scale", "mean", "mode"}
-GSM_KEYS = {"cov_x", "cov_y", "scale", "theta"}
+GSM_KEYS = {"cov_x", "cov_y", "scale", "theta", "cov_prior"}
 UM_KEYS = {"u_min", "u_max"}
 IM_KEYS = {"i_min", "i_max", "step"}
 
@@ -63,7 +63,7 @@ def prior_model(
             model, pspec = correlated_field_model(
                 prefix=prefix,
                 shape=grid.shape,
-                distances=grid.distances,
+                distances=tuple(d / grid.factor for d in grid.distances),  # pixel size of the refined grid
                 n_copies=n_copies,
                 **i0_params,
             )
@@ -80,7 +80,7 @@ def prior_model(
             model = gaussian_model(
                 prefix=prefix,
                 shape=grid.shape,
-                distances=grid.distances,
+                distances=tuple(d / grid.factor for d in grid.distances),  # pixel size of the refined grid
                 n_copies=n_copies,
                 **i0_params,
             )
