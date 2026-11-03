@@ -78,7 +78,10 @@ def build_primary_beam(
     channel_average : bool, optional
         Average the beam over the data channels of each model-frequency bin
         (bins as in ``resolve.InterferometryResponse``), weighted by the total
-        channel weight. Otherwise the beam is taken at the model frequencies.
+        channel weight. With a single model frequency (e.g. the placeholder
+        frequency of a single-frequency stage) the bin is the whole band: the beam
+        is averaged over all data channels and the beam model is chosen from the
+        channel frequencies. Otherwise the beam is taken at the model frequencies.
     n_channels : int, optional
         Number of evenly spaced data channels per bin used for the average.
     pointing_offset : tuple of float, optional
@@ -98,11 +101,26 @@ def build_primary_beam(
     from .response import frequency_domain
 
     freq = np.atleast_1d(np.asarray(freq, dtype="float64"))
-    model = default_beam_model(freq) if model is None else model
+    # A single model frequency (e.g. the placeholder frequency of a single-frequency stage)
+    # represents the sky at all data channels: average the beam over all of them, and
+    # choose the beam model from the channel frequencies.
+    single_band = channel_average and obs is not None and freq.size == 1
+    if model is None:
+        model = default_beam_model(np.asarray(obs.freq, dtype="float64") if single_band else freq)
     beam = JimBeam(model)
     xx, yy = beam_offsets(grid, pointing_offset)
 
-    if channel_average and obs is not None and freq.size > 1:
+    if single_band:
+        ch_freq = np.asarray(obs.freq, dtype="float64")
+        ch_wgt = _channel_weights(obs)
+        idx = np.nonzero(ch_wgt > 0)[0]
+        if idx.size == 0:
+            raise ValueError("The data have no channel with positive weight.")
+        n_band = max(4 * n_channels, 1)  # the whole band: more channels than for one bin
+        idx = idx[np.unique(np.linspace(0, idx.size - 1, min(n_band, idx.size)).round().astype(int))]
+        w = ch_wgt[idx] / ch_wgt[idx].sum()
+        pb = sum(wi * beam.I(xx, yy, f / 1e6) for wi, f in zip(w, ch_freq[idx], strict=True))[None]
+    elif channel_average and obs is not None and freq.size > 1:
         ch_freq = np.asarray(obs.freq, dtype="float64")
         ch_wgt = _channel_weights(obs)
         bounds = frequency_domain(freq, freq_bounds).binbounds()

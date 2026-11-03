@@ -103,6 +103,33 @@ class TestChannelAverage:
         np.testing.assert_allclose(pb[2], single[3], rtol=1e-6)
 
 
+class TestSingleFrequencyBand:
+    """A single model frequency (placeholder of a single-frequency stage) gets the beam
+    averaged over all data channels, with the beam model chosen from the channels."""
+
+    def _obs(self, ch_freq, ch_wgt):
+        return SimpleNamespace(freq=np.asarray(ch_freq), weight=np.ones((1, 5, len(ch_freq))) * np.asarray(ch_wgt))
+
+    def test_placeholder_frequency_averages_all_channels(self):
+        grid = _grid()
+        ch = [0.99e9, 1.05e9, 1.12e9]
+        pb = build_primary_beam(grid, [1.0], self._obs(ch, [2, 1, 1]))
+        single = build_primary_beam(grid, ch, channel_average=False)
+        assert pb.shape == grid.shape
+        np.testing.assert_allclose(pb, 0.5 * single[0] + 0.25 * single[1] + 0.25 * single[2], rtol=1e-6)
+
+    def test_zero_weight_channels_are_ignored(self):
+        grid = _grid()
+        ch = [0.99e9, 1.05e9, 1.12e9]
+        pb = build_primary_beam(grid, [1.0], self._obs(ch, [1, 0, 1]))
+        single = build_primary_beam(grid, ch, channel_average=False)
+        np.testing.assert_allclose(pb, 0.5 * single[0] + 0.5 * single[2], rtol=1e-6)
+
+    def test_placeholder_without_data_raises(self):
+        with pytest.raises(ValueError, match="No MeerKAT beam model"):
+            build_primary_beam(_grid(), [1.0])
+
+
 class TestBeamedSky:
     def test_output_is_beam_times_sky(self):
         sky = _sky()
