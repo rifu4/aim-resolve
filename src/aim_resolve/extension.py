@@ -170,6 +170,7 @@ def zoom_extension(
     zoom_bg=False,
     base="base.yml",
     run=0,
+    flux_scale=1.0,
     **kwargs,
 ):
     """Create a zoom extension configuration.
@@ -192,8 +193,15 @@ def zoom_extension(
         Name of the base configuration file. Default is ``'base.yml'``.
     run : int, optional
         Run number to append to the output directory name. Default is 0 (no run number).
+    flux_scale : float, optional
+        Factor by which the transferred sky is scaled at the transition, e.g. 2.0 when the
+        new data are on twice the flux scale of the data of the previous iteration. Added as
+        ln(flux_scale) to the offsets of all sky components of the new iteration (see
+        `scale_sky_offsets`), and the zoom transition fits the new components to the old
+        reconstruction times `flux_scale`. Default is 1.0 (no scaling).
     **kwargs
-        Additional section overrides applied before writing.
+        Additional section overrides applied before writing (after the flux scaling, so an
+        explicitly given offset is used as it is).
 
     Returns
     -------
@@ -257,6 +265,9 @@ def zoom_extension(
         odir=f"{odir}/opt/{cfg.it - 1}_rec_{zoom}z{run}/trans",
     )
     cfg.modify_sec(f"opt.{cfg.it}", base="base_opt.n", transitions=f"=trans.{cfg.it}")
+    if flux_scale != 1:
+        cfg.modify_sec(f"trans.{cfg.it}", flux_scale=float(flux_scale))
+    scale_sky_offsets(cfg, cfg.it, flux_scale)
 
     for key, val in kwargs.items():
         cfg.modify_sec(key, **val)

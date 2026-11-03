@@ -116,6 +116,7 @@ def transition_freq(
     *args,
     lh_old,
     lh_new,
+    reset_noise=False,
     **kwargs,
 ):
     """Transfer parameters from a single-frequency to a multi-frequency model.
@@ -133,6 +134,9 @@ def transition_freq(
         Likelihood dictionary for the previous iteration.
     lh_new : dict
         Likelihood dictionary for the new iteration.
+    reset_noise : bool, optional
+        Do not take over the learned noise scaling of the previous iteration:
+        the new noise model starts at its prior. Default is ``False``.
 
     Returns
     -------
@@ -159,7 +163,7 @@ def transition_freq(
     # load learned noise scaling of the previous iteration if available
     nm_old = lh_old["noise_model"]
     nm_new = lh_new["noise_model"]
-    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
+    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel) and not reset_noise:
         ptree[nm_new.prefix] = np.broadcast_to(
             domain_tree(samples)[nm_old.prefix], nm_new.target.shape
         )
@@ -413,6 +417,8 @@ def transition_zoom(
     fit="kl",
     log_map=None,
     own_kl=None,
+    flux_scale=1.0,
+    reset_noise=False,
     **kwargs,
 ):
     """Transfer parameters to a higher-resolution (zoomed) grid.
@@ -461,6 +467,15 @@ def transition_zoom(
         1, the brightest pixel), and ``signals``: prefixes of signal components (e.g.
         ``[o0, o1]``) that are also fitted with ``own_kl_fit`` (default none), with
         ``signal_taper_rel`` (default 0.01).
+    flux_scale : float, optional
+        Factor applied to the old reconstruction before the new components are fitted to
+        it, for new data on a different flux scale. The offsets of the new sky components
+        are expected to be shifted by ln(flux_scale) (``zoom_extension``), so that copied
+        components are scaled as well. Default is 1.0.
+    reset_noise : bool, optional
+        If True, the learned noise scaling of the previous iteration is not copied and
+        the new noise model starts at its prior (e.g. for new data or weights). Default is
+        ``False``.
 
     Returns
     -------
@@ -496,7 +511,7 @@ def transition_zoom(
     for sky_oi, sky_ni in zip(sky_old.models, sky_new.models, strict=False):
         if sky_ni.grid not in sky_oi.grid and sky_oi.grid in sky_ni.grid:
             raise ValueError("Old and new sky model components have to match.")
-        rec_oi = map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
+        rec_oi = flux_scale * map_signal(sky_oi.grid, sky_ni.grid)(samples.mean(sky_oi))
         copied = {
             k.replace(sky_oi.prefix, sky_ni.prefix)
             for k in domain_keys(samples)
@@ -506,7 +521,7 @@ def transition_zoom(
         own_signal = isinstance(sky_ni, SignalModel) and sky_ni.prefix.split(".")[0] in own_signals
         own = fit == "own_kl" and (isinstance(sky_ni, (TileModel, PointModel)) or own_signal)
         if own and not (sky_ni.grid == sky_oi.grid and same_params):
-            data_ni = own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
+            data_ni = flux_scale * own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
             print(f"zoom transition: KL fit of {sky_ni.prefix} in its own space {data_ni.shape}")
             pos_ci = own_kl_fit(
                 keys.pop(),
@@ -525,7 +540,7 @@ def transition_zoom(
                 plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
             )
         elif fit in ("log_map", "log_kl") and not (sky_ni.grid == sky_oi.grid and same_params):
-            data_ni = own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
+            data_ni = flux_scale * own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
             how = "MAP" if fit == "log_map" else "KL"
             print(f"zoom transition: log-space {how} fit of {sky_ni.prefix} in its own space {data_ni.shape}")
             if fit == "log_map":
@@ -563,7 +578,7 @@ def transition_zoom(
             )
         ptree |= pos_ci.tree
 
-    rec_sky = map_signal(sky_old.grid, sky_new.grid)(samples.mean(sky_old))
+    rec_sky = flux_scale * map_signal(sky_old.grid, sky_new.grid)(samples.mean(sky_old))
     pos_sky = optimize_and_plot(
         key=keys.pop(),
         sky=sky_new,
@@ -578,7 +593,7 @@ def transition_zoom(
     # load learned noise scaling of the previous iteration if available
     nm_old = lh_old["noise_model"]
     nm_new = lh_new["noise_model"]
-    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
+    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel) and not reset_noise:
         ptree[nm_new.prefix] = map_signal(sky_old.grid, sky_new.grid)(
             domain_tree(samples)[nm_old.prefix]
         )
