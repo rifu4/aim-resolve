@@ -1,5 +1,7 @@
 """Sky-model construction utilities for multi-component reconstruction."""
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 from .mask import remove_freq_axis
@@ -9,6 +11,9 @@ from .model.points import PointModel
 from .model.signal import SignalModel
 from .model.tiles import TileModel
 from .model.util import to_shape
+
+# floor of the brightness for the component offsets (get_offset), relative to the maximum in the mask
+OFFSET_FLOOR = 1e-5
 
 
 def model_background(
@@ -263,12 +268,24 @@ def get_offset(
         )
         offset = [round(float(ri), 1) for ri in log_sum]
 
-    elif isinstance(model, SignalModel) or (
-        isinstance(model, str)
-        and any(m in model for m in ("signal", "object", "background"))
-    ):
+    elif isinstance(model, SignalModel) or (isinstance(model, str) and "background" in model):
+        # the offset is the mean of the log field over the mask: the mean of log(brightness / taper), with the taper of
+        # objects at its prior median (1 for the background). The brightness is floored at OFFSET_FLOOR times its maximum,
+        # so empty or clipped pixels do not dominate. The log of the mean would lie higher by about var(log) / 2.
+        rec = np.asarray(np.broadcast_to(rec_sub, mask.shape), dtype="float64")
+        rec = np.maximum(rec, OFFSET_FLOOR * np.max(rec, where=mask, initial=0.0))
+        log_field = np.log(rec, where=rec > 0, out=np.full(rec.shape, -np.inf))
+        if isinstance(model, SignalModel) and model.gaussian is not None:
+            x0 = jax.tree_util.tree_map(jnp.zeros_like, model.gaussian.init(jax.random.PRNGKey(0)))
+            log_field = log_field - np.log(np.asarray(model.gaussian(x0), dtype="float64")).reshape(log_field.shape[-2:])
+        mean_log = np.mean(log_field, where=mask & (rec > 0))
+        offset = round(float(mean_log), 1)
+
+    elif isinstance(model, str) and any(m in model for m in ("signal", "object")):
+        # without the model the taper is unknown: log of the mean, as before
         log_mean = np.log(np.mean(rec_sub, where=mask))
         offset = round(float(log_mean), 1)
+        print(f"{model}: no taper given, offset from the log of the mean")
 
     elif isinstance(model, TileModel) or (isinstance(model, str) and "tile" in model):
         log_mean = np.log(
