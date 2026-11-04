@@ -1567,10 +1567,14 @@ def plot_multi_color(
     cbar_2d=False,
     cbar2d_size=(0.20, 0.24),
     cbar2d_bright_label="mJy / arcsec$^2$",
+    mask=None,
     **rgb_kwargs,
 ):
     """
     Render a spectral cube (f, n, m) as a multi-color RGB image and save to PNG.
+
+    `mask` (bool array (n, m), optional): pixels where it is False are left out
+    (NaN, transparent), e.g. outside the useful primary beam.
 
     All keyword arguments beyond the plotting ones are forwarded to
     `spectral_cube_to_rgb` (nu_axis_scale, deslope, intensity_scale, range_min,
@@ -1593,6 +1597,10 @@ def plot_multi_color(
     from matplotlib.cm import ScalarMappable
 
     rgb = spectral_cube_to_rgb(cube, nu_coords, **rgb_kwargs)
+    if mask is not None:
+        # masked pixels as NaN: transparent (RGBA alpha 0); imshow does not take NaN in RGB data
+        rgb = np.concatenate([rgb[..., :3], np.asarray(mask, dtype=rgb.dtype)[..., None]], axis=-1)
+        rgb[~np.asarray(mask, dtype=bool), :3] = 0.0
 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     # Match the (a.T, origin="lower") orientation used in eso_compare.py.
@@ -2772,7 +2780,7 @@ plot_curvature_vs_alpha_band(profiles["c2"], "c2_curvature_vs_alpha.png")
 # 5) Multi-colour (spectral -> RGB) images (as plot_rgb_freq.py): full sky with
 #    the point-source / box markers, the two galaxies and the brightest tiles.
 # ===========================================================================
-nu_idx = [1, 2, 3, 4, 5, 6]  # even channel positions -> distinct hues; real freqs on the colorbar
+nu_idx = list(range(1, len(FREQ_MHZ) + 1))  # even channel positions -> distinct hues; real freqs on the colorbar
 color_dict = dict(
     nu_axis_scale="linear", intensity_scale="log", range_min=0.0, range_max=100.0, deslope=0.3,
     normalize_spectrum_enabled=True, normalize_spectrum_boost=7.5, dynamic_range=1e4,
@@ -2803,6 +2811,26 @@ del ref_sky
 plot_multi_color(
     sky, nu_idx, odir=odir, name="sky_rgb_box", marker=box_markers(),
     brightness_max=sky_brightness_max, spectrum_ref=sky_spectrum_ref, **color_dict,
+)
+
+
+def beam_mask(pb_min):
+    """Pixels of the sky grid where the primary beam at the highest model frequency
+    (narrowest beam) is >= pb_min; pointing centre at the reference pixel (CRPIX)."""
+    from resolve.library.meerkat_beam import JimBeam
+
+    h = pyfits.getheader(fits_file(FREQ_MHZ[-1], "mean"))
+    x = (np.arange(h["NAXIS1"]) + 1 - h["CRPIX1"]) * h["CDELT1"]  # offsets [deg], axis 0 as layer()
+    y = (np.arange(h["NAXIS2"]) + 1 - h["CRPIX2"]) * h["CDELT2"]
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+    return JimBeam("MKAT-AA-L-JIM-2020").I(xx, yy, h["CRVAL3"] / 1e6) >= pb_min
+
+
+# The same image, with everything outside the useful primary beam left out (NaN)
+RGB_PB_MIN = 0.1  # as PB_MIN in save_fits.py
+plot_multi_color(
+    sky, nu_idx, odir=odir, name="sky_rgb_box_pbmask", marker=box_markers(),
+    brightness_max=sky_brightness_max, spectrum_ref=sky_spectrum_ref, mask=beam_mask(RGB_PB_MIN), **color_dict,
 )
 del sky
 

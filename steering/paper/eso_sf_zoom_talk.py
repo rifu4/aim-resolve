@@ -1,4 +1,8 @@
-"""Single-frequency zoom-in talk plots for ESO reconstructions."""
+"""Single-frequency zoom-in talk plots for ESO reconstructions.
+
+usage: python eso_sf_zoom_talk.py [run (default 4_rec_3z_1)] [iteration of the sky model (default 5)]
+The plots are saved to <dir>/opt/<run>/talk_plots/.
+"""
 
 # %%
 import os
@@ -9,6 +13,7 @@ os.environ["JAX_PLATFORM_NAME"] = "cpu"
 
 # %%
 import pickle
+import sys
 
 import jax
 import aim_resolve as aim
@@ -49,8 +54,9 @@ def box_markers(cfg, ps_map, grid, it):
 # %%
 dir = "/scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_b"
 
-sf_rec = "4_rec_3z_1"
-sf_it = 5
+sf_rec = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "4_rec_3z_14"
+sf_it = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+odir = f"{dir}/opt/{sf_rec}/talk_plots"
 
 ARCMIN2RAD = np.pi / 60 / 180
 AS2RAD = ARCMIN2RAD / 60
@@ -61,7 +67,8 @@ opt_yml = f"{dir}/opt/{sf_rec}/opt.yml"
 print("load:", opt_yml)
 
 optim_cfg = aim.OptimizeKLConfig.from_file(opt_yml, aim.get_builders)
-optim_cfg.sections["data.0"]["fname"] = "/Users/rf/Development/data/eso_986-1137mhz.npz"
+if os.path.exists("/Users/rf/Development/data/eso_986-1137mhz.npz"):  # local copy of the data
+    optim_cfg.sections["data.0"]["fname"] = "/Users/rf/Development/data/eso_986-1137mhz.npz"
 
 sky_sf = optim_cfg.instantiate_sec(f"sky.{sf_it}")
 print("sky components:", [c.prefix for c in sky_sf.models])
@@ -84,7 +91,7 @@ print("vmin:", min_sf, "\nvmax:", max_sf)
 
 plot_dict = dict(
     name=None,
-    odir=None,
+    odir=odir,
     norm="log",
     vmin=min_sf,
     vmax=max_sf,
@@ -105,17 +112,17 @@ aim.plot_arrays(
     array=sky_mean_sf,
     marker=markers_sf,
     callback=lambda fig, ax: fig.text(0.085, 0.90, "1062 MHz", fontsize=15, c="white"),
-    **plot_dict,
+    **plot_dict | dict(name="sky_mean_markers"),
 )
 aim.plot_arrays(
     array=sky_mean_sf,
     callback=lambda fig, ax: fig.text(0.085, 0.90, "1062 MHz", fontsize=15, c="white"),
-    **plot_dict,
+    **plot_dict | dict(name="sky_mean"),
 )
 aim.plot_arrays(
     array=pot_mean_sf,
     callback=lambda fig, ax: fig.text(0.085, 0.90, "1062 MHz", fontsize=15, c="black"),
-    **plot_dict,
+    **plot_dict | dict(name="points_and_objects"),
 )
 
 # %%
@@ -125,11 +132,11 @@ comp_mean_sf = [
 
 
 print("plotting ...")
-for c in comp_mean_sf:
+for i, c in enumerate(comp_mean_sf):
     aim.plot_arrays(
         array=c,
         figsize=(20,20),
-        **plot_dict,
+        **plot_dict | dict(name=f"object_{i}"),
     )
 
 # %%
@@ -147,7 +154,7 @@ pt_mean_sf = samples_sf.mean(sky_pt_sf) * CONV_FACTOR
 print("plotting ...")
 aim.plot_arrays(
     array=pt_mean_sf,
-    **plot_dict,
+    **plot_dict | dict(name="points_and_tiles"),
 )
 
 # %%
@@ -155,7 +162,7 @@ zoom = 2
 
 
 smp_val_sf = []
-for smp in samples_sf:
+for smp in list(samples_sf)[:4]:  # the 2x2 panel shows four samples
     val = sky_sf(smp) * CONV_FACTOR
     if zoom > 1:
         grd = sky_sf.grid
@@ -178,7 +185,7 @@ aim.plot_arrays(
         hspace=-0.71, wspace=-0.7, width_ratios=[1, 1], height_ratios=[1, 1]
     ),
     callback=callback,
-    **plot_dict,
+    **plot_dict | dict(name="samples_zoom"),
 )
 
 # %%
@@ -199,7 +206,7 @@ aim.plot_arrays(
     callback=lambda fig, ax: fig.text(
         0.085, 0.90, "Posterior mean", fontsize=15, c="white"
     ),
-    **plot_dict,
+    **plot_dict | dict(name="sky_mean_zoom"),
 )
 aim.plot_arrays(
     array=skyz_runc_sf,
@@ -212,7 +219,7 @@ aim.plot_arrays(
     callback=lambda fig, ax: fig.text(
         0.085, 0.90, "Relative uncertainty", fontsize=15, c="black"
     ),
-    **plot_dict | dict(vmin=None, vmax=None),
+    **plot_dict | dict(vmin=None, vmax=None, name="relative_uncertainty_zoom"),
 )
 
 # %%
@@ -242,6 +249,6 @@ aim.plot_arrays(
     array=tiles_arrays,
     cols=8,
     **plot_dict
-    | dict(vmin=tiles_vmin, vmax=tiles_vmax, norm="log"),
+    | dict(vmin=tiles_vmin, vmax=tiles_vmax, norm="log", name="tiles"),
 )
 # %%
