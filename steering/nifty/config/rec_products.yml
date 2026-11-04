@@ -1,0 +1,59 @@
+# FITS products and plots of a reconstruction:
+#   python nifty/save_rec.py --config nifty/config/rec_products.yml --cuda_device 0
+#   python nifty/plot_rec.py --config nifty/config/rec_products.yml
+# Paths are relative to steering/. All keys and their defaults: FITS_DEFAULTS in save_rec.py,
+# PLOT_DEFAULTS (and the *_DEFAULTS of its subsections) in plot_rec.py.
+# This example: the multi-frequency run of the paper (ESO 137-006 / ESO 137-007).
+
+fits:
+  rec_dir: runs/fast_vi_1f_1024_1z_b/opt/4_rec_3z_4_6f_1_it_1_it_1
+  it: 6                     # sky.6
+  prefix: eso137
+  pb_correction: true       # skipped if the beam is in the forward model
+  pb_min: 0.1
+  pb_mode: clip
+
+plot:
+  components:
+    - {name: O0, label: ESO137-006, rel_fov: [0.16, 0.08], center: [0, "-0.05deg"], flux_min: 1.0e-2,
+       contour_levels: [1.0e-2, 1.0e-1, 1, 10]}
+    - {name: O1, label: ESO137-007, rel_fov: [0.25, 0.09], center: ["0.18deg", "0.31deg"], flux_min: 5.0e-3,
+       contour_levels: [5.0e-3, 5.0e-2, 5.0e-1, 5]}
+  vmin: 6.0e-4              # lower colour limit of the component brightness maps
+  tiles: {n: 36, rows: 6, cols: 6}
+  rgb: {hue_ref_alpha: -1.0, pb_mask_min: 0.1}
+  compare:
+    fits:
+      AIRI: [paper/fits/ESO137_1053MHz_AIRI.fits, paper/fits/ESO137_1399MHz_AIRI.fits]
+      uSARA: [paper/fits/ESO137_1053MHz_uSARA.fits, paper/fits/ESO137_1399MHz_uSARA.fits]
+    labels: [aim-resolve, AIRI (from Dabbech et al. 22), uSARA (from Dabbech et al. 22)]
+    components: [O0, O1]
+    names: [c1_alpha, c2_alpha]
+    hspace: [-0.95, -1.0]
+  regions: {file: paper/regions.yml, component: O0, flux_min: 1.0e-2, name: c1_regions}
+  profiles:
+    c1:
+      component: O0
+      label: CST1
+      anchors: [[0.39, 0.76], [0.525, 0.685], [0.65, 0.59], [0.68, 0.55], [0.70, 0.485]]
+      half_width: 8.0
+      ridge_smooth: 5.0
+      ridge_y_window: 0.001
+      dist_unit: arcsec
+      center: middle
+      img_vmin: 5.0e-3
+      xlabel_suffix: "  (left → right)"
+      z_tick: 4
+      plots: [profiles]
+    c2:
+      component: O1
+      label: ESO137-007
+      anchors: [[0.048, 0.12], [0.21, 0.28], [0.41, 0.58], [0.55, 0.65], [0.86, 0.7]]
+      half_width: 40.0
+      ridge_smooth: 15.0
+      ridge_y_window: null
+      dist_unit: arcmin
+      center: first
+      img_vmin: 1.0e-3
+      z_tick: 20
+      plots: [profiles, flux_alpha_vs_z, curvature_vs_alpha]
