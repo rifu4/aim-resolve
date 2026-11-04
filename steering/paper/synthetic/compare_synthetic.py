@@ -34,10 +34,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from synth_common import OUT, PREFIX, REF_IDX, RUNS, STEERING, VARIANTS, TruthSky
+from synth_common import OUT, PREFIX, REF_IDX, RUNS, STEERING, VARIANTS, TruthSky, truth_dir
 
 import aim_resolve as aim
 
@@ -79,6 +80,33 @@ def stats(d, z):
                 cover_1sig=float(np.mean(np.abs(z) < 1)), cover_2sig=float(np.mean(np.abs(z) < 2)))
 
 
+def point_table(cubes, truth_name, u, v, odir):
+    """Point sources of the truth (make_truth_comp.py): flux density at nu_ref, alpha and beta of the
+    point-source component (sum over the source's 3 x 3 sub-pixel block; cubes: (sample, nfreq, N, N)
+    of the point model alone) vs the truth."""
+    import yaml
+
+    pts = yaml.safe_load(open(f"{truth_dir(truth_name)}/components.yml"))["points"]
+    beta0 = truth_name.startswith("beta0")
+    rows = []
+    print(f"point sources: {'name':8s} {'S_true':>7s} {'S_rec':>7s} | {'a_true':>6s} {'a_rec':>11s} | "
+          f"{'b_true':>6s} {'b_rec':>11s}   [mJy at nu_ref; rec: mean +- std]")
+    for p in pts:
+        blk = cubes[:, :, p["i"] - 1:p["i"] + 2, p["j"] - 1:p["j"] + 2].sum(axis=(2, 3))  # (k, nfreq) [Jy/sr * pix]
+        ln = np.log(blk)
+        a = np.tensordot(ln - ln[:, [REF_IDX]], u, axes=([1], [0])) / np.sum(u**2)
+        b = np.polyfit(u, ln.T, 2)[0]
+        flux = blk[:, REF_IDX] * (7.03125 / 3 * np.pi / 180 / 3600) ** 2 * 1e3
+        bt = 0.0 if beta0 else p["beta"]
+        at = p["alpha"] + bt * np.sum(u**3) / np.sum(u**2)  # anchored slope of the truth (the model's alpha)
+        rows.append((p["name"], p["flux_mjy"], flux.mean(), at, a.mean(), a.std(ddof=1), bt, b.mean(), b.std(ddof=1)))
+        print(f"               {p['name']:8s} {p['flux_mjy']:7.2f} {flux.mean():7.2f} | {at:+6.2f} "
+              f"{a.mean():+6.2f}+-{a.std(ddof=1):.2f} | {bt:+6.2f} {b.mean():+6.2f}+-{b.std(ddof=1):.2f}")
+    np.savetxt(f"{odir}/points.txt", np.array([r[1:] for r in rows]), fmt="%.4f",
+               header="S_true S_rec[mJy] alpha_true alpha_rec alpha_std beta_true beta_rec beta_std; rows: "
+                      + " ".join(r[0] for r in rows))
+
+
 for job in jobs:
     run, truth_name, v = job["run"], job["truth"], job["label"]
     odir = f"{run}/compare"
@@ -98,12 +126,23 @@ for job in jobs:
         samples, *_ = pickle.load(f)
     print("samples:", len(samples), "| model freqs [MHz]:", np.round(freq / 1e6, 2).tolist())
 
-    cubes, a_model, b_lp, b_model = [], [], [], []
+    # several components (objects, tiles, points): alpha / beta of the total sky from its cube; the anchored
+    # slope is the model's alpha and the u^2 coefficient its beta (q(u) = u^2 - k u is orthogonal to u)
+    multi = len(sky.models) > 1 or sky.background.grid != sky.grid  # a single object on its own grid as well
+    point_model = next((m for m in sky.models if type(m).__name__ == "PointModel"), None)
+    cubes, a_model, b_lp, b_model, point_cubes = [], [], [], [], []
     for x in samples:
         c = np.asarray(sky(x), dtype="float64")  # intrinsic sky (nfreq, N, N) [Jy/sr]
         cubes.append(c)
-        a_model.append(np.asarray(sky.background.spectral_index(x), dtype="float64"))
+        if point_model is not None:
+            point_cubes.append(np.asarray(point_model(x), dtype="float64"))
         b_lp.append(curvature(c, u))
+        if multi:
+            a_model.append(anchored_slope(c, u))
+            if has_curv:
+                b_model.append(b_lp[-1])
+            continue
+        a_model.append(np.asarray(sky.background.spectral_index(x), dtype="float64"))
         if has_curv:
             b_model.append(np.asarray(sky.background.spectral_curvature(x), dtype="float64"))
     cubes, a_model, b_lp = (np.stack(t) for t in (cubes, a_model, b_lp))
@@ -123,6 +162,8 @@ for job in jobs:
     t_beta = curvature(t_cube, u)
     truth = dict(flux=t_cube[REF_IDX] * CONV_FACTOR, alpha=t.alpha, beta=t_beta, alpha_lin=anchored_slope(t_cube, u))
     print(f"truth fit check: max |beta_fit - beta| {np.max(np.abs(t_beta - t.beta)):.1e} (exact log-parabola)")
+    if t.has_points and point_model is not None:
+        point_table(np.stack(point_cubes), truth_name, u, v, odir)
 
     np.savez(f"{odir}/posterior.npz", freq=freq, **{f"rec_{k}": val for k, val in rec.items()},
              **{f"truth_{k}": val for k, val in truth.items()}, alpha_model_k=a_model, beta_k=b_lp,
@@ -187,15 +228,20 @@ for job in jobs:
     else:
         quantities.append(("beta", "beta", "beta (log-parabola fit)", (-1, 1), (-1.5, 1.5)))
     for tag, rm in ([] if "--no-maps" in sys.argv else [("mask", m)]):
-        fig, axes = plt.subplots(len(quantities), 4, figsize=(20, 4.9 * len(quantities)))
-        rows = [(lab, truth[tq], rec[q], rec[f"{q}_std"], "RdYlBu_r" if q.startswith("alpha") else "coolwarm", lim, 0.5)
-                for q, tq, lab, lim, _ in quantities]
-        for r, (name, tr, rc, sd, cmap, lim, dlim) in enumerate(rows):
+        # first row: brightness at nu_ref (log colour scale as the sky plots), relative error and std
+        rows = [("I0 [mJy/arcsec$^2$]", truth["flux"], rec["flux"], (rec["flux"] - truth["flux"]) / truth["flux"],
+                 rec["flux_std"] / rec["flux"], dict(cmap="inferno", norm=LogNorm(vmin=FLUX_MIN, vmax=10)), 0.2,
+                 "(rec - truth) / truth", "relative std")]
+        rows += [(lab, truth[tq], rec[q], rec[q] - truth[tq], rec[f"{q}_std"],
+                  dict(cmap="RdYlBu_r" if q.startswith("alpha") else "coolwarm", vmin=lim[0], vmax=lim[1]), 0.5,
+                  "rec - truth", "posterior std") for q, tq, lab, lim, _ in quantities]
+        fig, axes = plt.subplots(len(rows), 4, figsize=(20, 4.9 * len(rows)))
+        for r, (name, tr, rc, d, sd, kw0, dlim, dlab, slab) in enumerate(rows):
             for c, (arr, title, kw) in enumerate([
-                (tr, f"truth {name}", dict(cmap=cmap, vmin=lim[0], vmax=lim[1])),
-                (rc, f"reconstruction {name}", dict(cmap=cmap, vmin=lim[0], vmax=lim[1])),
-                (rc - tr, f"rec - truth", dict(cmap="PuOr", vmin=-dlim, vmax=dlim)),
-                (sd, f"posterior std", dict(cmap="viridis", vmin=0, vmax=dlim)),
+                (tr, f"truth {name}", kw0),
+                (rc, f"reconstruction {name}", kw0),
+                (d, dlab, dict(cmap="PuOr", vmin=-dlim, vmax=dlim)),
+                (sd, slab, dict(cmap="viridis", vmin=0, vmax=dlim)),
             ]):
                 ax = axes[r, c]
                 im = ax.imshow(np.where(rm, arr, np.nan).T, origin="lower", **kw)

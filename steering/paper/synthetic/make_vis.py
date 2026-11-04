@@ -22,7 +22,18 @@
 #   V2 dirty images per bin of real vs synthetic data (A) -> realism, orientation
 #   V3 noise level of synthetic vs real data on long baselines
 #
-# usage: python make_vis.py --data mf|sf [--variants A,C] [--check] [--nthreads 48]
+# --rows PCT: the row subset of the real data (make_rows_subset.py: PCT % of the rows, weights x 100 / PCT);
+#             the noise level s_c is estimated with the original weights, so the synthetic noise per
+#             visibility is sqrt(PCT / 100) of the full data's and the S/N per bin stays about the same
+# --freqset 8f: binned variants with the 8 model frequencies / fixed bins of nifty/config/mf_ext_8f.yml
+#
+# --field 1deg: the 1 deg field (truths 1deg_*, variants A1deg / B1deg / C1deg)
+# --field 1deglr: the 1 deg field on the low-resolution grid (factor 1, 7.03 arcsec pixels) of
+#        make_lowres_1deg.py (truths 1deg_*_lr, variants *1deglr; uv cut applied afterwards by
+#        make_lowres_1deg.py --cut-only)
+#
+# usage: python make_vis.py --data mf|sf [--variants A,C] [--rows PCT] [--freqset 6f|8f] [--field 05deg|1deg]
+#        [--check] [--nthreads 48]
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -36,7 +47,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from synth_common import DATA_MF, DATA_SF, OUT, SYNTH_DATA, VARIANTS, TruthSky, field_grid, noise_seed
+from synth_common import (
+    DATA_MF, DATA_SF, FAC, N_COARSE, N_COARSE_1DEG, NOISELESS, OUT, STEERING, SYNTH_DATA, VARIANTS, TruthSky, field_grid,
+    noise_seed,
+)
 
 import nifty8 as ift
 import resolve as rve
@@ -53,15 +67,27 @@ parser.add_argument("--data", choices=["mf", "sf"], required=True)
 parser.add_argument("--variants", default="A,C")
 parser.add_argument("--check", action="store_true", help="validation on a channel subset only, nothing is saved")
 parser.add_argument("--nthreads", type=int, default=48)
+parser.add_argument("--rows", type=int, default=100, help="row subset of the real data [%%] (make_rows_subset.py)")
+parser.add_argument("--freqset", choices=["6f", "8f"], default="6f", help="model bins of the binned variants")
+parser.add_argument("--field", choices=["05deg", "1deg", "1deglr"], default="05deg", help="field of the truth / model grid")
 args = parser.parse_args()
 variants = args.variants.split(",")
 fname = DATA_MF if args.data == "mf" else DATA_SF
+W_SCALE = 1.0
+if args.rows < 100:
+    fname = fname.replace(".npz", f"_rows{args.rows}pct_w.npz")
+    W_SCALE = 100.0 / args.rows  # weights of the subset = original weights x W_SCALE
 odir = f"{OUT}/vis_check" if args.check else SYNTH_DATA
 os.makedirs(odir, exist_ok=True)
 
 prep = np.load(f"{OUT}/prep/prep.npz")
 nu_eff, bounds = prep["nu_eff"], prep["bounds"]
-grid = field_grid()
+if args.freqset == "8f":
+    import yaml
+
+    mf8 = {k: v for d in yaml.safe_load_all(open(f"{STEERING}/nifty/config/mf_ext_8f.yml")) if d for k, v in d.items()}
+    nu_eff, bounds = np.asarray(mf8["freq"], dtype="float64"), np.asarray(mf8["lh.6"]["freq_bounds"], dtype="float64")
+grid = field_grid(N_COARSE) if args.field == "05deg" else field_grid(N_COARSE_1DEG, 1 if args.field == "1deglr" else FAC)
 sdom = ift.RGSpace(grid.shape, distances=grid.dis / grid.fac)
 
 # %%
@@ -88,7 +114,7 @@ def robust_noise_level(c):
     """Noise per real / imaginary part in units of 1 / sqrt(w), longest 10 % baselines."""
     lam = uvlen * nu_used[c] / C_LIGHT
     m = (lam > np.percentile(lam, 90)) & (wgt[:, c] > 0)
-    z = vis_real[m, c] * np.sqrt(wgt[m, c])
+    z = vis_real[m, c] * np.sqrt(wgt[m, c] / W_SCALE)  # original weights (row subset: weights x W_SCALE)
     mad = lambda x: 1.4826 * np.median(np.abs(x - np.median(x)))  # noqa: E731
     return 0.5 * (mad(z.real) + mad(z.imag))
 
@@ -141,7 +167,7 @@ for c in range(nu_used.size):
         else:
             sky = truth[v](nu_used[c]) * pb_c
         clean = predict(R, sky)
-        vis_out[v][:, c] = np.where(wgt[:, c] > 0, clean + noise[noise_seed(v)], 0.0)
+        vis_out[v][:, c] = np.where(wgt[:, c] > 0, clean + (0 if v in NOISELESS else noise[noise_seed(v)]), 0.0)
         if args.check:
             vis_clean[v][:, c] = clean
     if args.check:
