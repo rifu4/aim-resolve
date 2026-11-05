@@ -406,9 +406,13 @@ def transition_addt(
     nm_old = lh_old["noise_model"]
     nm_new = lh_new["noise_model"]
     if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel) and not reset_noise:
-        ptree[nm_new.prefix] = map_signal(sky_old.grid, sky_new.grid)(
-            domain_tree(samples)[nm_old.prefix]
-        )
+        nm_val = domain_tree(samples)[nm_old.prefix]
+        if np.shape(nm_val) == tuple(nm_new.model.target.shape):
+            ptree[nm_new.prefix] = nm_val
+        else:
+            # the noise scaling of the fast likelihood lives on the Fourier grid of the sky: a zoom changes it, and
+            # the values cannot be mapped like a sky image; the new noise model starts at its prior
+            print(f"noise model {nm_new.prefix}: new shape (zoom), starts at its prior")
 
     key, k_p = random.split(key)
     pos_new = random_init(
@@ -631,9 +635,13 @@ def transition_zoom(
     nm_old = lh_old["noise_model"]
     nm_new = lh_new["noise_model"]
     if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel) and not reset_noise:
-        ptree[nm_new.prefix] = map_signal(sky_old.grid, sky_new.grid)(
-            domain_tree(samples)[nm_old.prefix]
-        )
+        nm_val = domain_tree(samples)[nm_old.prefix]
+        if np.shape(nm_val) == tuple(nm_new.model.target.shape):
+            ptree[nm_new.prefix] = nm_val
+        else:
+            # the noise scaling of the fast likelihood lives on the Fourier grid of the sky: a zoom changes it, and
+            # the values cannot be mapped like a sky image; the new noise model starts at its prior
+            print(f"noise model {nm_new.prefix}: new shape (zoom), starts at its prior")
 
     key, k_p = random.split(key)
     pos_new = random_init(
