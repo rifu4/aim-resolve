@@ -1,0 +1,115 @@
+---
+
+# zoom extension of the agent pipeline run fast_vi_1f_1024_1z_agent3 (stage 3: 2 objects, 25 tiles, background) to a
+# 3x finer grid (3072 px for 2 deg, 2.3 arcsec); output: runs/fast_vi_1f_1024_1z_agent3/opt/3_rec_3z
+odir: /scratch/users/rfuchs/packages/aim-resolve/steering/runs/fast_vi_1f_1024_1z_agent3
+base: base.yml
+file: 3_pre.yml
+
+---
+
+mode: zoom
+zoom: 3
+zoom_bg: true
+# same data as the pipeline run (eso_1007-1053mhz_wfix.npz): no flux scaling
+flux_scale: 1.0
+
+---
+
+opt:
+  # map the KL over the samples sequentially (lax.scan): less GPU memory at about the same speed
+  kl_map: smap
+
+# stage 4 takes over the stage-3 model (single-frequency ubik model with the priors of the run, fixed taper cov 0.2,
+# primary beam); only the offsets are set for the refined grid (get_offset of the stage-3 posterior mean on the
+# stage-4 grid, see the comment at the end)
+sky_bg.4:
+  offset: 11.5   # inherited 11.4
+sky_o0.4:
+  offset: 12.0   # inherited 12.6
+sky_o1.4:
+  offset: 13.3   # inherited 13.7
+
+# zoomed kernels of exactly this data (built for the earlier zoom runs); the automatic name would differ
+# noise prior as in the current pipeline configs (mean 1.05: inflations of 10x are no longer reachable)
+lh.4:
+  psf_kernel_fn: runs/kernels/pk_eso_1007-1053mhz_1f_2deg_3072_wfix.pkl
+  n_inv_kernel_fn: runs/kernels/nk_eso_1007-1053mhz_1f_2deg_3072_wfix.pkl
+  noise:
+    parameters:
+      mode: 1.0
+      mean: 1.05
+
+opt.4:
+  base: base_opt.4
+  likelihood: =lh.4
+
+base_opt.4:
+  n_major_iterations: 10
+  n_minor_iterations: 2
+  n_samples: 2
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 1000
+      maxiter: 2000
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 10
+      maxiter: 20
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+        miniter: 20
+      miniter: 100
+      maxiter: 200
+      energy_reduction_factor: 0.001
+  sample_mode: 4*[nonlinear_resample] + [nonlinear_update]   # new samples while the posterior still moves, then keep and update them
+
+base_trans:
+  n_total_iterations: 15
+  n_samples: 1
+  draw_linear_kwargs:
+    cg_name: SL
+    cg_kwargs:
+      absdelta: 1.0e-11
+      miniter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 7*[1000]
+      maxiter: 2*[100] + 2*[200] + 2*[350] + 2*[500] + 7*[1000]
+  nonlinearly_update_kwargs:
+    minimize_kwargs:
+      name: SN
+      xtol: 0.0001
+      cg_kwargs:
+        name: null
+      miniter: 0
+      maxiter: 10
+  kl_kwargs:
+    minimize_kwargs:
+      name: M
+      absdelta: 1.0e-10
+      cg_kwargs:
+        name: null
+        miniter: 2*[5] + 2*[10] + [20]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 7*[50]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 7*[50]
+      energy_reduction_factor: 0.001
+  sample_mode: 4*[linear_resample] + [nonlinear_resample]
+
+# zoom transition: KL fit of every component in its own space (tiles each in their own array), as in run 17
+trans.4:
+  fit: own_kl
+  # the noise model starts at its prior (it grew with every iteration of the pipeline run)
+  reset_noise: true
+  # start help: flux at the target level before the KL (no taper help: the taper is fixed)
+  own_kl: {level: true, taper: false, signals: [o0, o1], signal_taper_rel: 1.0e-2}
+
+# offsets: computed with the get_offset rule (mean log field, taper at its value, floor 1e-5) of each stage-3 component
+# (posterior mean of opt/3_rec/last.pkl) mapped onto the grid of its stage-4 counterpart
