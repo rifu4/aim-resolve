@@ -410,7 +410,7 @@ def transition_addt(
             ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci, sky_ci.freq)
             if is_tiles and copied_tiles:
                 # copied tiles keep the offsets of their model section
-                ofs = list(np.atleast_1d(ofs_dct[sky_ci.prefix]))
+                ofs = [float(v) for v in np.atleast_1d(ofs_dct[sky_ci.prefix])]
                 cur = np.atleast_1d(np.squeeze(np.asarray(sky_ci.tiles.offset)))
                 for kn in copied_tiles:
                     ofs[kn] = float(cur[kn])

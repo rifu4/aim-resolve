@@ -5,6 +5,7 @@ import pickle
 import sys
 
 import jax
+import numpy as np
 
 from aim_resolve import (
     OptimizeKLConfig,
@@ -94,7 +95,9 @@ def main():
     cfg = SetupKLConfig.from_file(mdl_yml)
 
     for pf, of in offsets.items():
-        cfg.modify_sec(f"sky_{pf}", offset=of)
+        # plain numbers for the YAML file (offsets of tiles and points are lists)
+        of = np.asarray(of, dtype="float64")
+        cfg.modify_sec(f"sky_{pf}", offset=of.tolist() if of.ndim else float(of))
 
     # save the new model yaml-file
     cfg.to_file(f"{odir}/files/{it}_pre.yml")
