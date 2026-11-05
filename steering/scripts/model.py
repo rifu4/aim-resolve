@@ -1,5 +1,8 @@
 """Script for building the sky model from detected sources between reconstruction iterations."""
 
+import copy
+import json
+import os
 import sys
 
 import numpy as np
@@ -22,6 +25,8 @@ from aim_resolve import (
     split_style,
     yaml_load,
 )
+from aim_resolve.mask import add_freq_axis
+from aim_resolve.reuse import component_masks, match_components, upsample_mask
 
 
 def zoom_of_it(zoom, it):
@@ -39,6 +44,93 @@ def zoom_of_it(zoom, it):
     return int(zoom)
 
 
+def reuse_components(mask_dct, prev_secs, mdl_dct, odir, it, zoom, zoom_it, freq):
+    """Match the new components with those of the previous iteration (base_model.reuse).
+
+    A matched object or tile gets the mask of the old one (so box and mask stay the same) and is
+    later written with the old box and offset. The kept components go to the section reuse.{it} of
+    the model file (see write_reuse), all decisions with their values to {odir}/reuse/{it}_reuse.json.
+
+    Returns
+    -------
+    dict
+        ``objects``: {new prefix: old prefix}, ``tiles``: {new copy index: old copy index},
+        ``n``: number of kept components.
+    """
+    out = dict(objects={}, tiles={}, n=0)
+    opts = dict(mdl_dct.get("reuse") or {})
+    msk_file = f"{odir}/files/{it - 1}_msk.npz"
+    if not opts.get("enabled", False) or it < 2 or not os.path.isfile(msk_file):
+        return out
+
+    def plain(v):
+        return remove_freq_axis(np.asarray(v), freq)
+
+    old = {k: upsample_mask(plain(v), zoom) for k, v in np.load(msk_file).items() if k.endswith(f".{it - 1}")}
+    new = {k: plain(v) for k, v in mask_dct.items()}
+    # the core of a new mask has to keep this margin inside the old box (base pixels, scaled with the zoom)
+    margin = float(opts.get("fit_margin", 0.5)) * mdl_dct["masks"].get("margin_min", 2) * zoom_it
+    match = match_components(
+        component_masks(new, it), component_masks(old, it - 1), margin,
+        iou_min=float(opts.get("iou_min", 0.7)), area_min=float(opts.get("area_min", 0.7)),
+    )
+    for name, res in match.items():
+        if res["old"] is None:
+            continue
+        if name.startswith("o") and f"sky_{res['old']}" in prev_secs:
+            out["objects"][name] = res["old"]
+            mask_dct[name] = old[res["old"]] if len(freq) == 1 else add_freq_axis(old[res["old"]], freq)
+        elif name.startswith("t") and f"sky_t0.{it - 1}" in prev_secs:
+            k, j = int(name.split("[")[1][:-1]), int(res["old"].split("[")[1][:-1])
+            out["tiles"][k] = j
+            tile = old[f"t0.{it - 1}"][j]
+            mask_dct[name.split("[")[0]][k] = tile if len(freq) == 1 else add_freq_axis(tile, freq)
+        else:
+            res["old"], res["reason"] = None, "kind not handled (points)"
+    out["n"] = len(out["objects"]) + len(out["tiles"])
+    if out["n"]:
+        # the masks changed: update the background mask
+        mask_dct["sum"] = np.sum(
+            [np.sum(v, axis=0) if v.ndim == 3 else v for k, v in mask_dct.items() if k not in ("sum", f"bg.{it}")], axis=0
+        )
+        mask_dct[f"bg.{it}"] = np.floor(1 - mask_dct["sum"]).clip(0, 1)
+    print(f"reuse: {out['n']} of {len(match)} components kept from iteration {it - 1}")
+    for name, res in match.items():
+        print(f"  {name}: " + (f"= {res['old']}" if res["old"] else "new") + f" ({ {k: v for k, v in res.items() if k != 'old'} })")
+    os.makedirs(f"{odir}/reuse", exist_ok=True)
+    with open(f"{odir}/reuse/{it}_reuse.json", "w") as f:
+        json.dump(dict(objects=out["objects"], tiles={str(k): v for k, v in out["tiles"].items()}, decisions=match), f, indent=1)
+    return out
+
+
+def write_reuse(cfg, reuse, it):
+    """Section reuse.{it} of the model file: kept objects {new prefix: old prefix} and kept tiles as
+    [new copy index, old copy index] pairs (read by the pre-fit, never built as a model)."""
+    if reuse["n"]:
+        cfg.add_sec(
+            f"reuse.{it}",
+            objects=dict(reuse["objects"]),
+            tiles=[[int(k), int(j)] for k, j in sorted(reuse["tiles"].items())],
+        )
+
+
+def reused_section(prev_secs, old_prefix, zoom_it):
+    """Section of an object that keeps its old box: old grid (factor of the current zoom), prior, taper and offset."""
+    dct = copy.deepcopy(prev_secs[f"sky_{old_prefix}"])
+    dct.pop("prefix", None)
+    dct["grid"] = dict(dct["grid"]) | dict(factor=zoom_it)
+    return dct
+
+
+def reuse_tiles(ti_dct, prev_secs, tiles):
+    """Kept tiles get the center and offset of the old tile ({new copy index: old copy index})."""
+    old = next(v for k, v in prev_secs.items() if k.startswith("sky_t0."))
+    centers, offsets = old["tile_grid"]["center"], old["offset"]
+    for k, j in tiles.items():
+        ti_dct["tile_grid"]["center"][k] = copy.deepcopy(centers[j])
+        ti_dct["offset"][k] = offsets[j]
+
+
 def main():
     """Build sky model components from detection maps and update the configuration for the next iteration."""
     _, files = sys.argv[0], sys.argv[1:]
@@ -46,6 +138,7 @@ def main():
 
     # load the model yaml-file from the previous iteration to the SetupKLConfig class and add one iteration
     cfg = SetupKLConfig.from_file(mdl_yml)
+    prev_secs = {k: copy.deepcopy(v) for k, v in cfg.sections.items() if k.startswith("sky_") and k.endswith(f".{cfg.it}")}
     cfg.sections["opt"]["resume"] = cfg.sections["opt"]["odir"]
     cfg.sections["opt"]["odir"] = cfg.sections["opt"]["odir"].replace(
         f"{cfg.it}_rec", f"{cfg.it + 1}_rec"
@@ -106,6 +199,10 @@ def main():
         ps_map, cl_map, it, freq, zoom_it, **mdl_dct["masks"]
     )
 
+    # stable boxes: new components that are the same source as an old one keep the old box (and offset)
+    reuse = reuse_components(mask_dct, prev_secs, mdl_dct, odir, int(it), zoom, zoom_it, freq)
+    write_reuse(cfg, reuse, int(it))
+
     bg_dct = model_background(mask_dct[f"bg.{it}"], freq, rec.val)
     cfg.modify_sec(f"sky_bg.{it}", merge_base=True, **bg_dct)
     # optionally the background on the zoomed grid as well (otherwise only the components are refined)
@@ -124,9 +221,12 @@ def main():
 
     if mdl_dct["objects"]:
         for oi in filter(lambda x: "o" in x, mask_dct):
-            oi_dct = model_objects(
-                mask_dct[oi], grid, freq, rec_sub, **mdl_dct["objects"]
-            )
+            if oi in reuse["objects"]:
+                oi_dct = reused_section(prev_secs, reuse["objects"][oi], zoom_it)
+            else:
+                oi_dct = model_objects(
+                    mask_dct[oi], grid, freq, rec_sub, **mdl_dct["objects"]
+                )
             if oi_dct:
                 cfg.add_sec(f"sky_{oi}", prefix=oi, **oi_dct)
                 cfg.modify_sec(f"sky.{it}", **{oi: f"=sky_{oi}"})
@@ -134,6 +234,8 @@ def main():
     if mdl_dct["tiles"]:
         for ti in filter(lambda x: "t" in x, mask_dct):
             ti_dct = model_tiles(mask_dct[ti], grid, freq, rec_sub, **mdl_dct["tiles"])
+            if ti_dct and reuse["tiles"]:
+                reuse_tiles(ti_dct, prev_secs, reuse["tiles"])
             if ti_dct:
                 cfg.add_sec(f"sky_{ti}", prefix=ti, **ti_dct)
                 cfg.modify_sec(f"sky.{it}", **{ti: f"=sky_{ti}"})
@@ -151,7 +253,10 @@ def main():
             [
                 dict(
                     arrays=[rec.val],
-                    labels=[f"{len(px)} points, {len(objects)} objects, {len(tiles)} tiles"],
+                    labels=[
+                        f"{len(px)} points, {len(objects)} objects, {len(tiles)} tiles"
+                        + (f" ({reuse['n']} kept)" if reuse["n"] else "")
+                    ],
                     overlays=[overlay],
                     cmap=sky_dct["cmap"],
                     vmin=vmin,

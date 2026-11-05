@@ -144,6 +144,13 @@ base_model:
   # the grids, and the detection of iteration 4 runs on the zoomed reconstruction (pixel settings scaled by detect.py)
   zoom: 1
   zoom_bg: false     # true: the background on the zoomed grid as well (otherwise only the components are refined)
+  # stable boxes (PLAN_reuse.md, part B): a new component that is the same source as an old one keeps the old box,
+  # offset, prior and taper; decisions in files/{it}_reuse.json. Off until the pre-fit uses it (part C).
+  reuse:
+    enabled: false
+    iou_min: 0.7       # intersection over union of the new and old mask supports
+    area_min: 0.7      # minimum ratio of the box areas (new / old), otherwise the box should shrink
+    fit_margin: 0.5    # the core of the new mask keeps this fraction of margin_min inside the old box
   masks:
     margin_fac: 0.1    # was 0.2: the agent masks follow the objects closely, 10% keeps the boxes compact
     margin_min: 10     # was 5: minimum margin for the many small compact sources (tiles)

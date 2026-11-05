@@ -13,6 +13,8 @@ def clean_dict(dct):
         """Check if a key is referenced in any value of the dictionary."""
         if "opt" in key and "base" not in key:
             return True
+        if key.startswith("reuse."):  # bookkeeping of the model step (kept components), never referenced
+            return True
         for _k, v in dct.items():
             if isinstance(v, dict):
                 if _need_key(key, v):

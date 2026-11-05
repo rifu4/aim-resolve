@@ -78,13 +78,18 @@ box and offset as now.
   box is compared in sky coordinates, so an unchanged source keeps its box at the finer resolution.
 
 ### Implementation
-- `masks_from_maps` (or a new step after it) gets the previous masks and model sections and returns
-  the reused boxes and their old prefixes.
-- `model.py` writes, for every reused component, a field `reuse: <old prefix>`, for example
-  `sky_o1.2: {..., reuse: o0.1}`. The old grid, prior and offset are copied verbatim. Other code
-  ignores the field.
-- The per-component decision and its values (IoU, area ratio) are logged and saved to
-  `files/{it}_reuse.json`.
+- **Implemented** (`src/aim_resolve/reuse.py`, `steering/scripts/model.py`, `base_model.reuse`):
+  - Sources are compared by their cores (the detections without margins), one-to-one within their
+    kind; nested or touching components do not block a match (they are the overlap groups of C).
+  - A kept object gets the old section (grid with the current zoom factor, prior, taper, offset); a
+    kept tile the old center and offset; both get the old mask.
+  - The model file gets a section `reuse.{it}` (never built as a model, kept by `clean_dict`):
+    `objects: {new prefix: old prefix}` and `tiles: [[new copy index, old copy index], ...]`.
+  - All decisions with their values (IoU, area ratio, fits, reason) go to
+    `{odir}/reuse/{it}_reuse.json`.
+  - Points are not handled yet (reported as "kind not handled").
+  - Test on `agent3`, iteration 2 → 3: 26 of 27 components kept (both objects, 24 of 25 tiles; one
+    new tile covers two old ones), with and without a 2× zoom at that step.
 
 ---
 
@@ -174,7 +179,7 @@ R is the previous total reconstruction (all old components plus the old backgrou
 
 ### Implementation
 - `transition_addt`:
-  - a new optional input `reuse` (from `files/{it}_reuse.json` / the `reuse:` fields);
+  - the kept components from the section `reuse.{it}` of the model file;
   - group building, the copy decision, the R' / background / group fits;
   - the skip path when nothing changed.
 - Helpers:
@@ -227,7 +232,7 @@ base_trans:
     pre-fit): zoom-fit against that pre-fit, per component and for faint structure.
 
 ## Order of work
-1. **B:** hysteresis and the `reuse:` markers in the model step (incl. the zoom scaling).
+1. **B:** hysteresis and the `reuse.{it}` section in the model step (incl. the zoom scaling). Done.
 2. **C:** copy for objects and points, overlap groups, background refit, logging.
 3. **C:** zoom-fit for unchanged groups at zoom steps.
 4. **C:** skip path when nothing changed.
