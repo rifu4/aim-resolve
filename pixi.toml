@@ -44,6 +44,14 @@ wandb = "*"
 [feature.pipeline.pypi-dependencies]
 snakemake = "*"
 
+# ── agent feature ────────────────────────────────────────────────────
+# Claude API client for the agent-based source detection (base_detect.method: agent);
+# kept out of the default/cpu environments and confined to the `agent` env.
+# Not mirrored as a pyproject extra: changing pyproject.toml makes pixi re-solve
+# every environment (aim-resolve is an editable dependency of all of them).
+[feature.agent.pypi-dependencies]
+anthropic = "*"
+
 # ── radio extra (mirrors [project.optional-dependencies] radio) ──────
 # Installed from GitLab (not on PyPI). Requires network access to gitlab.mpcdf.mpg.de.
 [feature.radio.pypi-dependencies]
@@ -86,5 +94,8 @@ python-casacore = "*"
 [environments]
 default = { features = ["cuda", "train", "pipeline", "radio", "docs"] }
 cpu = { features = ["cpu", "train", "pipeline", "radio", "docs"] }
+# default env + Claude API client. Solved on its own (no solve-group), so adding it
+# leaves the locked default environment untouched.
+agent = { features = ["cuda", "train", "pipeline", "radio", "docs", "agent"] }
 # MS -> observation conversion: casacore + classic resolve (radio) + cpu jax.
 casa = { features = ["casa", "radio", "cpu"] }

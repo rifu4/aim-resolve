@@ -8,6 +8,7 @@ transition utilities for multi-resolution and multi-frequency workflows.
 from . import enforce_float64
 
 # --- top-level modules ---
+from .agent_detect import agent_detect, boxes_to_maps, manual_detect
 from .builders import get_builders
 from .clustering import dbscan_clustering, objects2points
 from .data import data_func, image_data, radio_data
@@ -98,15 +99,22 @@ from .optimize import (
 
 # --- plot ---
 from .plot import (
+    component_boxes,
+    dynamic_limits,
     plot_agreement,
     plot_arrays,
     plot_classes,
+    plot_components,
     plot_image,
+    plot_kl_callback,
     plot_mean_and_std,
     plot_models,
+    plot_panels,
     plot_power,
     plot_pullplot,
     plot_samples,
+    plot_style,
+    split_style,
 )
 
 # --- resolve ---
