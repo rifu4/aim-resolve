@@ -113,11 +113,25 @@ class TestGaussianModel:
             prefix="gm ",
             shape=np.array([8, 8]),
             distances=np.array([1.0, 1.0]),
+            cov_x=(1.0, 0.1),
+            cov_y=(1.0, 0.1),
+            n_copies=3,
+        )
+        assert isinstance(model, VModel)
+
+    def test_n_copies_constant(self):
+        # constant taper: no parameters to map over, the same profile for every copy
+        model = gaussian_model(
+            prefix="gm ",
+            shape=np.array([8, 8]),
+            distances=np.array([1.0, 1.0]),
             cov_x=1.0,
             cov_y=1.0,
             n_copies=3,
         )
-        assert isinstance(model, VModel)
+        out = np.asarray(model({}))
+        assert out.shape == (3, 8, 8)
+        assert np.allclose(out[0], out[2])
 
 
 class TestCovPrior:

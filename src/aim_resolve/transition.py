@@ -28,7 +28,7 @@ from .modeling import get_offset
 from .optimize.opt_dct import callable_optimize_dict
 from .optimize.opt_kl import optimize_kl
 from .optimize.samples import MySamples, domain_keys, domain_tree, random_init
-from .plot import plot_arrays
+from .plot import dynamic_limits, plot_arrays, plot_panels, plot_style, split_style
 
 
 def transition_func(
@@ -252,6 +252,8 @@ def transition_addt(
     mask=None,
     noise=None,
     plot_dct=None,
+    style_dct=None,
+    reset_noise=False,
     **kwargs,
 ):
     """Add components by fitting them to the previous reconstruction.
@@ -287,6 +289,14 @@ def transition_addt(
         ``max_std=1e-5``.
     plot_dct : dict, optional
         Plotting parameters. Default is ``{'norm': 'log'}``.
+    style_dct : dict, optional
+        Style of the pipeline plots (the ``base_style`` section, see ``split_style``).
+        If given, the masks and the fit of every stage are plotted with ``plot_panels``
+        (target and fit side by side, shared colorbar, step label), otherwise with
+        ``plot_arrays``. Default is None.
+    reset_noise : bool, optional
+        Do not take over the learned noise scaling of the previous iteration: the new
+        noise model starts at its prior. Default is ``False``.
 
     Returns
     -------
@@ -318,11 +328,16 @@ def transition_addt(
         mask_dct = masks_from_model(sky_new)
     mask_box = masks_to_boxes(sky_new, mask_dct)
     if odir:
-        p_dct = plot_dct | dict(name=f"{it}_masks.png", norm="linear", vmin=0, vmax=1)
         mask_val = [remove_freq_axis(v, sky_new.freq) for v in mask_dct.values()]
-        plot_arrays(
-            [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val], **p_dct
-        )
+        mask_val = [np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val]
+        if style_dct is not None:
+            theme, _, pnl_dct = split_style(style_dct)
+            group = dict(arrays=mask_val, labels=list(mask_dct), cmap=plot_dct.get("cmap", "inferno"), norm="linear", vmin=0, vmax=1)
+            with plot_style(**theme):
+                plot_panels([group], name=f"{it}_masks.png", odir=odir, step=f"pre-fit · it {it} · masks", **pnl_dct)
+        else:
+            p_dct = plot_dct | dict(name=f"{it}_masks.png", norm="linear", vmin=0, vmax=1)
+            plot_arrays(mask_val, **p_dct)
 
     # initialize an empty position tree
     ptree = {}
@@ -340,6 +355,8 @@ def transition_addt(
         noise=noise.copy(),
         opt_dct=opt_dct,
         plot_dct=plot_dct | dict(name=f"{it}_{sky_bg.prefix}.png"),
+        style_dct=style_dct,
+        step=f"pre-fit · it {it} · {sky_bg.prefix}",
     )
     ptree |= pos_bg.tree
 
@@ -366,6 +383,8 @@ def transition_addt(
             noise=noise.copy(),
             opt_dct=opt_dct,
             plot_dct=plot_dct | dict(name=f"{it}_{sky_ci.prefix}.png"),
+            style_dct=style_dct,
+            step=f"pre-fit · it {it} · {sky_ci.prefix}",
         )
         ptree |= pos_ci.tree
 
@@ -378,13 +397,15 @@ def transition_addt(
         pos=Vector(ptree),
         opt_dct=None,
         plot_dct=plot_dct | dict(name=f"{it}_{sky_new.prefix}.png"),
+        style_dct=style_dct,
+        step=f"pre-fit · it {it} · {sky_new.prefix}",
     )
     ptree = pos_sky.tree
 
     # load learned noise scaling of the previous iteration if available
     nm_old = lh_old["noise_model"]
     nm_new = lh_new["noise_model"]
-    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel):
+    if isinstance(nm_old, NoiseModel) and isinstance(nm_new, NoiseModel) and not reset_noise:
         ptree[nm_new.prefix] = map_signal(sky_old.grid, sky_new.grid)(
             domain_tree(samples)[nm_old.prefix]
         )
@@ -419,6 +440,7 @@ def transition_zoom(
     own_kl=None,
     flux_scale=1.0,
     reset_noise=False,
+    style_dct=None,
     **kwargs,
 ):
     """Transfer parameters to a higher-resolution (zoomed) grid.
@@ -476,6 +498,11 @@ def transition_zoom(
         If True, the learned noise scaling of the previous iteration is not copied and
         the new noise model starts at its prior (e.g. for new data or weights). Default is
         ``False``.
+    style_dct : dict, optional
+        Style of the pipeline plots (the ``base_style`` section, see ``split_style``).
+        If given, target and fit of every component are plotted with ``plot_panels``
+        (tiles as sub-grids, shared colorbar, step label), otherwise with
+        ``plot_arrays``. Default is None.
 
     Returns
     -------
@@ -538,6 +565,8 @@ def transition_zoom(
                 data=rec_oi,
                 pos=pos_ci,
                 plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+                style_dct=style_dct,
+                step=f"zoom transition · it {it} · {sky_ni.prefix}",
             )
         elif fit in ("log_map", "log_kl") and not (sky_ni.grid == sky_oi.grid and same_params):
             data_ni = flux_scale * own_to_new(sky_oi, sky_ni, samples.mean(partial(component_own, sky_oi)))
@@ -553,6 +582,8 @@ def transition_zoom(
                 data=rec_oi,
                 pos=pos_ci,
                 plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+                style_dct=style_dct,
+                step=f"zoom transition · it {it} · {sky_ni.prefix}",
             )
         elif sky_ni.grid == sky_oi.grid:
             pos_ci = {
@@ -566,6 +597,8 @@ def transition_zoom(
                 data=rec_oi,
                 pos=Vector(pos_ci),
                 plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+                style_dct=style_dct,
+                step=f"zoom transition · it {it} · {sky_ni.prefix}",
             )
         else:
             pos_ci = optimize_and_plot(
@@ -575,6 +608,8 @@ def transition_zoom(
                 noise=noise.copy(),
                 opt_dct=opt_dct,
                 plot_dct=plot_dct | dict(name=f"{it}_{sky_ni.prefix}.png"),
+                style_dct=style_dct,
+                step=f"zoom transition · it {it} · {sky_ni.prefix}",
             )
         ptree |= pos_ci.tree
 
@@ -587,6 +622,8 @@ def transition_zoom(
         pos=Vector(ptree),
         opt_dct=None,
         plot_dct=plot_dct | dict(name=f"{it}_{sky_new.prefix}.png"),
+        style_dct=style_dct,
+        step=f"zoom transition · it {it} · {sky_new.prefix}",
     )
     ptree = pos_sky.tree
 
@@ -976,6 +1013,8 @@ def optimize_and_plot(
     opt_dct=None,
     noise=None,
     plot_dct=None,
+    style_dct=None,
+    step=None,
 ):
     """Optimise a sky model on given data and optionally plot the result.
 
@@ -999,6 +1038,11 @@ def optimize_and_plot(
         Noise configuration for the fit. Default uses ``max_std=1e-5``.
     plot_dct : dict, optional
         Plotting parameters including ``odir`` and ``name``.
+    style_dct : dict, optional
+        Style of the pipeline plots (``base_style``); if given, target and fit are
+        plotted with ``plot_panels``, otherwise with ``plot_arrays``. Default is None.
+    step : str, optional
+        Pipeline step shown above the ``plot_panels`` plots. Default is None.
 
     Returns
     -------
@@ -1034,7 +1078,12 @@ def optimize_and_plot(
                     odir=plot_dct["odir"] + "/callback",
                     name=f"{opt_state.nit}_{sky.prefix}",
                 )
-                plot_arrays(samples.mean(sky), **p_dct)
+                if style_dct is not None:
+                    _plot_target_and_fit(
+                        None, samples.mean(sky), p_dct, style_dct, f"{step} · KL {opt_state.nit}" if step else None
+                    )
+                else:
+                    plot_arrays(samples.mean(sky), **p_dct)
         else:
             callback = None
 
@@ -1045,7 +1094,14 @@ def optimize_and_plot(
         )
         pos = samples.pos
 
-    if plot_dct["odir"]:
+    if plot_dct["odir"] and style_dct is not None:
+        if isinstance(sky, SignalModel):
+            sky.mask = None
+        if isinstance(sky, TileModel):
+            _plot_tiles_target_and_fit(sky, data, pos, plot_dct, style_dct, step)
+        else:
+            _plot_target_and_fit(data, sky(pos), plot_dct, style_dct, step)
+    elif plot_dct["odir"]:
         [plot_dct.pop(k) for k in ["vmin", "vmax"] if k in plot_dct]
         if isinstance(sky, SignalModel):
             sky.mask = None
@@ -1068,3 +1124,64 @@ def optimize_and_plot(
         )
 
     return pos
+
+
+def _tile_cutouts(sky, image):
+    """Cutouts of an image on the grid of a TileModel at the boxes of its tiles (central frequency)."""
+    image = np.asarray(image, dtype="float64")
+    image = image[image.shape[0] // 2] if image.ndim == 3 else image
+    lims0 = np.asarray(sky.grid.lims, dtype="float64")[:, 0]
+    fac = np.asarray(sky.grid.fac, dtype="float64")
+    shape = np.asarray(sky.tiles.grid.shape)
+    lims = np.asarray(sky.tiles.grid.lims, dtype="float64").reshape((-1, 2, 2))
+    cuts = []
+    for lm in lims:
+        i0, j0 = np.round((lm[:, 0] - lims0) * fac).astype(int)
+        cuts.append(image[i0 : i0 + shape[0], j0 : j0 + shape[1]])
+    return cuts
+
+
+def _plot_tiles_target_and_fit(sky, data, pos, plot_dct, style_dct, step, max_sub=100):
+    """Target and fit of a TileModel as two sub-grid panels of its tiles (at most the ``max_sub`` brightest)."""
+    from .plot.panels import _capped
+
+    fits = np.asarray(sky(pos, map=False), dtype="float64")
+    if sky.tiles.grid.n_copies == 1:
+        fits = fits[None]
+    if fits.ndim == 4:  # (tiles, freq, x, y): central frequency
+        fits = fits[:, fits.shape[1] // 2]
+    targets = _tile_cutouts(sky, data)
+    (targets,), (label,), (sel,) = _capped([targets], ["target"], max_sub)
+    fits = list(fits) if sel is None else [fits[i] for i in sel]
+    theme, drange, pnl_dct = split_style(style_dct)
+    vmin, vmax = dynamic_limits(np.array(targets), drange, plot_dct.get("vmin"), plot_dct.get("vmax"))
+    group = dict(
+        arrays=[targets, fits], labels=[label, label.replace("target", "fit")], cmap=plot_dct.get("cmap", "inferno"),
+        vmin=vmin, vmax=vmax,
+    )
+    pnl_dct.pop("cols", None)
+    with plot_style(**theme):
+        plot_panels([group], name=plot_dct["name"], odir=plot_dct["odir"], step=step, cols=2, **pnl_dct)
+
+
+def _plot_target_and_fit(data, fit, plot_dct, style_dct, step):
+    """Target (if given) and fit of a transition stage side by side with one shared colorbar."""
+    theme, drange, pnl_dct = split_style(style_dct)
+    fit = np.asarray(fit, dtype="float64")
+    fits = list(fit) if fit.ndim == 3 else [fit]
+    if data is not None:
+        data = np.asarray(data, dtype="float64")
+        targets = list(data) if data.ndim == 3 else [data]
+        arrays, labels = [], []
+        for f, (d, m) in enumerate(zip(targets, fits, strict=True)):
+            sfx = f" ch {f}" if len(fits) > 1 else ""
+            arrays += [d, m]
+            labels += [f"target{sfx}", f"fit{sfx}"]
+        reference = np.array(targets)
+    else:
+        arrays, labels, reference = fits, ["fit"] * len(fits), np.array(fits)
+    vmin, vmax = dynamic_limits(reference, drange, plot_dct.get("vmin"), plot_dct.get("vmax"))
+    group = dict(arrays=arrays, labels=labels, cmap=plot_dct.get("cmap", "inferno"), vmin=vmin, vmax=vmax)
+    cols = pnl_dct.pop("cols", None) or (2 if data is not None else None)
+    with plot_style(**theme):
+        plot_panels([group], name=plot_dct["name"], odir=plot_dct["odir"], step=step, cols=cols, **pnl_dct)

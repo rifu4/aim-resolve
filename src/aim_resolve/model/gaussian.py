@@ -90,7 +90,10 @@ def gaussian_model(
     init = {k: partial(random_like, primals=v) for k, v in ptree.items()}
     model = Model(gaussian, domain=ptree.copy(), init=init)
 
-    if n_copies > 1:
+    if n_copies > 1 and not ptree:
+        # constant taper: nothing to map over, the same profile for every copy
+        return Model(lambda p: jnp.broadcast_to(gaussian(p), (n_copies, *shape)), domain={}, init={})
+    elif n_copies > 1:
         return VModel(model, n_copies)
     else:
         return model

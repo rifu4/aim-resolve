@@ -100,12 +100,25 @@ def model_points(
     return ps_dct
 
 
+def _taper(gaussian):
+    """Gaussian taper (``cov_x``, ``cov_y``) from ``mean_fac`` and ``std_fac``.
+
+    A prior ``[mean_fac, std_fac]``, or the constant ``mean_fac`` if ``std_fac`` is
+    missing, None or 0 (fixed taper).
+    """
+    std = gaussian.get("std_fac")
+    cov = float(gaussian["mean_fac"]) if not std else [float(gaussian["mean_fac"]), float(std)]
+    return dict(cov_x=cov, cov_y=cov)
+
+
 def model_objects(
     oj_mask,
     grid,
     freq,
     rec_sub,
     gaussian=None,
+    params_sf="params_sf",
+    params_mf="params_mf",
 ):
     """Create an extended-object model configuration dictionary.
 
@@ -123,8 +136,12 @@ def model_objects(
     rec_sub : np.ndarray
         Background-subtracted reconstruction for offset calculation.
     gaussian : dict or None, optional
-        Gaussian smoothing parameters (``mean_fac``, ``std_fac``).
+        Gaussian smoothing parameters (``mean_fac``, ``std_fac``; without ``std_fac`` fixed).
         Default is None.
+    params_sf, params_mf : str, optional
+        Config sections of the prior parameters for one or several frequencies (e.g. a
+        component prior with a narrower zero mode than the background). Default is
+        ``'params_sf'`` and ``'params_mf'``.
 
     Returns
     -------
@@ -147,16 +164,13 @@ def model_objects(
         grid=oj_grid.to_dict(),
         freq=freq,
         params=dict(
-            base="params_mf" if len(freq) > 1 else "params_sf",
+            base=params_mf if len(freq) > 1 else params_sf,
         ),
         offset=get_offset("object", rec_sub, oj_mask, freq),
     )
 
     if gaussian:
-        oj_dct["gaussian"] = dict(
-            cov_x=[float(gaussian["mean_fac"]), float(gaussian["std_fac"])],
-            cov_y=[float(gaussian["mean_fac"]), float(gaussian["std_fac"])],
-        )
+        oj_dct["gaussian"] = _taper(gaussian)
 
     return oj_dct
 
@@ -168,6 +182,8 @@ def model_tiles(
     rec_sub,
     tile_size=32,
     gaussian=None,
+    params_sf="params_sf",
+    params_mf="params_mf",
 ):
     """Create a tile model configuration dictionary.
 
@@ -186,8 +202,12 @@ def model_tiles(
     tile_size : int, optional
         Spatial size of each tile in pixels. Default is 32.
     gaussian : dict or None, optional
-        Gaussian smoothing parameters (``mean_fac``, ``std_fac``).
+        Gaussian smoothing parameters (``mean_fac``, ``std_fac``; without ``std_fac`` fixed).
         Default is None.
+    params_sf, params_mf : str, optional
+        Config sections of the prior parameters for one or several frequencies (e.g. a
+        component prior with a narrower zero mode than the background). Default is
+        ``'params_sf'`` and ``'params_mf'``.
 
     Returns
     -------
@@ -217,16 +237,13 @@ def model_tiles(
         grid=grid.to_dict("center"),
         freq=freq,
         params=dict(
-            base="params_mf" if len(freq) > 1 else "params_sf",
+            base=params_mf if len(freq) > 1 else params_sf,
         ),
         offset=get_offset("tile", rec_sub, ts_masks, freq),
     )
 
     if gaussian:
-        ts_dct["gaussian"] = dict(
-            cov_x=[float(gaussian["mean_fac"]), float(gaussian["std_fac"])],
-            cov_y=[float(gaussian["mean_fac"]), float(gaussian["std_fac"])],
-        )
+        ts_dct["gaussian"] = _taper(gaussian)
 
     return ts_dct
 

@@ -74,8 +74,10 @@ def masks_from_maps(
         o_pix = [1 + om.max() - om.min() for om in np.where(o_map > 0)]
         if np.all(o_pix <= tile_size):
             ts_maps.append(o_map)
-        elif i < max_objects:
+        elif len(oj_maps) < max_objects:
             oj_maps.append(o_map)
+        else:
+            print(f"object {i} ({o_pix[0]}x{o_pix[1]} px with margin) dropped: more than {max_objects} objects")
 
     for i in range(len(oj_maps)):
         mask_dct[f"o{i}.{it}"] = np.asarray(oj_maps[i])

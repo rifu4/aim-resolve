@@ -264,6 +264,9 @@ def zoom_extension(
         opt_dct=dict(base="base_trans"),
         odir=f"{odir}/opt/{cfg.it - 1}_rec_{zoom}z{run}/trans",
     )
+    # plots of the transition in the style of the pipeline plots (base_style of the run, if any)
+    if base_dct.get("base_style"):
+        cfg.modify_sec(f"trans.{cfg.it}", style_dct=dict(base_dct["base_style"]))
     cfg.modify_sec(f"opt.{cfg.it}", base="base_opt.n", transitions=f"=trans.{cfg.it}")
     if flux_scale != 1:
         cfg.modify_sec(f"trans.{cfg.it}", flux_scale=float(flux_scale))
