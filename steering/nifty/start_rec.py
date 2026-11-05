@@ -18,7 +18,10 @@ import click
     help='CUDA device to use (e.g. "0", "0,1", ...), default is "" for CPU',
 )
 @click.option(
-    "--plot_range", default=None, help="Brigthness range for plotting the sky models"
+    "--plot_range",
+    type=float,
+    default=None,
+    help="Dynamic range of the sky plots (vmin = max / plot_range); default: base_style.dynamic_range or 1e5",
 )
 @click.option(
     "--gpu_allocator",
@@ -47,7 +50,8 @@ def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, 
     cuda_device : str
         CUDA device identifier, empty string for CPU.
     plot_range : float or None
-        Brightness range for plotting the sky models.
+        Dynamic range of the sky plots (vmin = max / plot_range). None: the
+        ``base_style.dynamic_range`` of the config, else 1e5.
     gpu_allocator : str or None
         XLA GPU allocator (XLA_PYTHON_CLIENT_ALLOCATOR): "platform" (allocated and freed directly, avoids
         out-of-memory errors from pool fragmentation), "bfc" (memory pool, JAX's default) or "cuda_async"
@@ -89,11 +93,17 @@ def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, 
     sky_dct = {
         sec: cfg.instantiate_sec(sec) for sec in cfg.sections if sec.startswith("sky.")
     }
-    sky_models = []
-    for sky in sky_dct.values():
-        sky_models += [
-            sky,
-        ] + [m for m in sky.models if len(sky.models) > 1]
+    skies = list(sky_dct.values())
+
+    # Plot style (base_style section of the config, if any) and dynamic range of the sky plots:
+    # --plot_range, else base_style.dynamic_range, else 1e5
+    theme, cfg_range, pnl_dct = aim.split_style(cfg.sections.get("base_style"))
+    if plot_range is not None:
+        dynamic_range = float(plot_range)
+    elif cfg.sections.get("base_style", {}).get("dynamic_range") is not None:
+        dynamic_range = cfg_range
+    else:
+        dynamic_range = 1e5
 
     # Print and plot the data
     data_dct = {
@@ -102,57 +112,24 @@ def main(base, config, cuda_device, plot_range, gpu_allocator, gpu_preallocate, 
     for dk, dv in data_dct.items():
         print(dv, "\n")
         if isinstance(dv, aim.ImageData):
-            aim.plot_arrays(dv.val, name=dk, odir=odir, norm="log")
+            d_val = np.asarray(dv.val)
         elif isinstance(dv, aim.Observation):
-            aim.plot_arrays(dv.dirty_image(sky_models[0].grid), name=dk, odir=odir)
+            d_val = np.asarray(dv.dirty_image(skies[0].grid))
+        else:
+            continue
+        d_val = d_val[d_val.shape[0] // 2] if d_val.ndim == 3 else d_val
+        vmin, vmax = aim.dynamic_limits(d_val, dynamic_range)
+        with aim.plot_style(**theme):
+            aim.plot_panels([dict(arrays=[d_val], vmin=vmin, vmax=vmax)], name=f"{dk}.png", odir=odir, step=dk, **pnl_dct)
 
     # import nifty.re as jft
     # jft.check_model(sky_models[-1], sky_models[-1].init(jax.random.PRNGKey(4)))
 
-    # Define a callback function to plot the results of the optimization after each iteration
+    # Define a callback function to plot the sky and its components after each iteration
     def callback(samples, state, *args):
         nit = args[0] if len(args) > 0 else state.nit
-        for sky in sky_models:
-            if aim.domain_keys(sky).issubset(aim.domain_keys(samples)):
-                sky_val = samples.mean(sky)
-                sky_min = (
-                    sky_val.max() / plot_range
-                    if plot_range is not None
-                    else sky_val[sky_val > 0].min()
-                )
-                aim.plot_arrays(
-                    sky_val,
-                    name=f"{nit}_{sky.prefix}",
-                    odir=odir,
-                    norm="log",
-                    rows=1,
-                    vmin=sky_min,
-                )
-                if sky.freq.size > 1:
-                    sky_ref = samples.mean(sky.ref_freq_model)
-                    aim.plot_arrays(
-                        sky_ref,
-                        name=f"{nit}_{sky.prefix}_ref",
-                        odir=odir,
-                        norm="log",
-                        rows=1,
-                        vmin=sky_min,
-                    )
-                    if isinstance(sky, aim.ComponentModel) and len(sky.models) > 1:
-                        sky = sky.points_and_objects
-                    alpha = samples.mean(sky.spectral_index)
-                    contours = {
-                        "array": sky_ref,
-                        "colors": "white",
-                        "levels": [sky_val.max() / d for d in [1e3, 1e2, 10]],
-                        "linewidths": 0.25,
-                    }
-                    aim.plot_arrays(
-                        np.where(sky_ref > sky_min, alpha, np.nan),
-                        name=f"{nit}_{sky.prefix}_alpha",
-                        odir=odir,
-                        contour=contours,
-                    )
+        with aim.plot_style(**theme):
+            aim.plot_kl_callback(skies, samples, nit, odir, dynamic_range=dynamic_range, **pnl_dct)
 
     # Run the optimization
     visible_devices = jax.devices()

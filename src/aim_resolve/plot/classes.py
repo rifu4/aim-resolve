@@ -2,7 +2,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import colormaps
+from matplotlib import colormaps, patheffects
 
 from .util import plot_figure, set_ticks
 
@@ -18,6 +18,7 @@ def plot_classes(
     ticks=5,
     plot_grid=True,
     plot_label=True,
+    label_loc="title",
     figsize=(5, 5),
     dpi=100,
     **kwargs,
@@ -47,6 +48,9 @@ def plot_classes(
         Whether to plot the grid of the array. Default is True.
     plot_label : bool, optional
         Whether to plot the label of the array. Default is True.
+    label_loc : str, optional
+        Where to draw the label: 'title' (above the image) or 'corner' (inside the
+        upper left corner). Default is 'title'.
     figsize : tuple, optional
         The size of the figure. Default is (5, 5).
     dpi : int, optional
@@ -93,7 +97,13 @@ def plot_classes(
         axes[-1].imshow(X=class_maps.transpose(1, 0, 2), cmap=cmap, origin="lower")
 
     if plot_label and label:
-        axes[-1].set_title(label)
+        if label_loc == "corner":
+            txt = axes[-1].text(
+                0.03, 0.97, label, transform=axes[-1].transAxes, ha="left", va="top", color="white", fontsize=9
+            )
+            txt.set_path_effects([patheffects.withStroke(linewidth=1.5, foreground="black")])
+        else:
+            axes[-1].set_title(label)
 
     set_ticks(axes[-1], grid, ticks, plot_grid)
 

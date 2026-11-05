@@ -109,7 +109,7 @@ def fast_optimize_kl(
     callback: Callable[[Samples, OptimizeVIState], None] | None = None,
     odir: str | None = None,
     devices: list | None = None,
-    plot_residuals=True,
+    plot_residuals=False,
 ) -> tuple[MySamples, OptimizeVIState, int]:
     """Run the fast-resolve optimise-KL loop with major/minor cycles.
 
@@ -169,7 +169,7 @@ def fast_optimize_kl(
     devices : list or None, optional
         JAX devices for sample distribution.
     plot_residuals : bool, optional
-        Whether to plot the residuals at each major iteration. Default is True.
+        Whether to plot the residuals at each major iteration (to ``odir/residuals``). Default is False.
 
     Returns
     -------
