@@ -683,13 +683,15 @@ def _per_copy(model, a):
     return a.reshape(a.shape[0] if isinstance(model, (TileModel, PointModel)) else 1, -1)
 
 
-def start_taper(model, data, pos, frac=0.5, rel=1.0, steps=np.arange(31.0)):
+def start_taper(model, data, pos, frac=0.5, rel=1.0, steps=None):
     """Widen the Gaussian taper at the start until it is at least ``frac`` of its maximum at every
     pixel of the target above ``rel`` times its maximum (default: the brightest pixel), per tile
     for tiles: an off-centre source is visible from the start. The excitations of ``cov_x`` and
     ``cov_y`` are raised together in ``steps``; the prior is unchanged. Returns ``pos``
     unchanged if the model has no taper.
     """
+    if steps is None:
+        steps = np.arange(31.0)
     gm = getattr(model, "gaussian", None)
     keys = [k for k in pos.tree if k.endswith("cov_x") or k.endswith("cov_y")]
     if gm is None or len(keys) != 2:
