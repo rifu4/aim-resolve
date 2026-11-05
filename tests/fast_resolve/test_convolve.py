@@ -5,11 +5,11 @@ import numpy as np
 import pytest
 
 from aim_resolve.fast_resolve.convolve import (
+    basic_downsampler,
+    basic_upsampler,
     build_fft_kernel,
     build_padder,
     build_slicer,
-    basic_downsampler,
-    basic_upsampler,
     build_split_kernel,
     downsample,
     fft_convolve,
@@ -263,6 +263,9 @@ class TestSplitKernelCentring:
         )  # single frequency: squeezed to (S, S)
 
         grid = np.mgrid[:S, :S]
-        centroid = lambda a: np.array([(g * a).sum() / a.sum() for g in grid])
+
+        def centroid(a):
+            return np.array([(g * a).sum() / a.sum() for g in grid])
+
         np.testing.assert_allclose(out.sum(), ref.sum(), rtol=1e-6)
         np.testing.assert_allclose(centroid(out), centroid(ref), atol=1e-3)

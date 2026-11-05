@@ -9,7 +9,12 @@ from resolve.library.meerkat_beam import JimBeam
 from scipy.signal import fftconvolve
 
 import aim_resolve.likelihood as lh_mod
-from aim_resolve.fast_resolve.beam import BeamedSky, beam_offsets, build_primary_beam, default_beam_model
+from aim_resolve.fast_resolve.beam import (
+    BeamedSky,
+    beam_offsets,
+    build_primary_beam,
+    default_beam_model,
+)
 from aim_resolve.fast_resolve.convolve import PSFConvolve
 from aim_resolve.model.grid import SignalGrid
 from aim_resolve.model.signal import SignalModel

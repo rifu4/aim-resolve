@@ -3,6 +3,7 @@
 import jax
 import numpy as np
 import pytest
+from nifty.re import Vector
 
 from aim_resolve.model.components import ComponentModel
 from aim_resolve.model.grid import PointGrid, SignalGrid
@@ -20,7 +21,6 @@ from aim_resolve.transition import (
     start_level,
     transition_zoom,
 )
-from nifty.re import Vector
 
 jax.config.update("jax_enable_x64", True)
 

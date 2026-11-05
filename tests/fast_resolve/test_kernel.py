@@ -75,7 +75,11 @@ class TestNInvKernelFit:
     """The JAX fit of the noise kernel against the original NIFTy8 fit."""
 
     def test_same_minimum_as_nifty8(self):
-        from aim_resolve.fast_resolve.kernel import _fit_n_inv_kernel, _fit_n_inv_kernel_nifty8, _rnr_delta_response
+        from aim_resolve.fast_resolve.kernel import (
+            _fit_n_inv_kernel,
+            _fit_n_inv_kernel_nifty8,
+            _rnr_delta_response,
+        )
 
         kernel, sdom = _rnr_delta_response(_small_rnr())
         # both converge to the same minimum (at 80 iterations neither is fully converged)
@@ -86,7 +90,11 @@ class TestNInvKernelFit:
         assert np.linalg.norm(nk_jax - nk_ift) / np.linalg.norm(nk_ift) < 1e-3
 
     def test_energy_as_nifty8(self):
-        from aim_resolve.fast_resolve.kernel import _fit_n_inv_kernel, _fit_n_inv_kernel_nifty8, _rnr_delta_response
+        from aim_resolve.fast_resolve.kernel import (
+            _fit_n_inv_kernel,
+            _fit_n_inv_kernel_nifty8,
+            _rnr_delta_response,
+        )
 
         kernel, sdom = _rnr_delta_response(_small_rnr())
         dv = sdom.scalar_dvol

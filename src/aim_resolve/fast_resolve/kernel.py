@@ -82,7 +82,7 @@ def build_n_inv_kernel(RNR, relativ_min_val=1e-3, fit="jax"):
     if isinstance(RNR, list) and any(len(rnr.domain.shape) != 3 for rnr in rnrs):
         raise ValueError("rnr domain must have 3 dimensions.")
 
-    kernel, sdom = zip(*(_rnr_delta_response(rnr) for rnr in rnrs))
+    kernel, sdom = zip(*(_rnr_delta_response(rnr) for rnr in rnrs), strict=True)
     if any(s != sdom[0] for s in sdom):
         raise ValueError("all RNR operators must share the same spatial domain.")
     kernel, sdom = np.concatenate(kernel, axis=0), sdom[0]

@@ -9,7 +9,9 @@ import numpy as np
 from jax.typing import ArrayLike
 from nifty.re import Model, Vector, VModel
 
-from ..multi_frequency.spectral_product_utils.spectral_behavior import SpectralIndexCurvature
+from ..multi_frequency.spectral_product_utils.spectral_behavior import (
+    SpectralIndexCurvature,
+)
 from ..optimize.samples import domain_tree, model_init
 from .grid import PointGrid, SignalGrid
 from .map import map_signal
