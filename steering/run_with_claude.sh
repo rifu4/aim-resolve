@@ -45,8 +45,10 @@ say() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 for round in $(seq 1 50); do
     say "starting snakemake (round $round): $CFG on GPU $GPU"
     # --nolock: several runs (each with its own odir) share this working directory, and the
-    # directory lock of one Snakemake process would otherwise stop the others
-    if "$PIXI" run snakemake --nolock --cores "$THREADS" --config file="$CFG" cuda_device="$GPU" threads="$THREADS" >> "$LOG" 2>&1; then
+    # directory lock of one Snakemake process would otherwise stop the others;
+    # --rerun-triggers mtime: rerun steps only for newer inputs, not for changed params or code
+    # (another config file name would otherwise rerun the whole run from iteration 0)
+    if "$PIXI" run snakemake --nolock --rerun-triggers mtime --cores "$THREADS" --config file="$CFG" cuda_device="$GPU" threads="$THREADS" >> "$LOG" 2>&1; then
         say "pipeline finished"
         exit 0
     fi
