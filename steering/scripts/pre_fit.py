@@ -10,7 +10,9 @@ from aim_resolve import (
     OptimizeKLConfig,
     SetupKLConfig,
     get_builders,
-    plot_mean_and_std,
+    plot_components,
+    plot_style,
+    split_style,
     transition_addt,
     yaml_load,
 )
@@ -27,6 +29,10 @@ def main():
     # load the base yaml-file and extract output directory and plotting settings
     base_dct = yaml_load(base_yml)
     plt_dct = base_dct["base_plot"]
+    theme, drange, pnl_dct = split_style(base_dct.get("base_style"))
+    sky_dct = dict(
+        dynamic_range=drange, vmin=plt_dct.get("vmin"), vmax=plt_dct.get("vmax"), cmap=plt_dct.get("cmap", "inferno")
+    )
     odir = base_dct["base_opt"]["odir"]
 
     # initialize the sky model using the OptimizeKLConfig class (mode is taken from the lh sections)
@@ -52,24 +58,33 @@ def main():
             opt_dct=cfg.sections["base_trans"],
             odir=f"{odir}/trans" if os.path.isdir(odir) else None,
             mask=f"{odir}/files/{it}_msk.npz",
-            noise=cfg.sections[f"lh.{it}"]["noise"],
+            # fixed noise std (max_std * max) instead of the noise model of the reconstruction: with a per-pixel
+            # noise model the fits inflate the noise where they do not fit yet and drop faint structure
+            noise=dict(max_std=1e-5, parameters={}),
             plot_dct=base_dct["base_plot"],
+            style_dct=base_dct.get("base_style", {}),
+            # start the noise model of the new iteration at its prior instead of taking over the learned one
+            reset_noise=base_dct.get("base_prefit", {}).get("reset_noise", False),
         )
         os.makedirs(os.path.dirname(tra_pkl), exist_ok=True)
         pickle.dump((samples, offsets), open(tra_pkl, "wb"))
 
-    # plot the final results of the transition
-    models = [
-        sky_mdl,
-    ] + [m for m in sky_mdl.models if len(sky_mdl.models) > 1]
-    plot_mean_and_std(
-        model=[md for md in models],
-        samples=samples,
-        mode="mean",
-        name=f"{it}_pre.png",
-        odir=f"{odir}/plots",
-        **plt_dct,
-    )
+    # the transition fits on its own instance of the sky model: apply its offsets here, too
+    for md in sky_mdl.models:
+        if md.prefix in offsets:
+            md.set_offset(offsets[md.prefix])
+
+    # plot the final results of the transition: sky and components with one shared colorbar
+    with plot_style(**theme):
+        plot_components(
+            [sky_mdl] + list(sky_mdl.models),
+            samples,
+            name=f"{it}_pre.png",
+            odir=f"{odir}/plots",
+            step=f"pre-fit · it {it}",
+            **sky_dct,
+            **pnl_dct,
+        )
 
     # load and update the model config with the new offsets
     cfg = SetupKLConfig.from_file(mdl_yml)

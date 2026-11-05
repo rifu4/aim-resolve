@@ -7,15 +7,18 @@ import numpy as np
 from aim_resolve import (
     ImageData,
     SetupKLConfig,
-    draw_boxes,
+    component_boxes,
+    dynamic_limits,
     map_signal,
     masks_from_maps,
     model_background,
     model_objects,
     model_points,
     model_tiles,
-    plot_arrays,
+    plot_panels,
+    plot_style,
     remove_freq_axis,
+    split_style,
     yaml_load,
 )
 
@@ -37,6 +40,10 @@ def main():
     base_dct = yaml_load(base_yml)
     mdl_dct = base_dct.pop("base_model")
     plt_dct = base_dct["base_plot"]
+    theme, drange, pnl_dct = split_style(base_dct.get("base_style"))
+    sky_dct = dict(
+        dynamic_range=drange, vmin=plt_dct.get("vmin"), vmax=plt_dct.get("vmax"), cmap=plt_dct.get("cmap", "inferno")
+    )
     odir = base_dct["base_opt"]["odir"]
     cfg.modify_sec(f"opt.{it}", base="base_opt.n")
 
@@ -105,31 +112,47 @@ def main():
 
     # get the positions of the detected point sources and the boxes of the extended objects and plot them as markers
     px, py = np.argwhere(ps_map == 1).T
-    ps_mrk = dict(x=px, y=py, s=25, c="white", marker="+")
-    box_map = draw_boxes(cfg.sections, grid, it)
-    ox, oy = np.argwhere(box_map == 1).T
-    oj_mrk = dict(x=ox, y=oy, s=1, c="white", marker=",")
-    plot_arrays(
-        array=rec.val,
-        grid=rec.grid,
-        label="detected components",
-        name=f"{it}_mdl.png",
-        odir=f"{odir}/plots",
-        marker=dict(ps_mrk=ps_mrk, oj_mrk=oj_mrk),
-        **plt_dct,
-    )
-
-    # plot and save the point source and object masks
-    p_dct = plt_dct | {"norm": "linear", "vmin": 0, "vmax": 1}
+    # plot the model components: circles around the point sources, thin boxes around tiles and objects
+    radius = max(4.0, 0.006 * max(rec.val.shape))
+    tiles, objects = component_boxes(cfg.sections, grid, it)
+    vmin, vmax = dynamic_limits(rec.val, sky_dct["dynamic_range"], sky_dct["vmin"], sky_dct["vmax"])
+    overlay = dict(circles=[(x, y, radius) for x, y in zip(px, py, strict=True)], boxes=tiles + objects)
     mask_val = [remove_freq_axis(v, freq) for v in mask_dct.values()]
-    plot_arrays(
-        array=[np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val],
-        label=[f"mask {k}" for k in mask_dct],
-        name=f"{it}_msk.png",
-        odir=f"{odir}/plots",
-        rows=1,
-        **p_dct,
-    )
+    with plot_style(**theme):
+        plot_panels(
+            [
+                dict(
+                    arrays=[rec.val],
+                    labels=[f"{len(px)} points, {len(objects)} objects, {len(tiles)} tiles"],
+                    overlays=[overlay],
+                    cmap=sky_dct["cmap"],
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+            ],
+            name=f"{it}_mdl.png",
+            odir=f"{odir}/plots",
+            step=f"model · it {it}",
+            **pnl_dct,
+        )
+
+        # plot the point source and object masks with one shared colorbar
+        plot_panels(
+            [
+                dict(
+                    arrays=[np.sum(v, axis=0) if v.ndim == 3 else v for v in mask_val],
+                    labels=list(mask_dct),
+                    cmap=sky_dct["cmap"],
+                    norm="linear",
+                    vmin=0,
+                    vmax=1,
+                )
+            ],
+            name=f"{it}_msk.png",
+            odir=f"{odir}/plots",
+            step=f"model masks · it {it}",
+            **pnl_dct,
+        )
     np.savez(f"{odir}/files/{it}_msk", **mask_dct)
 
     # save the new model yaml-file

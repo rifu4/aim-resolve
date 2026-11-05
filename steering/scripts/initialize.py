@@ -50,9 +50,9 @@ def main():
             n_inv_kernel_fn=f"{kernel_dir}/nk_{kname}_{len(freq)}f_{kfov}_{ksize}.pkl",
         )
 
-    # extract callback, extra, and transition keys from pipe_dct
+    # extract callback and transition keys from pipe_dct (the old `extra` key is ignored)
     callback = pipe_dct.pop("callback") if "callback" in pipe_dct else False
-    extra = pipe_dct.pop("extra") if "extra" in pipe_dct else False
+    pipe_dct.pop("extra", None)
     trans = pipe_dct.pop("trans") if "trans" in pipe_dct else False
     key = pipe_dct.pop("key") if "key" in pipe_dct else 0
     rerun = pipe_dct.pop("rerun") if "rerun" in pipe_dct else True
@@ -69,8 +69,6 @@ def main():
     os.makedirs(odir + "/plots/", exist_ok=True)
     if callback:
         os.makedirs(odir + "/callback/", exist_ok=True)
-    if extra:
-        os.makedirs(odir + "/extra/", exist_ok=True)
     if trans:
         os.makedirs(odir + "/trans/", exist_ok=True)
 

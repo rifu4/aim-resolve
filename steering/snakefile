@@ -10,7 +10,24 @@
 #
 # Usage:
 #   snakemake --configfile config/snake.yml
-#   snakemake --config file=config/snake.yml cuda_device=0
+#   snakemake --cores 16 --config file=config/snake.yml cuda_device=0
+#   snakemake --cores 16 --config file=config/snake.yml cuda_device=0,1 gpu_allocator=bfc gpu_mem_fraction=0.8
+#
+# Command line keys (--config):
+#   cuda_device      : str   - CUDA device(s), e.g. "0" or "0,1" (several GPUs are used by the
+#                              reconstruction steps); empty for CPU.
+#   gpu_allocator    : str   - XLA GPU allocator: platform (default; allocated and freed directly,
+#                              no out-of-memory errors from pool fragmentation), bfc (memory pool,
+#                              JAX's default) or cuda_async. Default: the environment setting if
+#                              there is one, else platform (bfc if one of the pool options is given).
+#   gpu_preallocate  : bool  - Reserve the memory pool up front (bfc only).
+#   gpu_mem_fraction : float - Size or upper limit of the memory pool as a fraction of the GPU
+#                              memory (bfc only).
+#   (same behaviour as nifty/start_rec.py and nifty/extend_rec.py)
+#   threads          : int   - CPU threads of the pre-fit and reconstruction steps (default 16),
+#                              e.g. for the ducc0 gridder building the fast-resolve kernels.
+#                              Snakemake sets OMP_NUM_THREADS etc. to a rule's threads and caps them
+#                              at --cores, so run with --cores >= threads (e.g. --cores 16).
 #
 # Configuration keys (loaded from the YAML file specified by ``file``):
 #   odir   : str  - Output directory for all pipeline artifacts.
@@ -25,7 +42,21 @@ if str(cuda_device) == '':
     os.environ['JAX_PLATFORM_NAME'] = 'cpu'
 else:
     os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_device)
-    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+    # GPU memory: the options override the environment; default allocator "platform" (no pool, so
+    # no out-of-memory errors from fragmentation), the pool ("bfc") if it is configured
+    gpu_allocator = config.get('gpu_allocator')
+    gpu_preallocate = str(config.get('gpu_preallocate', False)).lower() in ('true', '1', 'yes')
+    gpu_mem_fraction = config.get('gpu_mem_fraction')
+    if gpu_allocator is not None:
+        os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = str(gpu_allocator)
+    else:
+        pool = gpu_preallocate or gpu_mem_fraction is not None
+        os.environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR', 'bfc' if pool else 'platform')
+    if gpu_preallocate:
+        os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'true'
+    os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
+    if gpu_mem_fraction is not None:
+        os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = str(gpu_mem_fraction)
 
 
 from aim_resolve import yaml_load
@@ -38,6 +69,9 @@ n_it = dct['n_it']
 data = dct['data']['fname']
 
 base = f'{odir}/files/base.yml'
+
+# CPU threads of the compute-heavy steps (Snakemake would otherwise set OMP_NUM_THREADS=1)
+n_threads = int(config.get('threads', 16))
 
 
 
@@ -75,6 +109,8 @@ rule:
         d = data,
     output:
         f'{odir}/files/0_rec.pkl',
+    threads:
+        n_threads
     params:
         t = {},
         b = base,
@@ -127,6 +163,8 @@ for it in range(1, n_it):
             m = f'{odir}/files/{it}_mdl.yml',
         output:
             f'{odir}/files/{it}_pre.yml',
+        threads:
+            n_threads
         params:
             r = f'{odir}/opt/{it-1}_rec/last.pkl',
             b = base,
@@ -144,6 +182,8 @@ for it in range(1, n_it):
             d = data,
         output:
             f'{odir}/files/{it}_rec.pkl',
+        threads:
+            n_threads
         params:
             t = f'{odir}/opt/{it}_pre/last.pkl',
             b = base,

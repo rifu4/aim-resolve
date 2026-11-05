@@ -10,12 +10,12 @@ from aim_resolve import (
     ImageData,
     Observation,
     OptimizeKLConfig,
+    dynamic_limits,
     get_builders,
-    plot_agreement,
-    plot_arrays,
-    plot_mean_and_std,
-    plot_pullplot,
-    plot_samples,
+    plot_components,
+    plot_panels,
+    plot_style,
+    split_style,
     yaml_load,
 )
 
@@ -31,6 +31,10 @@ def main():
     # load model and base yaml-files and extract output directory
     base_dct = yaml_load(base_yml)
     plt_dct = base_dct["base_plot"]
+    theme, drange, pnl_dct = split_style(base_dct.get("base_style"))
+    sky_dct = dict(
+        dynamic_range=drange, vmin=plt_dct.get("vmin"), vmax=plt_dct.get("vmax"), cmap=plt_dct.get("cmap", "inferno")
+    )
     odir = base_dct["base_opt"]["odir"]
 
     # initialize the sky model using the OptimizeKLConfig class
@@ -38,48 +42,44 @@ def main():
 
     # instantiate the sky models of the current iteration
     sky_mdl = cfg.instantiate_sec(f"sky.{it}")
-    sky_models = [
-        sky_mdl,
-    ] + [m for m in sky_mdl.models if len(sky_mdl.models) > 1]
+    # sky and all its components (also a single background component) for the panel plots
+    panel_models = [sky_mdl] + list(sky_mdl.models)
 
     # print and plot the data
     if int(it) == 0:
         data = cfg.instantiate_sec(f"data.{it}")
         print(data, "\n")
         if isinstance(data, ImageData):
-            d_val = data.noisy_val.clip(0, None)
-            plot_arrays(
-                d_val, data.grid, "data", "0_data.png", f"{odir}/plots", **plt_dct
-            )
-            plot_arrays(
-                data.val, data.grid, "truth", "0_truth.png", f"{odir}/plots", **plt_dct
-            )
+            images = [("data", "0_data.png", data.noisy_val.clip(0, None)), ("truth", "0_truth.png", data.val)]
         elif isinstance(data, Observation):
             d_val = data.dirty_image(sky_mdl.grid)
-            p_dct = plt_dct | dict(vmin=None, vmax=None)
-            plot_arrays(
-                d_val, sky_mdl.grid, "data", "0_data.png", f"{odir}/plots", **p_dct
-            )
+            images = [("data", "0_data.png", d_val[d_val.shape[0] // 2] if d_val.ndim == 3 else d_val)]
+        else:
+            images = []
+        with plot_style(**theme):
+            for step, nm, d_val in images:
+                vmin, vmax = dynamic_limits(d_val, drange)
+                plot_panels(
+                    [dict(arrays=[d_val], cmap=sky_dct["cmap"], vmin=vmin, vmax=vmax)],
+                    name=nm,
+                    odir=f"{odir}/plots",
+                    step=step,
+                    **pnl_dct,
+                )
 
     # define a callback function to plot the results of the optimization after each iteration
     def callback(samples, state, *args):
         nit = args[0] if len(args) > 0 else state.nit
-        plot_mean_and_std(
-            model=sky_mdl,
-            samples=samples,
-            freq=True,
-            name=f"{nit}_sky.png",
-            odir=f"{odir}/callback",
-            **plt_dct,
-        )
-        plot_mean_and_std(
-            model=[md for md in sky_models],
-            samples=samples,
-            mode="mean",
-            name=f"{nit}_components.png",
-            odir=f"{odir}/callback",
-            **plt_dct,
-        )
+        with plot_style(**theme):
+            plot_components(
+                panel_models,
+                samples,
+                name=f"{nit}_sky.png",
+                odir=f"{odir}/callback",
+                step=f"reconstruct · it {it} · KL {nit}",
+                **sky_dct,
+                **pnl_dct,
+            )
 
     # optimize the sky model. Start from pre-fit positions if available
     rec_pkl = os.path.join(cfg.sections["opt"]["odir"], "last.pkl")
@@ -89,92 +89,42 @@ def main():
         (samples, _) = (
             pickle.load(open(tra_pkl, "rb")) if os.path.isfile(tra_pkl) else (None, _)
         )
+        # use all visible GPUs (cuda_device=0,1,... in the snakefile)
+        visible_devices = jax.devices()
         samples, *_ = cfg.optimize_kl(
             position_or_samples=samples,
             callback=callback if os.path.isdir(odir + "/callback/") else None,
+            devices=visible_devices if len(visible_devices) > 1 else None,
         )
 
-    # plot the final results of the optimization
-    plot_mean_and_std(
-        model=[md for md in sky_models],
-        samples=samples,
-        mode="mean",
-        name=f"{it}_rec.png",
-        odir=f"{odir}/plots",
-        **plt_dct,
-    )
+    # plot the final results of the optimization: the full sky ({it}_rec) and, if there are components
+    # besides the background, the sky and all components with one shared colorbar ({it}_sep)
+    with plot_style(**theme):
+        plot_components(
+            [sky_mdl],
+            samples,
+            name=f"{it}_rec.png",
+            odir=f"{odir}/plots",
+            step=f"reconstruct · it {it}",
+            **sky_dct,
+            **pnl_dct,
+        )
+        if len(sky_mdl.models) > 1:
+            plot_components(
+                panel_models,
+                samples,
+                name=f"{it}_sep.png",
+                odir=f"{odir}/plots",
+                step=f"reconstruct · it {it} · components",
+                **sky_dct,
+                **pnl_dct,
+            )
 
     # save the reconstructed sky model and grid to a pkl-file
     rec_val = samples.mean(sky_mdl)
     rec_val = rec_val[rec_val.shape[0] // 2] if rec_val.ndim == 3 else rec_val
     rec = ImageData(rec_val, sky_mdl.grid, f"{it}_rec")
     rec.save(name=f"{it}_rec", odir=f"{odir}/files")
-
-    # extra plots: mean (and std) of the sky model components
-    if os.path.isdir(odir + "/extra/"):
-        for md in sky_models:
-            pf, it = md.prefix.split(".")[0], md.prefix.split(".")[1]
-            for mi in ["mean", "std"]:
-                plot_mean_and_std(
-                    model=md,
-                    samples=samples,
-                    mode=mi,
-                    freq=True,
-                    name=f"{it}_{pf}_{mi}.png",
-                    odir=f"{odir}/extra",
-                    **plt_dct,
-                )
-        plot_samples(
-            model=sky_mdl,
-            samples=samples,
-            name=f"{it}_sky_samples.png",
-            odir=f"{odir}/extra",
-            **plt_dct,
-        )
-
-        if sky_mdl.freq.size > 1:
-            frq_mdl = sky_mdl.spectral_index
-            frq_models = [
-                frq_mdl,
-            ] + [m for m in frq_mdl.models if len(frq_mdl.models) > 1]
-            p_dct = plt_dct | dict(norm="linear", vmin=None, vmax=None)
-            for md in frq_models:
-                pf, it = md.prefix.split(".")[0], md.prefix.split(".")[1]
-                for mi in ["mean", "std"]:
-                    plot_mean_and_std(
-                        model=md,
-                        samples=samples,
-                        mode=mi,
-                        name=f"{it}_{pf}_alpha_{mi}.png",
-                        odir=f"{odir}/extra",
-                        **p_dct,
-                    )
-            plot_samples(
-                model=frq_mdl,
-                samples=samples,
-                name=f"{it}_alpha_samples.png",
-                odir=f"{odir}/extra",
-                **p_dct,
-            )
-
-        data = cfg.instantiate_sec("data.0")
-        if isinstance(data, ImageData):
-            plot_agreement(
-                model=sky_mdl,
-                samples=samples,
-                data=data,
-                name=f"{it}_sky_agreement.png",
-                odir=f"{odir}/extra",
-                **plt_dct,
-            )
-            plot_pullplot(
-                model=sky_mdl,
-                samples=samples,
-                data=data,
-                name=f"{it}_sky_pullplot.png",
-                odir=f"{odir}/extra",
-                **plt_dct,
-            )
 
 
 if __name__ == "__main__":
