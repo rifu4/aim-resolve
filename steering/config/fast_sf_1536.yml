@@ -5,7 +5,7 @@
 # All settings in pixels are scaled by 1.5 so that they cover the same angular sizes as in fast_sf.yml.
 
 # specify the main pipeline settings (output directory, key, number of iterations, and the trained U-Net)
-odir: runs/fast_vi_1f_1536_1z_agent
+odir: runs/fast_vi_1f_1536_1z_agent4
 key: 42
 
 n_it: 4
@@ -122,8 +122,8 @@ base_trans:
       cg_kwargs:
         name: null
         miniter: 2*[5] + 2*[10] + [20]
-      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + 5*[100]
-      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 2*[50] + 5*[100]
+      miniter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 7*[50]
+      maxiter: 2*[5] + 2*[10] + 2*[20] + 2*[35] + 7*[50]
       energy_reduction_factor: 0.001
   sample_mode: 4*[linear_resample] + [nonlinear_resample]
 

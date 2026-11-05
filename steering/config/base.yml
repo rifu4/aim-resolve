@@ -220,11 +220,11 @@ params_mf:   # spatial part identical to params_sf (the frequency transition cop
     process: wiener
     sigma: [0.2, 0.08]
 
-# priors of the objects and tiles (base_model.objects/tiles.params_sf, params_mf): as params_sf / params_mf with a narrower
-# zero mode, since their offsets already come from the reconstruction (agent3: zero mode of the objects 0.008, of the
-# tiles 4e-6, at -4 to -13 sigma under [0.3, 0.3]); the background keeps params_sf
+# priors of the objects and tiles (base_model.objects/tiles.params_sf, params_mf): currently the same values as params_sf /
+# params_mf. A narrower zero mode matches the final posteriors (agent3: objects 0.008, tiles 4e-6), but the pre-fit needs the
+# freedom to correct the start offsets (agent4 with 0.02 and 0.1: o1 stayed at its start level)
 params_sf_comp:
-  zero_mode: [0.1, 0.1]   # [0.02, 0.02] was too tight: the pre-fit could not correct the start offsets
+  zero_mode: [0.3, 0.3]   # as the background: 0.02 and 0.1 were too tight, the pre-fit could not lift the start offsets (o1 of agent4)
   spatial_amplitude:
     fluctuations: [1, 0.5]
     loglogavgslope: [-1.4, 0.4]
@@ -232,7 +232,7 @@ params_sf_comp:
     asperity: [0.05, 0.05]
 
 params_mf_comp:   # params_mf with the zero mode of params_sf_comp
-  zero_mode: [0.1, 0.1]
+  zero_mode: [0.3, 0.3]
   spatial_amplitude:
     fluctuations: [1, 0.5]
     loglogavgslope: [-1.4, 0.4]

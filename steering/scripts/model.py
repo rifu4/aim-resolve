@@ -25,9 +25,17 @@ from aim_resolve import (
 
 
 def zoom_of_it(zoom, it):
-    """Zoom factor of iteration `it` from a single factor or a list with one factor per iteration."""
+    """Zoom factor of iteration `it` from a single factor or a list with one factor per iteration.
+
+    The grids can only be refined by whole factors: every factor of the list has to be a multiple
+    of the one before (e.g. [1, 2, 4] or [1, 1, 3], not [1, 2, 3], where 2 -> 3 is a step of 1.5).
+    """
     if isinstance(zoom, list | tuple):
-        return int(zoom[min(it, len(zoom) - 1)])
+        zoom = [int(z) for z in zoom]
+        for z0, z1 in zip(zoom[:-1], zoom[1:], strict=True):
+            if z1 < z0 or z1 % z0:
+                raise ValueError(f"zoom steps have to be whole factors, got {z0} -> {z1} in base_model.zoom {zoom}")
+        return zoom[min(it, len(zoom) - 1)]
     return int(zoom)
 
 
@@ -79,8 +87,10 @@ def main():
     cl_map = det_dct["cl_map"].astype(float)
 
     # adjust the zoom level of the sky model and zoom the reconstructed image if necessary
-    if zoom_it < rec.grid.factor:
-        raise ValueError(f"zoom {zoom_it} of iteration {it} is below the zoom {rec.grid.factor} of the previous one")
+    if zoom_it < rec.grid.factor or zoom_it % rec.grid.factor:
+        raise ValueError(
+            f"zoom {zoom_it} of iteration {it} is not a whole multiple of the zoom {rec.grid.factor} of the previous one"
+        )
     zoom = zoom_it // rec.grid.factor
     grid = rec.grid.refine(zoom)
     freq = cfg.sections[f"sky_bg.{it}"]["freq"]
