@@ -360,8 +360,8 @@ def split_fft_convolve(
         Padding functions for each resolution.
     slicer_high, slicer_low : callable
         Slicing functions to crop the results.
-    factor : int
-        Down-sampling factor for the low-resolution branch.
+    downsampler, upsampler : callable
+        Down- and up-sampling functions of the low-resolution branch.
 
     Returns
     -------
