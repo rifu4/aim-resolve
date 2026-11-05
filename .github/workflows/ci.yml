@@ -13,7 +13,7 @@ env:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # GCC 13; ubuntu-latest (GCC 15) fails to compile resolve (ambiguous vmav call)
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         run: pixi run -e cpu pytest tests/ -q --tb=short
 
   test-radio:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # GCC 13; ubuntu-latest (GCC 15) fails to compile resolve (ambiguous vmav call)
     # resolve requires cloning submodules + C++ compilation; jubik is on GitHub.
     # Mark continue-on-error so the main pipeline stays green if GitLab is down.
     continue-on-error: true
@@ -66,7 +66,7 @@ jobs:
         run: pixi run -e cpu pytest tests/ -q --tb=short
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # GCC 13; ubuntu-latest (GCC 15) fails to compile resolve (ambiguous vmav call)
     # Only deploy on pushes to main/master; build-check on PRs too.
     permissions:
       contents: write
