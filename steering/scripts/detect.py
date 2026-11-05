@@ -20,6 +20,27 @@ from aim_resolve import (
     yaml_load,
 )
 
+# pixel sizes of the agent settings (with the defaults of agent_detect) and the size of the rendered views
+AGENT_PIXEL_KEYS = {"merge_dist": 5.0, "pair_dist": 40.0, "compact_box": 8, "snap_radius": 3}
+MAX_VIEW_PX = 1536
+
+
+def scale_agent_settings(agent_dct, zoom):
+    """Agent settings with the pixel sizes scaled by `zoom` (the zoom factor of the reconstruction).
+
+    The rendered views grow with the zoom as well, up to MAX_VIEW_PX (about the largest image size
+    the vision input uses), so that the overview still shows compact sources.
+    """
+    agent_dct = dict(agent_dct)
+    if zoom <= 1:
+        return agent_dct
+    for key, default in AGENT_PIXEL_KEYS.items():
+        val = agent_dct.get(key, default)
+        agent_dct[key] = type(default)(round(val * zoom)) if isinstance(default, int) else float(val) * zoom
+    agent_dct["view_px"] = min(MAX_VIEW_PX, int(agent_dct.get("view_px", 768)) * zoom)
+    print(f"agent settings scaled by the zoom {zoom}:", {k: agent_dct[k] for k in (*AGENT_PIXEL_KEYS, "view_px")})
+    return agent_dct
+
 
 def main():
     """Run source detection on a reconstructed image.
@@ -40,6 +61,11 @@ def main():
     # load the reconstructed image and grid
     rec = ImageData.load(opt_pkl, dtype="float32")
 
+    # pixel sizes in the settings refer to the base grid: scale them by the zoom factor of the reconstruction
+    # (a 3x zoomed reconstruction has 3x more pixels per source), so one config works at any resolution
+    zoom = int(np.max(np.atleast_1d(rec.grid.factor)))
+    agent_dct = scale_agent_settings(base_dct.get("base_agent", {}), zoom)
+
     # task, submission and log of the agent detection go to {odir}/agent
     adir = f"{odir}/agent"
     if method in ("agent", "manual"):
@@ -47,7 +73,7 @@ def main():
 
     if method == "agent":
         # detect point sources and objects with the Claude agent and save its transcript
-        ps_map, cl_map, log = agent_detect(rec, **base_dct["base_agent"])
+        ps_map, cl_map, log = agent_detect(rec, **agent_dct)
         with open(f"{adir}/{it}_agent.json", "w") as f:
             json.dump(log, f, indent=1)
 
@@ -57,7 +83,7 @@ def main():
         task_dir = f"{adir}/{it}_task"
         sub_file = f"{adir}/{it}_submission.json"
         res = manual_detect(
-            rec, task_dir, sub_file, rec_path=os.path.abspath(opt_pkl), **base_dct["base_agent"]
+            rec, task_dir, sub_file, rec_path=os.path.abspath(opt_pkl), **agent_dct
         )
         if res is None:
             print(f"detection task written to {task_dir}/task.md")
@@ -85,7 +111,7 @@ def main():
 
     # drop detections at the border of the field: emission just outside the field wraps around (periodic
     # convolution) and shows up on opposite edges, and sources cut by the border cannot be modelled
-    edge_dist = int(base_dct.get("base_detect", {}).get("edge_dist", 0) or 0)
+    edge_dist = int(base_dct.get("base_detect", {}).get("edge_dist", 0) or 0) * zoom
     if edge_dist > 0:
         inner = np.zeros(ps_map.shape[-2:], dtype=bool)
         inner[edge_dist:-edge_dist, edge_dist:-edge_dist] = True

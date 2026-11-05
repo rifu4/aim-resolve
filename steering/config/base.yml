@@ -139,7 +139,11 @@ base_agent:
 ---
 
 base_model:
+  # zoom factor of the components relative to grid_bg: one factor for all iterations, or a list with one factor per
+  # iteration (the last entry holds for later iterations), e.g. [1, 1, 1, 3, 3]: the model step of iteration 3 refines
+  # the grids, and the detection of iteration 4 runs on the zoomed reconstruction (pixel settings scaled by detect.py)
   zoom: 1
+  zoom_bg: false     # true: the background on the zoomed grid as well (otherwise only the components are refined)
   masks:
     margin_fac: 0.1    # was 0.2: the agent masks follow the objects closely, 10% keeps the boxes compact
     margin_min: 10     # was 5: minimum margin for the many small compact sources (tiles)
@@ -216,11 +220,11 @@ params_mf:   # spatial part identical to params_sf (the frequency transition cop
     process: wiener
     sigma: [0.2, 0.08]
 
-# priors of the objects and tiles (base_model.objects/tiles.params_sf, params_mf): as params_sf / params_mf with a narrow
+# priors of the objects and tiles (base_model.objects/tiles.params_sf, params_mf): as params_sf / params_mf with a narrower
 # zero mode, since their offsets already come from the reconstruction (agent3: zero mode of the objects 0.008, of the
 # tiles 4e-6, at -4 to -13 sigma under [0.3, 0.3]); the background keeps params_sf
 params_sf_comp:
-  zero_mode: [0.02, 0.02]
+  zero_mode: [0.1, 0.1]   # [0.02, 0.02] was too tight: the pre-fit could not correct the start offsets
   spatial_amplitude:
     fluctuations: [1, 0.5]
     loglogavgslope: [-1.4, 0.4]
@@ -228,7 +232,7 @@ params_sf_comp:
     asperity: [0.05, 0.05]
 
 params_mf_comp:   # params_mf with the zero mode of params_sf_comp
-  zero_mode: [0.02, 0.02]
+  zero_mode: [0.1, 0.1]
   spatial_amplitude:
     fluctuations: [1, 0.5]
     loglogavgslope: [-1.4, 0.4]

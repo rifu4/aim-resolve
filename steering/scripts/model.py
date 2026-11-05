@@ -7,6 +7,7 @@ import numpy as np
 from aim_resolve import (
     ImageData,
     SetupKLConfig,
+    SignalGrid,
     component_boxes,
     dynamic_limits,
     map_signal,
@@ -21,6 +22,13 @@ from aim_resolve import (
     split_style,
     yaml_load,
 )
+
+
+def zoom_of_it(zoom, it):
+    """Zoom factor of iteration `it` from a single factor or a list with one factor per iteration."""
+    if isinstance(zoom, list | tuple):
+        return int(zoom[min(it, len(zoom) - 1)])
+    return int(zoom)
 
 
 def main():
@@ -47,11 +55,15 @@ def main():
     odir = base_dct["base_opt"]["odir"]
     cfg.modify_sec(f"opt.{it}", base="base_opt.n")
 
+    # zoom factor of this iteration: base_model.zoom is one factor for all iterations or a list with one
+    # factor per iteration (the last entry holds for later iterations)
+    zoom_it = zoom_of_it(mdl_dct["zoom"], int(it))
+
     # update fast-resolve kernels depending on the new resolution
     if cfg.sections[f"lh.{it}"]["mode"] == "fast":
         pkdir = "_".join(cfg.sections[f"lh.{it}"]["psf_kernel_fn"].split("_")[:-1])
         nkdir = "_".join(cfg.sections[f"lh.{it}"]["n_inv_kernel_fn"].split("_")[:-1])
-        ksize = mdl_dct["zoom"] * base_dct["grid_bg"]["space"][0]
+        ksize = zoom_it * base_dct["grid_bg"]["space"][0]
         cfg.modify_sec(
             f"lh.{it}",
             psf_kernel_fn=f"{pkdir}_{ksize}.pkl",
@@ -67,7 +79,9 @@ def main():
     cl_map = det_dct["cl_map"].astype(float)
 
     # adjust the zoom level of the sky model and zoom the reconstructed image if necessary
-    zoom = mdl_dct["zoom"] // rec.grid.factor
+    if zoom_it < rec.grid.factor:
+        raise ValueError(f"zoom {zoom_it} of iteration {it} is below the zoom {rec.grid.factor} of the previous one")
+    zoom = zoom_it // rec.grid.factor
     grid = rec.grid.refine(zoom)
     freq = cfg.sections[f"sky_bg.{it}"]["freq"]
     if zoom > 1:
@@ -79,11 +93,15 @@ def main():
     if mdl_dct["tiles"] and mdl_dct["tiles"]["tile_size"]:
         mdl_dct["masks"] |= {"tile_size": mdl_dct["tiles"]["tile_size"]}
     mask_dct = masks_from_maps(
-        ps_map, cl_map, it, freq, mdl_dct["zoom"], **mdl_dct["masks"]
+        ps_map, cl_map, it, freq, zoom_it, **mdl_dct["masks"]
     )
 
     bg_dct = model_background(mask_dct[f"bg.{it}"], freq, rec.val)
     cfg.modify_sec(f"sky_bg.{it}", merge_base=True, **bg_dct)
+    # optionally the background on the zoomed grid as well (otherwise only the components are refined)
+    if mdl_dct.get("zoom_bg", False) and zoom_it > 1:
+        bg_grid = SignalGrid.build(**base_dct["grid_bg"]).refine(zoom_it)
+        cfg.modify_sec(f"sky_bg.{it}", grid=bg_grid.to_dict())
     rec_sub = rec.val - np.exp(bg_dct["offset"])
     rec_sub = rec_sub.clip(0, None)
 
