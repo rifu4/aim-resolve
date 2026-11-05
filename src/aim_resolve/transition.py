@@ -29,6 +29,7 @@ from .optimize.opt_dct import callable_optimize_dict
 from .optimize.opt_kl import optimize_kl
 from .optimize.samples import MySamples, domain_keys, domain_tree, random_init
 from .plot import dynamic_limits, plot_arrays, plot_panels, plot_style, split_style
+from .reuse import box_regions, copy_plan, kept_pairs, renamed_latents, tile_slices
 
 
 def transition_func(
@@ -254,6 +255,8 @@ def transition_addt(
     plot_dct=None,
     style_dct=None,
     reset_noise=False,
+    reuse=None,
+    reuse_log=None,
     **kwargs,
 ):
     """Add components by fitting them to the previous reconstruction.
@@ -297,6 +300,14 @@ def transition_addt(
     reset_noise : bool, optional
         Do not take over the learned noise scaling of the previous iteration: the new
         noise model starts at its prior. Default is ``False``.
+    reuse : dict, optional
+        Kept components of the model step (section ``reuse.{it}``: ``objects`` {new: old prefix},
+        ``tiles`` [[new, old copy index], ...]). Kept components whose overlap group is unchanged
+        and whose grid did not change are copied (latent parameters and offsets of the previous
+        posterior) instead of fitted; the background is then fitted on the old reconstruction minus
+        the copied components. Default is None.
+    reuse_log : str, optional
+        File for the copy decisions (JSON). Default is None.
 
     Returns
     -------
@@ -343,10 +354,24 @@ def transition_addt(
     ptree = {}
     keys = list(random.split(key, 2 + len(sky_new.models)))
 
+    # reuse: copy kept components with unchanged overlap groups, subtract them from the target
+    copy = _copy_components(sky_old, sky_new, reuse, reuse_log) if reuse else {}
+    copied_obj = {n: o for n, (o, a) in copy.items() if a == "copy" and "[" not in n}
+    copied_tiles = {int(n.split("[")[1][:-1]): int(o.split("[")[1][:-1]) for n, (o, a) in copy.items() if a == "copy" and "[" in n}
+    old_tree = domain_tree(samples) if copy else {}
+    if (copied_obj or copied_tiles) and sky_old.grid != sky_new.grid:
+        print("reuse in the pre-fit: the sky grid changed, nothing is copied")
+        copied_obj, copied_tiles = {}, {}
+    if copied_obj or copied_tiles:
+        rec_old = np.asarray(rec_old) - _copied_image(samples, sky_old, sky_new, copy, mask_dct)
+
     # optimize the new background model on the old reconstruction (mask regions around point sources and the object boxes)
     sky_bg = sky_new.background.copy()
     rec_bg = map_signal(sky_old.grid, sky_bg.grid)(rec_old)
     msk_bg = mask_box[sky_bg.prefix]
+    if copied_obj or copied_tiles:
+        # the regions of copied components hold only the old background now: fit it there as well
+        msk_bg = _background_mask(sky_new, sky_bg, mask_dct, copied_obj, copied_tiles)
     sky_bg.mask = msk_bg
     pos_bg = optimize_and_plot(
         key=keys.pop(),
@@ -369,10 +394,27 @@ def transition_addt(
 
     # optimize the new object and tile models on the corresponding regions of the old reconstruction
     for sky_ci in sky_new.points + sky_new.objects + sky_new.tiles:
+        if sky_ci.prefix in copied_obj:
+            # copied: latent parameters of the old component, its offset is already in the model section
+            ptree |= renamed_latents(old_tree, copied_obj[sky_ci.prefix], sky_ci.prefix)
+            continue
+        is_tiles = isinstance(sky_ci, TileModel)
+        if is_tiles and copied_tiles and len(copied_tiles) == sky_ci.tiles.grid.n_copies:
+            old_t = next(m for m in sky_old.models if isinstance(m, TileModel))
+            init = {k: np.zeros(v.shape) for k, v in domain_tree(sky_ci).items()}
+            ptree |= tile_slices(old_tree, old_t.prefix, sky_ci.prefix, init, copied_tiles)
+            continue
         sub_ci = map_signal(sky_new.grid, sky_ci.grid)(rec_sub)
         msk_ci = mask_box[sky_ci.prefix]
         if offsets:
             ofs_dct[sky_ci.prefix] = get_offset(sky_ci, sub_ci, msk_ci, sky_ci.freq)
+            if is_tiles and copied_tiles:
+                # copied tiles keep the offsets of their model section
+                ofs = list(np.atleast_1d(ofs_dct[sky_ci.prefix]))
+                cur = np.atleast_1d(np.squeeze(np.asarray(sky_ci.tiles.offset)))
+                for kn in copied_tiles:
+                    ofs[kn] = float(cur[kn])
+                ofs_dct[sky_ci.prefix] = ofs
             sky_ci.set_offset(ofs_dct[sky_ci.prefix])
         if isinstance(sky_ci, PointModel | TileModel):
             msk_ci = msk_ci.sum(axis=0).clip(0, 1)
@@ -387,6 +429,9 @@ def transition_addt(
             step=f"pre-fit · it {it} · {sky_ci.prefix}",
         )
         ptree |= pos_ci.tree
+        if is_tiles and copied_tiles:
+            old_t = next(m for m in sky_old.models if isinstance(m, TileModel))
+            ptree |= tile_slices(old_tree, old_t.prefix, sky_ci.prefix, pos_ci.tree, copied_tiles)
 
     rec_sky = map_signal(sky_old.grid, sky_new.grid)(rec_old)
     pos_sky = optimize_and_plot(
@@ -427,6 +472,74 @@ def transition_addt(
 
     return samples_new, ofs_dct
 
+
+
+def _copy_components(sky_old, sky_new, reuse, reuse_log):
+    """Copy decisions of the kept components: ``{new name: (old name, 'copy' | 'refit')}``."""
+    old_t = next((m for m in sky_old.models if isinstance(m, TileModel)), None)
+    new_t = next((m for m in sky_new.models if isinstance(m, TileModel)), None)
+    pairs = kept_pairs(reuse, new_t.prefix if new_t else "", old_t.prefix if old_t else "")
+    new_reg, old_reg = box_regions(sky_new, sky_new.grid), box_regions(sky_old, sky_new.grid)
+    by_prefix_old = {m.prefix: m for m in sky_old.models}
+    by_prefix_new = {m.prefix: m for m in sky_new.models}
+
+    def grid_of(model):
+        return model.tiles.grid if isinstance(model, TileModel) else model.grid
+
+    same_grid = {}
+    for n, o in pairs.items():
+        gn, go = grid_of(by_prefix_new[n.split("[")[0]]), grid_of(by_prefix_old[o.split("[")[0]])
+        same_grid[n] = bool(np.all(gn.fac == go.fac) and np.all(np.asarray(gn.shape) == np.asarray(go.shape)))
+    plan = copy_plan(new_reg, old_reg, pairs, same_grid)
+    decisions = {n: dict(old=pairs.get(n)) | d for n, d in plan.items()}
+    n_copy = sum(d["action"] == "copy" for d in plan.values())
+    print(f"reuse in the pre-fit: {n_copy} of {len(plan)} components copied")
+    for n, d in decisions.items():
+        print(f"  {n}: {d['action']}" + (f" = {d['old']}" if d["action"] == "copy" else f" ({d.get('reason', 'not kept')})"))
+    if reuse_log:
+        import json
+
+        os.makedirs(os.path.dirname(reuse_log) or ".", exist_ok=True)
+        with open(reuse_log, "w") as f:
+            json.dump(decisions, f, indent=1)
+    return {n: (pairs[n], d["action"]) for n, d in plan.items() if n in pairs}
+
+def _copied_image(samples, sky_old, sky_new, copy, mask_dct):
+    """Old reconstruction of the copied components on the new sky grid (tiles: only the copied ones)."""
+    to_new = map_signal(sky_old.grid, sky_new.grid) if sky_old.grid != sky_new.grid else (lambda a: a)
+    by_prefix = {m.prefix: m for m in sky_old.models}
+    out = 0.0
+    regions = None
+    tiles = {}
+    for o, action in copy.values():
+        if action != "copy":
+            continue
+        if "[" not in o:
+            out = out + np.asarray(to_new(np.asarray(samples.mean(lambda x, m=by_prefix[o]: m(x, map=True)))))
+        else:
+            tiles.setdefault(o.split("[")[0], []).append(o)
+    for prefix, names in tiles.items():
+        img = np.asarray(to_new(np.asarray(samples.mean(lambda x, m=by_prefix[prefix]: m(x, map=True)))))
+        regions = box_regions(sky_old, sky_new.grid) if regions is None else regions
+        sel = np.any([regions[o] for o in names], axis=0)
+        out = out + np.where(sel, img, 0.0)
+    return out
+
+
+def _background_mask(sky_new, sky_bg, mask_dct, copied_obj, copied_tiles):
+    """Background mask: everywhere except the masks of the refitted components (on the background grid)."""
+    refit = []
+    for k, v in mask_dct.items():
+        if k in ("sum",) or k.startswith("bg"):
+            continue
+        v = remove_freq_axis(np.asarray(v), sky_new.freq)
+        if v.ndim == 3:  # tiles / points: one mask per copy
+            refit += [m for i, m in enumerate(v) if not (k.startswith("t") and i in copied_tiles)]
+        elif k not in copied_obj:
+            refit.append(v)
+    msk = np.ones(sky_new.grid.shape) if not refit else 1.0 - np.clip(np.sum(refit, axis=0), 0, 1)
+    msk = np.floor(np.asarray(map_signal(sky_new.grid, sky_bg.grid)(msk))) if sky_bg.grid != sky_new.grid else np.floor(msk)
+    return np.asarray(msk.astype(bool))
 
 def transition_zoom(
     key,
@@ -728,13 +841,15 @@ def _per_copy(model, a):
     return a.reshape(a.shape[0] if isinstance(model, (TileModel, PointModel)) else 1, -1)
 
 
-def start_taper(model, data, pos, frac=0.5, rel=1.0, steps=np.arange(31.0)):
+def start_taper(model, data, pos, frac=0.5, rel=1.0, steps=None):
     """Widen the Gaussian taper at the start until it is at least ``frac`` of its maximum at every
     pixel of the target above ``rel`` times its maximum (default: the brightest pixel), per tile
     for tiles: an off-centre source is visible from the start. The excitations of ``cov_x`` and
     ``cov_y`` are raised together in ``steps``; the prior is unchanged. Returns ``pos``
     unchanged if the model has no taper.
     """
+    if steps is None:
+        steps = np.arange(31.0)
     gm = getattr(model, "gaussian", None)
     keys = [k for k in pos.tree if k.endswith("cov_x") or k.endswith("cov_y")]
     if gm is None or len(keys) != 2:

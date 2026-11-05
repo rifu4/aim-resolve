@@ -78,3 +78,56 @@ def test_component_masks_and_bbox():
     assert set(comps) == {"o0.2", "t0.2[0]", "t0.2[1]"}
     assert comps["t0.2[1]"][0] == "tile"
     assert bbox(comps["t0.2[1]"][1]) == (48, 55, 58, 65)
+
+
+class TestCopyPlan:
+    @staticmethod
+    def region(i0, i1, j0, j1):
+        r = np.zeros((64, 64), bool)
+        r[i0:i1, j0:j1] = True
+        return r
+
+    def test_groups(self):
+        from aim_resolve.reuse import overlap_groups
+
+        regs = {"o0": self.region(0, 20, 0, 20), "t[0]": self.region(10, 14, 10, 14),
+                "o1": self.region(18, 30, 18, 30), "t[1]": self.region(50, 54, 50, 54)}
+        groups = sorted(sorted(g) for g in overlap_groups(regs))
+        assert groups == [["o0", "o1", "t[0]"], ["t[1]"]]
+
+    def test_copy_refit(self):
+        from aim_resolve.reuse import copy_plan
+
+        new = {"o0.3": self.region(0, 20, 0, 20), "t0.3[0]": self.region(10, 14, 10, 14),
+               "t0.3[1]": self.region(50, 54, 50, 54), "t0.3[2]": self.region(30, 34, 50, 54)}
+        old = {"o0.2": self.region(0, 20, 0, 20), "t0.2[0]": self.region(10, 14, 10, 14),
+               "t0.2[1]": self.region(50, 54, 50, 54), "t0.2[2]": self.region(40, 44, 5, 9)}
+        pairs = {"o0.3": "o0.2", "t0.3[0]": "t0.2[0]", "t0.3[1]": "t0.2[1]"}
+        same = dict.fromkeys(pairs, True)
+        plan = copy_plan(new, old, pairs, same)
+        assert plan["o0.3"]["action"] == plan["t0.3[0]"]["action"] == "copy"  # nested, both kept
+        assert plan["t0.3[1]"]["action"] == "copy"
+        assert plan["t0.3[2]"]["action"] == "refit" and "new" in plan["t0.3[2]"]["reason"]
+        # a new tile inside the object: the whole group is refitted
+        new["t0.3[3]"] = self.region(5, 8, 5, 8)
+        plan = copy_plan(new, old, pairs, same)
+        assert plan["o0.3"]["action"] == "refit" and plan["t0.3[0]"]["action"] == "refit"
+        # a dropped old component in the object's region, or a new grid: refit
+        old["t0.2[3]"] = self.region(2, 4, 2, 4)
+        del new["t0.3[3]"]
+        assert copy_plan(new, old, pairs, same)["o0.3"]["action"] == "refit"
+        del old["t0.2[3]"]
+        assert copy_plan(new, old, pairs, same | {"o0.3": False})["o0.3"]["action"] == "refit"
+
+
+def test_renamed_latents_and_tile_slices():
+    from aim_resolve.reuse import renamed_latents, tile_slices
+
+    tree = {"o1.2 i0 xi": np.ones((3, 3)), "o1.2 i0 zeromode": 0.5, "o10.2 i0 xi": np.zeros(2),
+            "t0.2 i0 xi": np.arange(4.0)[:, None] * np.ones((4, 2)), "t0.2 i0 zeromode": np.arange(4.0)}
+    ren = renamed_latents(tree, "o1.2", "o0.3")
+    assert set(ren) == {"o0.3 i0 xi", "o0.3 i0 zeromode"}  # o10.2 is not o1.2
+    new = {"t0.3 i0 xi": np.full((3, 2), -1.0), "t0.3 i0 zeromode": np.full(3, -1.0)}
+    out = tile_slices(tree, "t0.2", "t0.3", new, {0: 3, 2: 1})
+    assert list(out["t0.3 i0 zeromode"]) == [3.0, -1.0, 1.0]
+    assert out["t0.3 i0 xi"][0, 0] == 3.0 and out["t0.3 i0 xi"][1, 0] == -1.0

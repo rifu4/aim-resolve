@@ -34,6 +34,7 @@ def main():
         dynamic_range=drange, vmin=plt_dct.get("vmin"), vmax=plt_dct.get("vmax"), cmap=plt_dct.get("cmap", "inferno")
     )
     odir = base_dct["base_opt"]["odir"]
+    reuse_dct = dict(base_dct.get("base_model", {}).get("reuse") or {})
 
     # initialize the sky model using the OptimizeKLConfig class (mode is taken from the lh sections)
     cfg = OptimizeKLConfig.from_file([base_yml, mdl_yml], get_builders)
@@ -65,6 +66,9 @@ def main():
             style_dct=base_dct.get("base_style", {}),
             # start the noise model of the new iteration at its prior instead of taking over the learned one
             reset_noise=base_dct.get("base_prefit", {}).get("reset_noise", False),
+            # copy kept components with unchanged overlap groups (section reuse.{it} of the model step)
+            reuse=cfg.sections.get(f"reuse.{it}") if reuse_dct.get("enabled", False) else None,
+            reuse_log=f"{odir}/reuse/{it}_prefit.json",
         )
         os.makedirs(os.path.dirname(tra_pkl), exist_ok=True)
         pickle.dump((samples, offsets), open(tra_pkl, "wb"))

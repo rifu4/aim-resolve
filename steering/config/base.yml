@@ -145,7 +145,7 @@ base_model:
   zoom: 1
   zoom_bg: false     # true: the background on the zoomed grid as well (otherwise only the components are refined)
   # stable boxes (PLAN_reuse.md, part B): a new component that is the same source as an old one keeps the old box,
-  # offset, prior and taper; decisions in files/{it}_reuse.json. Off until the pre-fit uses it (part C).
+  # offset, prior and taper (section reuse.{it} of the model file, decisions in reuse/); the pre-fit copies them (part C).
   reuse:
     enabled: false
     iou_min: 0.7       # intersection over union of the new and old mask supports

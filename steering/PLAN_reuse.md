@@ -100,10 +100,11 @@ A component is copied only if **all** of these hold:
 1. **Identical model:** same grid, prior parameters and taper. After B this is an exact equality
    check, with the old offset.
 2. **Unchanged overlap group** (see below).
-3. **The old component already holds the emission:** inside the component's mask,
-   flux(old component) / flux(R − old background) ≥ `flux_min` (start value 0.9).
-   - This catches the case "same box, but the old fit was not good enough", e.g. a faint extension
-     that the detection now includes but that the old fit left in the background.
+3. ~~**The old component already holds the emission** (flux share ≥ `flux_min`)~~ — dropped: the
+   old reconstruction is exactly the sum of the old components and the old background, so the share
+   is always 1 for an isolated component (it cannot see emission left in the background), and a
+   nested component always fails because its neighbours count in the denominator. Changes are caught
+   by the same-source test (B) and the group rule.
 
 ### Overlap groups (nested and touching components)
 - **The problem:**
@@ -233,7 +234,10 @@ base_trans:
 
 ## Order of work
 1. **B:** hysteresis and the `reuse.{it}` section in the model step (incl. the zoom scaling). Done.
-2. **C:** copy for objects and points, overlap groups, background refit, logging.
+2. **C:** copy for objects and tiles (per tile), overlap groups, background refit, logging.
+   Implemented (`reuse.py`: `box_regions`, `overlap_groups`, `copy_plan`, `renamed_latents`,
+   `tile_slices`; `transition_addt(reuse=...)`, decisions in `{odir}/reuse/{it}_prefit.json`);
+   decisions checked on `agent3` 2 → 3 (24 of 27 copied), full pre-fit run still to do.
 3. **C:** zoom-fit for unchanged groups at zoom steps.
 4. **C:** skip path when nothing changed.
 5. **C:** per-tile copying.

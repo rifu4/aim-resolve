@@ -141,3 +141,127 @@ def component_masks(mask_dct, it):
             for i, m in enumerate(v if v.ndim == 3 else v[None]):
                 out[f"{k}[{i}]"] = (kind, m)
     return out
+
+
+# ---------------------------------------------------------------------------------------------------
+# Pre-fit (part C): which kept components are copied, overlap groups, renamed latent parameters
+# ---------------------------------------------------------------------------------------------------
+
+
+def box_regions(sky, grid):
+    """Pixel regions of the boxes of the objects and tiles of a sky model on `grid`.
+
+    Returns
+    -------
+    dict
+        ``{name: bool array}`` with names as in the reuse section: object prefixes (``'o0.3'``) and
+        tile copies (``'t0.3[4]'``).
+    """
+    from .model.signal import SignalModel
+    from .model.tiles import TileModel
+
+    lims0 = np.asarray(grid.lims, dtype="float64")[:, 0]
+    fac = np.asarray(grid.fac, dtype="float64")
+    shape = tuple(grid.shape)
+
+    def region(lim):
+        lim = np.asarray(lim, dtype="float64").reshape(2, 2)
+        i0, j0 = np.floor((lim[:, 0] - lims0) * fac).astype(int)
+        i1, j1 = np.ceil((lim[:, 1] - lims0) * fac).astype(int)
+        r = np.zeros(shape, dtype=bool)
+        r[max(i0, 0) : max(i1, 0), max(j0, 0) : max(j1, 0)] = True
+        return r
+
+    out = {}
+    for m in getattr(sky, "components", ()):
+        if isinstance(m, TileModel):
+            for k, lim in enumerate(np.asarray(m.tiles.grid.lims, dtype="float64").reshape(-1, 2, 2)):
+                out[f"{m.prefix}[{k}]"] = region(lim)
+        elif isinstance(m, SignalModel):
+            out[m.prefix] = region(m.grid.lims)
+    return out
+
+
+def overlap_groups(regions):
+    """Groups of names whose regions overlap, chained (union-find); isolated names form groups of one."""
+    names = list(regions)
+    parent = {n: n for n in names}
+
+    def find(n):
+        while parent[n] != n:
+            parent[n] = parent[parent[n]]
+            n = parent[n]
+        return n
+
+    for a in range(len(names)):
+        for b in range(a + 1, len(names)):
+            if np.logical_and(regions[names[a]], regions[names[b]]).any():
+                parent[find(names[a])] = find(names[b])
+    groups = {}
+    for n in names:
+        groups.setdefault(find(n), []).append(n)
+    return list(groups.values())
+
+
+def kept_pairs(reuse_sec, new_tile_prefix, old_tile_prefix):
+    """``{new name: old name}`` of the kept objects and tiles of a reuse section (``reuse.{it}``)."""
+    pairs = dict((reuse_sec or {}).get("objects", {}))
+    for k, j in (reuse_sec or {}).get("tiles", []):
+        pairs[f"{new_tile_prefix}[{int(k)}]"] = f"{old_tile_prefix}[{int(j)}]"
+    return pairs
+
+
+def copy_plan(new_regions, old_regions, pairs, same_grid):
+    """Decide per new component: 'copy' or 'refit', by overlap groups.
+
+    A group is copied only if every member is kept (has an old counterpart in `pairs`), has the same
+    grid as its counterpart (`same_grid[name]`), and no old component in the group's region was
+    dropped (all old components overlapping the group are counterparts of its members).
+
+    Returns
+    -------
+    dict
+        ``{name: {'action': 'copy' | 'refit', 'group': [...], 'reason': ...}}``.
+    """
+    mapped = set(pairs.values())
+    out = {}
+    for group in overlap_groups(new_regions):
+        reason = None
+        for n in group:
+            if n not in pairs:
+                reason = f"{n} is new"
+            elif not same_grid.get(n, False):
+                reason = f"{n} has a new grid (zoom)"
+            if reason:
+                break
+        if reason is None:
+            area = np.any([new_regions[n] for n in group], axis=0)
+            dropped = [o for o, r in old_regions.items() if o not in mapped and np.logical_and(r, area).any()]
+            if dropped:
+                reason = f"old {', '.join(dropped)} dropped in the group's region"
+        for n in group:
+            out[n] = dict(action="refit" if reason else "copy", group=sorted(group)) | ({"reason": reason} if reason else {})
+    return out
+
+
+def renamed_latents(tree, old_prefix, new_prefix):
+    """Latent parameters of an old component under the prefix of the new one."""
+    return {new_prefix + k[len(old_prefix):]: v for k, v in tree.items() if k.startswith(old_prefix + " ")}
+
+
+def tile_slices(tree, old_prefix, new_prefix, new_tree, copies):
+    """Copy single tiles: ``copies = {new index: old index}``; every tile parameter has the copies on axis 0.
+
+    `new_tree` holds the (fitted or initial) parameters of the new tile component, which are
+    overwritten at the kept indices. Returns the updated parameters of the new tile component.
+    """
+    out = {}
+    for k, v in new_tree.items():
+        if not k.startswith(new_prefix + " "):
+            continue
+        old = np.asarray(tree[old_prefix + k[len(new_prefix):]])
+        v = np.array(v, copy=True)
+        for kn, ko in copies.items():
+            v[kn] = old[ko]
+        out[k] = v
+    return out
