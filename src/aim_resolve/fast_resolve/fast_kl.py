@@ -361,7 +361,7 @@ def fast_optimize_kl(
                     f.write(mj_msg + kl_msg)
             if callback is not None:
                 callback(MySamples.from_samples(samples), opt_vi_st, i_mj + 1)
-        
+
         jax.clear_caches()
 
     return MySamples.from_samples(samples), opt_vi_st, n_major_iterations
