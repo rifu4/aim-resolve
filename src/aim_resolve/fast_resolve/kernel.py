@@ -149,9 +149,16 @@ def _fit_n_inv_kernel(kernel, dvol, relativ_min_val=1e-3, maxiter=80):
     import jax
     import jax.numpy as jnp
     import nifty.re as jft
-    from jax.experimental import enable_x64
 
-    with enable_x64():
+    # jax >= 0.8: jax.enable_x64(True); older versions: jax.experimental.enable_x64()
+    if hasattr(jax, "enable_x64"):
+        x64 = jax.enable_x64(True)
+    else:
+        from jax.experimental import enable_x64
+
+        x64 = enable_x64()
+
+    with x64:
         axes = (-2, -1)
         k = jnp.asarray(kernel, dtype=jnp.float64)
         fk = jnp.fft.fftn(k, axes=axes) * dvol
