@@ -1,44 +1,29 @@
-# Plan: detection history for the agent, and reuse of unchanged components
+# Plan: detection with the Claude agent (A, A2)
 
-Two improvements to the iterative pipeline (`detect → model → pre-fit → reconstruct`):
+Improvements to the detection step of the iterative pipeline (`detect → model → pre-fit →
+reconstruct`) with the Claude agent:
 
-- **A. Detection:** the Claude detection agent first decides blind, on the current reconstruction
-  only. It then compares its decisions with the previous iteration's decisions, models and fitted
-  components, and settles the disagreements.
-- **B. Model step and pre-fit:** components that did not change are taken over from the previous
-  reconstruction instead of being pre-fitted again. This saves most of the pre-fit time and starts
-  the reconstruction from the actual posterior.
+- **A. Blind decision, then comparison with the history:** the agent first decides on the current
+  reconstruction only, then compares its decisions with all previous iterations and settles the
+  disagreements.
+- **A2. Compact sources embedded in extended objects:** separated as point sources instead of
+  being dropped.
 
-B depends on stable boxes, and A helps the agent keep its decisions stable, so the two support each
-other. B can be implemented and tested without A.
+These come after the reuse of unchanged components (`PLAN_reuse.md`, parts B and C). A uses the
+same-source test of B for its matching; A2 relies on the overlap groups of C in the pre-fit.
 
 ## Context: current state (Nov 2026)
 
 - **Detection:** `steering/scripts/detect.py` with `base_detect.method: unet | agent | manual`. The
   agent tools are in `src/aim_resolve/agent_detect.py`, and headless runs use
-  `steering/run_with_claude.sh`. The agent gets `agent/{it}_task/` (`task.md`, `overview.png`,
-  candidates) and the reconstruction `files/{it-1}_rec.pkl`. It writes
-  `agent/{it}_submission.json` (objects, groups, compact_ids, extra_compact).
-- **Model step:** `steering/scripts/model.py` → `masks_from_maps` (`src/aim_resolve/mask.py`), then
-  `model_objects`, `model_tiles` and `model_points` (`src/aim_resolve/modeling.py`). It writes
-  `files/{it}_mdl.yml` and `files/{it}_msk.npz`.
-  - Boxes are the detection mask plus a margin (`margin_fac`, `margin_min`).
-  - A box that fits into `tile_size` becomes a tile, otherwise an object (up to `max_objects`).
-  - Offsets are recomputed every iteration (`get_offset`).
-- **Pre-fit:** `steering/scripts/pre_fit.py` → `transition_addt` (`src/aim_resolve/transition.py`).
-  1. The background is fitted on the old reconstruction R outside all component masks (cold start).
-  2. Each component is fitted in its own mask on R minus the background, with 10 KL steps
-     (`base_trans`).
-  3. The noise-model parameters are copied from the previous iteration.
-- **Already changed today:**
-  - The pre-fit uses a fixed noise std (`max_std · max`) instead of the per-pixel noise model,
-    which had dropped faint structure.
-  - A fixed taper is possible (`std_fac: 0`).
-  - The object limit counts the objects actually created.
-  - `fast_sf.yml` sets `margin_min: 5`.
-- **Measured cost (run `fast_vi_1f_1024_1z_agent2`, iteration 1):** about 4 min for the
-  background; 8–10 min each for the two large objects; about 3 min each for small objects and the
-  tile component.
+  `steering/run_with_claude.sh` (snakemake with `--nolock --rerun-triggers mtime`).
+- **Task and submission:** the agent gets `agent/{it}_task/` (`task.md`, `overview.png`, candidates)
+  and the reconstruction `files/{it-1}_rec.pkl`. It writes `agent/{it}_submission.json` (objects,
+  groups, compact_ids, extra_compact).
+- **Settings:** the agent's pixel settings (`merge_dist`, `pair_dist`, `compact_box`, `snap_radius`)
+  and `base_detect.edge_dist` are scaled by the zoom factor of the reconstruction; detections within
+  `edge_dist` of the field edge are dropped.
+- **Cost:** a detection takes 3–4 min, about 40k new and 8k output tokens (plus cached input).
 
 ---
 
@@ -84,7 +69,7 @@ other. B can be implemented and tested without A.
      source, e.g. "accepted in it 1, rejected in it 2, back as blind candidate in it 3". A
      disagreement is judged against the last iteration, but the agent sees the full track. A source
      that flip-flops is flagged as such.
-   - Matching uses the same-source test from part B (one-to-one, IoU, same type), applied to the
+   - Matching uses the same-source test from `PLAN_reuse.md`, part B (one-to-one, IoU, same type), applied to the
      decisions instead of the model boxes.
    - It produces a short list of **disagreements**:
      - **new:** in the blind decision, not in the previous one (e.g. a source that appeared after its
@@ -95,7 +80,7 @@ other. B can be implemented and tested without A.
      - **type:** object ↔ tile ↔ point, or extended ↔ compact;
      - **candidate status:** a compact candidate accepted in one and rejected in the other, with the
        brightness change.
-   - Pure box-size differences are **left out**, because the hysteresis in the model step (part B)
+   - Pure box-size differences are **left out**, because the hysteresis in the model step (`PLAN_reuse.md`, part B)
      handles those anyway.
    - Output: `agent/{it}_task/diff.md` and one image per disagreement in `agent/{it}_task/diff/`.
      Each image has a crop of the current reconstruction with the blind decision drawn in, and the
@@ -219,7 +204,7 @@ leaks into its surroundings.
      the ring median around each point.
   2. Subtract the fitted point images from the target of the object.
   3. Then fit the object.
-- **Reuse (part C):** a point inside an object belongs to the object's overlap group, so the two are
+- **Reuse (`PLAN_reuse.md`, part C):** a point inside an object belongs to the object's overlap group, so the two are
   copied or refitted together.
 
 ### Tests
@@ -232,184 +217,16 @@ leaks into its surroundings.
 - On run `fast_vi_1f_1024_1z_agent2`, iteration 1: with the new rule, candidate 13 should be
   accepted as embedded.
 
----
-
-## B. Model step: stable boxes (hysteresis)
-
-Without this, boxes rarely repeat exactly. A mask that is slightly different gives a box that is
-1 px larger, and no component can be copied.
-
-### Same-source test
-For each new detection, compare it with the old components. Use the detection masks (before
-margins) from `files/{it-1}_det.npz` and `files/{it-1}_msk.npz`, not the boxes.
-
-| criterion | measure | start value |
-|---|---|---|
-| one-to-one | the new mask overlaps exactly one old component, and that one overlaps no other new mask | required (otherwise split or merge) |
-| overlap | IoU(new mask, old mask) | ≥ 0.7 |
-| still fits | new mask plus a small margin (e.g. `margin_min / 2`) lies inside the old box | required (otherwise the box must grow) |
-| not too loose | area(box the new mask would get) / area(old box) | ≥ 0.7 (otherwise the box should shrink) |
-| same type | object → object, tile → tile, point → point | required |
-
-**If all criteria hold,** the model step writes the old component unchanged: same grid (space,
-center, factor), same prior, same taper and the **old offset**. Otherwise the component gets a new
-box and offset as now.
-
-- **Tiles:** the same test per tile, with the tile box in place of the object box. The tile keeps
-  its old center.
-- **Points:** the same pixel within the snap radius (3 px).
-
-### Implementation
-- `masks_from_maps` (or a new step after it) gets the previous masks and model sections and returns
-  the reused boxes and their old prefixes.
-- `model.py` writes, for every reused component, a field `reuse: <old prefix>`, for example
-  `sky_o1.2: {..., reuse: o0.1}`. The old grid, prior and offset are copied verbatim. Other code
-  ignores the field.
-- The per-component decision and its values (IoU, area ratio) are logged and saved to
-  `files/{it}_reuse.json`.
-
----
-
-## C. Pre-fit: copy unchanged components, refit the rest
-
-### Copy rule (transition)
-A component is copied only if **all** of these hold:
-1. **Identical model:** same grid, prior parameters and taper. After B this is an exact equality
-   check, with the old offset.
-2. **Unchanged overlap group** (see below).
-3. **The old component already holds the emission:** inside the component's mask,
-   flux(old component) / flux(R − old background) ≥ `flux_min` (start value 0.9).
-   - This catches the case "same box, but the old fit was not good enough", e.g. a faint extension
-     that the detection now includes but that the old fit left in the background.
-
-### Overlap groups (nested and touching components)
-- **The problem:**
-  - A new tile inside a copied object (e.g. a compact source in the jet box) would see nothing to
-    fit, because the copied object already contains its flux.
-  - A removed tile inside a copied object would lose its flux at the start: its region lies inside
-    the object mask, so the background does not take it.
-- **Groups:** components whose boxes overlap, chained transitively. A tile in an object that touches
-  another object puts all three into one group. Isolated tiles and points form groups of one.
-- **Copy a group** only if every member matches an old component (criteria 1 and 3) and the old
-  model had exactly this group: no member added, removed or changed.
-- **Otherwise refit the whole group.**
-
-### Targets
-R is the previous total reconstruction (all old components plus the old background).
-
-1. **Copied components** C₁…Cₖ: take their latent parameters from the previous samples, renamed to
-   the new prefixes (e.g. `o0.1 …` → `o1.2 …`), with their old offsets.
-   Then compute R' = R − ΣCᵢ.
-2. **Background:** a **cold-start refit** on R'.
-   - Masked only at the refitted groups. The regions of the copied components stay in, because there
-     R' is exactly the old background.
-   - **Why no warm start:** the excitations are Fourier modes. The old background's flux at a new
-     source sits in modes that the masked fit does not constrain, so it would survive and the new
-     component would get nothing.
-   - **Possible middle ground (later):** copy only the hyperparameters (power spectrum, zero mode)
-     and reset the excitations to zero.
-3. **Refitted groups:** each member is fitted in its own mask on (R' − B).clip(0), as in the
-   current pre-fit, with fixed noise.
-
-### Cases
-| case | handling |
-|---|---|
-| newly detected source (was in the old background) | the background is fitted outside its mask, so it only interpolates there; the flux stays in R' − B and goes to the new component |
-| component changed a lot (box grew or shrank clearly, split, merged, type changed) | treated as new; the old version is not subtracted, so its full flux stays in R'; latents cannot be carried over to a different grid |
-| component changed slightly | the hysteresis (B) keeps the old box, so the component is copied (if its group is unchanged) |
-| component removed | not copied; its flux stays in R' and goes to the background (or to the group that contains its region, which is then refitted) |
-| new component overlaps a copied one | the two are in the same group, so the whole group is refitted |
-| nothing new, changed or removed | copy the background and the noise model too; **skip the pre-fit entirely** |
-
-### Tiles: copy per tile
-- The tile component is one model with many copies, and the set of tiles changes between
-  iterations. Per tile with an identical center, copy its slice of the excitations. Only new tiles
-  are fitted.
-- The shared hyperparameters (power spectrum) are copied as long as the tile prior is unchanged.
-- **Open question:** fitting only some copies of a VModel needs a mask or a stop-gradient on the
-  copied slices. Simpler first version: if any tile of a group changes, refit that tile only, with
-  the others fixed. If that is too complicated, refit the whole tile component and copy only
-  objects and points in the first version.
-
-### Further speed-up: stop on convergence
-- The refits that remain always run 10 KL steps. Stop them when the relative energy change per step
-  falls below a threshold.
-- This is more reliable now that the pre-fit uses fixed noise.
-
-### Implementation
-- `transition_addt`:
-  - a new optional input `reuse` (from `files/{it}_reuse.json` / the `reuse:` fields);
-  - group building, the copy decision, the R' / background / group fits;
-  - the skip path when nothing changed.
-- Helpers:
-  - `match_components` (grid equality + groups);
-  - `copy_latents(samples_old, old_prefix, new_prefix)`, which renames the keys, including the
-    per-tile slices;
-  - `component_flux_fraction` for criterion 3.
-- `pre_fit.py` passes the reuse information and logs every decision:
-  - "o1.2 = o0.1: copied (flux 0.97)"
-  - "o2.2: refitted (IoU 0.55)"
-  - "group {o0.2, t0.2[3]}: refitted (new member)"
-- The final joint plot `{it}_sky.png` stays; the per-component plots are made only for refitted
-  components.
-
-### Config
-A new section, merged like the others:
-
-```yaml
-base_model:
-  reuse:
-    enabled: true
-    iou_min: 0.7
-    area_min: 0.7
-    fit_margin: 0.5      # fraction of margin_min the new mask must keep inside the old box
-    point_radius: 3      # px
-    flux_min: 0.9        # transition: old component must hold this share of R - background
-base_trans:
-  stop_rel_energy: 1.0e-3   # optional early stopping of the remaining fits
-```
-
-`enabled: false` gives the current behaviour.
-
----
-
-## Tests
-- **Unit tests**
-  - Same-source test: shifted, grown, shrunk, split and merged masks; tiles and points.
-  - Overlap groups: nested tile in an object, a chain of three, isolated tiles.
-  - `copy_latents`: renamed keys, tile slices; the copied component evaluates identically to the
-    old one.
-  - Flux criterion on a synthetic case where the old component misses an extension.
-  - Skip path: unchanged model → pre-fit skipped, samples equal to the old ones.
-- **Pipeline test** on an existing run (e.g. `fast_vi_1f_1024_1z_agent2`, iterations 1 → 2), offline:
-  - the reuse decisions;
-  - pre-fit time with and without reuse;
-  - the start point of the reconstruction: residuals and energy of the first KL steps.
+### Tests (A)
 - **Comparison step:** unit tests with synthetic submissions (new, missing, split, merge, type
   change, candidate status). Box-only differences must not appear in the diff.
-- **Two-phase agent:** on iteration 2 of an existing run (`fast_vi_1f_1024_1z_agent2`):
+- **Two-phase agent:** on iteration 2 of an existing run:
   - run phase 1 headless and check the diff and its images;
   - run phase 2 with `--resume`;
   - compare the blind and final submissions and read the reasons in `changes`;
   - also check the skip path (no disagreements → the blind submission becomes final).
 
-## Order of work
-1. **B** (hysteresis + `reuse:` fields) and **C** for objects and points: copy, groups, background
-   refit, logging.
-2. **C** skip path when nothing changed.
-3. **C** per-tile copying.
-4. Early stopping of the remaining fits.
-5. **A**, the blind decision plus comparison, in the priority order above. It shares the matching
-   code with B.
-6. **A2**, embedded compact sources. It is independent of A–C and can also come first, since it is
-   small.
-
-## Open questions
-- Should a copied component keep its old offset in the YAML for good, or be re-anchored after the
-  reconstruction?
-- Per-tile copying inside one VModel: masking or stop-gradient, or split the tiles into "copied" and
-  "new" tile components?
-- Thresholds: check the logged values from the first runs before tightening or loosening them.
+### Open questions (A, A2)
 - In phase 2, should the agent also be allowed to request "keep box of component X" explicitly, so
   that it can drive the hysteresis instead of leaving it to the mask comparison alone?
 - ~~Should phase 2 see only the last iteration or the full history?~~ Decided: the full history,
